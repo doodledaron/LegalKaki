@@ -26,6 +26,7 @@ import {
   Eye,
   ChevronDown,
   Edit,
+  Mail,
 } from "lucide-react";
 import {
   LegalDomain,
@@ -486,6 +487,17 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
   const [messagePayloads, setMessagePayloads] = useState<
     Record<string, { analysis?: ApiAnalysisResult; draft?: ApiDraftResult }>
   >({});
+  // Email modal state
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [emailTo, setEmailTo] = useState("");
+  const [emailSubject, setEmailSubject] = useState(
+    "Shared legal documents from LegalKaki"
+  );
+  const [emailMessage, setEmailMessage] = useState(
+    "Hi,\n\nPlease find the selected documents attached.\n\nBest regards,"
+  );
+  const [selectedEmailDocs, setSelectedEmailDocs] = useState<string[]>([]);
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   // State for temporarily storing uploaded documents (memory-based, no persistence)
   const [sessionDocuments, setSessionDocuments] = useState<Document[]>([]);
@@ -842,6 +854,47 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
     // #TODO: Implement save to collection with collectionsApi.createCollection()
     // POST /api/collections - Save current chat session to a collection
     console.log("Save to collection clicked");
+  };
+
+  const handleToggleEmailDoc = (docId: string) => {
+    setSelectedEmailDocs((prev) =>
+      prev.includes(docId)
+        ? prev.filter((id) => id !== docId)
+        : [...prev, docId]
+    );
+  };
+
+  const handleOpenEmailModal = () => {
+    if (selectedDocumentForEdit) {
+      setSelectedEmailDocs([selectedDocumentForEdit.id]);
+    }
+    setIsEmailModalOpen(true);
+  };
+
+  const handleSendEmail = async () => {
+    if (!emailTo.trim()) {
+      alert("Please enter at least one recipient email.");
+      return;
+    }
+    if (selectedEmailDocs.length === 0) {
+      alert("Please select at least one document to send.");
+      return;
+    }
+    try {
+      setSendingEmail(true);
+      await new Promise((r) => setTimeout(r, 1000));
+      console.log("[Email demo] send", {
+        to: emailTo,
+        subject: emailSubject,
+        message: emailMessage,
+        attachments: selectedEmailDocs,
+      });
+      alert("Email sent successfully (demo)");
+      setIsEmailModalOpen(false);
+      setSelectedEmailDocs([]);
+    } finally {
+      setSendingEmail(false);
+    }
   };
 
   const handleStartChat = async () => {
@@ -1514,6 +1567,14 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
                 >
                   Save to Collection
                 </Button>
+                <Button
+                  variant="ghost"
+                  size="small"
+                  onClick={handleOpenEmailModal}
+                  leftIcon={<Mail className="w-4 h-4" />}
+                >
+                  Email
+                </Button>
 
                 <input
                   ref={fileInputRef}
@@ -1569,6 +1630,134 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
 
         {/* Side Panel */}
         <SidePanel />
+        {/* Email Modal */}
+        <AnimatePresence>
+          {isEmailModalOpen && (
+            <motion.div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <motion.div
+                className="bg-surface-white w-full max-w-2xl rounded-xl shadow-2xl border border-gray-200 overflow-hidden"
+                initial={{ scale: 0.95, y: 10, opacity: 0 }}
+                animate={{ scale: 1, y: 0, opacity: 1 }}
+                exit={{ scale: 0.95, y: 10, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50/50">
+                  <div className="flex items-center space-x-2">
+                    <Mail className="w-4 h-4 text-purple-primary" />
+                    <h3 className="body-regular font-medium">
+                      Send Documents via Email
+                    </h3>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="small"
+                    onClick={() => setIsEmailModalOpen(false)}
+                    className="p-1"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                <div className="p-4 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="caption text-text-secondary">To</label>
+                      <input
+                        type="text"
+                        value={emailTo}
+                        onChange={(e) => setEmailTo(e.target.value)}
+                        placeholder="name@example.com, second@example.com"
+                        className="w-full mt-1 px-3 py-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-primary/30 focus:border-purple-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="caption text-text-secondary">
+                        Subject
+                      </label>
+                      <input
+                        type="text"
+                        value={emailSubject}
+                        onChange={(e) => setEmailSubject(e.target.value)}
+                        className="w-full mt-1 px-3 py-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-primary/30 focus:border-purple-primary"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="caption text-text-secondary">
+                      Message
+                    </label>
+                    <Textarea
+                      value={emailMessage}
+                      onChange={(e) => setEmailMessage(e.target.value)}
+                      rows={5}
+                      className="mt-1 bg-gray-50 focus:bg-surface-white border-purple-primary/20 focus:border-purple-primary"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="caption text-text-secondary">
+                      Select documents
+                    </label>
+                    <div className="mt-2 max-h-56 overflow-y-auto border border-gray-200 rounded-md p-2">
+                      {(availableDocuments || []).map((doc) => (
+                        <label
+                          key={doc.id}
+                          className="flex items-center justify-between px-3 py-2 rounded hover:bg-gray-50 cursor-pointer"
+                        >
+                          <div className="flex items-center space-x-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedEmailDocs.includes(doc.id)}
+                              onChange={() => handleToggleEmailDoc(doc.id)}
+                              className="rounded border-gray-300 text-purple-primary focus:ring-purple-primary"
+                            />
+                            <span className="body-small text-text-primary truncate max-w-[260px]">
+                              {doc.originalFilename}
+                            </span>
+                          </div>
+                          <span className="caption text-text-secondary">
+                            {doc.analysisStatus}
+                          </span>
+                        </label>
+                      ))}
+                      {(!availableDocuments ||
+                        availableDocuments.length === 0) && (
+                        <div className="text-center text-text-secondary py-6">
+                          No documents available
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="px-4 py-3 border-t border-gray-200 bg-gray-50/50 flex items-center justify-end space-x-2">
+                  <Button
+                    variant="ghost"
+                    size="small"
+                    onClick={() => setIsEmailModalOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="small"
+                    onClick={handleSendEmail}
+                    disabled={sendingEmail}
+                    leftIcon={<Mail className="w-3 h-3" />}
+                  >
+                    {sendingEmail ? "Sending…" : "Send Email"}
+                  </Button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

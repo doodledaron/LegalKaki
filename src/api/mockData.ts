@@ -383,81 +383,91 @@ export const mockAnalysisResult: AnalysisResult = {
 // Mock Draft Results
 export const mockDraftResult: DraftResult = {
   id: "draft-1",
-  documentType: "Employment Contract",
-  content: `**EMPLOYMENT CONTRACT DRAFT**
+  documentType: "Partnership Agreement",
+  content: `**PARTNERSHIP AGREEMENT DRAFT**
 
 **PARTIES:**
-- Employer: [Company Name]
-- Employee: [Employee Name]
+- Partner A: [Full Name / Company]
+- Partner B: [Full Name / Company]
 
-**POSITION & DUTIES:**
-The Employee is hereby engaged as [Job Title] and shall perform duties including but not limited to:
-• [Primary responsibility 1]
-• [Primary responsibility 2] 
-• [Primary responsibility 3]
+**BUSINESS PURPOSE:**
+The Partners agree to carry on the business of [Business Description] under the name [Partnership Name]. The primary objective shall be:
+• [Objective 1]
+• [Objective 2]
+• [Objective 3]
 
-**COMPENSATION:**
-- Monthly Salary: RM [Amount]
-- Benefits: Medical insurance, annual leave (14 days), sick leave (14 days)
-- EPF & SOCSO contributions as per Malaysian law
+**CAPITAL CONTRIBUTIONS:**
+- Partner A: RM [Amount]
+- Partner B: RM [Amount]
+- Additional contributions shall be mutually agreed in writing.
 
-**WORKING HOURS:**
-- Standard: 9:00 AM to 6:00 PM, Monday to Friday
-- Total: 40 hours per week (compliant with Employment Act 1955)
+**PROFIT & LOSS SHARING:**
+- Profits and losses shall be shared in the following proportions:
+  • Partner A: [Percentage]%
+  • Partner B: [Percentage]%
+- Distribution shall be made annually, unless otherwise agreed.
 
-**TERMINATION:**
-- Notice Period: 1 month written notice by either party
-- Probation: 3 months from commencement date
+**MANAGEMENT & DECISION-MAKING:**
+- Day-to-day management shall be jointly exercised.
+- Major decisions (e.g., capital expenditure, admission of new partners) require unanimous consent.
 
-**CONFIDENTIALITY:**
-- The Employee shall not disclose any confidential information acquired during employment without prior written consent of the Employer.
+**TERM & TERMINATION:**
+- The Partnership shall commence on [Date] and continue until terminated.
+- Either Partner may withdraw by giving 3 months written notice.
+- Grounds for dissolution include insolvency, illegality of business, or mutual agreement.
+
+**CONFIDENTIALITY & NON-COMPETE:**
+- Partners shall not disclose partnership information to third parties.
+- Partners shall not engage in competing businesses without prior consent.
 
 **GOVERNING LAW & DISPUTE RESOLUTION:**
-- This Agreement shall be governed by the laws of Malaysia. Any dispute shall be resolved through good-faith negotiations and, failing that, mediation or the Malaysian courts.
+- This Agreement shall be governed by the laws of Malaysia. Disputes shall be resolved first through good-faith negotiation, then mediation, and failing that, by the Malaysian courts.
 
 **SIGNATURES:**
-- Employer: _____________________  Date: __________
-- Employee: _____________________  Date: __________
+- Partner A: _____________________  Date: __________
+- Partner B: _____________________  Date: __________
 
 ⚠️ **DISCLAIMER**: This is an AI-generated draft. Please have it reviewed by a qualified lawyer before use.`,
   suggestions: [
     {
-      section: "Compensation Clause",
-      suggestion: "Consider adding performance bonus structure",
+      section: "Capital Contributions",
+      suggestion: "Include details on how future contributions will be handled",
       priority: "medium",
       reasoning:
-        "Performance incentives can improve employee motivation and retention",
+        "Prevents disputes over unequal or unexpected capital injections",
+    },
+    {
+      section: "Profit & Loss Sharing",
+      suggestion: "Specify treatment of partner salaries or drawings",
+      priority: "high",
+      reasoning:
+        "Ensures clarity on whether partners can withdraw funds outside of profit distributions",
+    },
+    {
+      section: "Management Clause",
+      suggestion: "Define voting rights and tie-breaker mechanism",
+      priority: "high",
+      reasoning:
+        "Avoids deadlock in decision-making and ensures smooth operation",
     },
     {
       section: "Termination Clause",
-      suggestion: "Specify grounds for immediate termination",
-      priority: "high",
-      reasoning:
-        "Clear termination grounds protect both employer and employee rights",
-    },
-    {
-      section: "Working Hours",
-      suggestion: "Add overtime compensation details",
+      suggestion: "Add buy-out provisions for withdrawing partners",
       priority: "medium",
-      reasoning: "Overtime provisions are required under Employment Act 1955",
+      reasoning:
+        "Clarifies exit process and prevents disruption of the business",
     },
     {
       section: "Confidentiality",
-      suggestion:
-        "Include a non-disclosure clause and define confidential information",
+      suggestion: "Expand to include intellectual property ownership",
       priority: "medium",
-      reasoning: "Protects proprietary information and trade secrets",
-    },
-    {
-      section: "Governing Law",
-      suggestion: "State applicable law and specify dispute resolution process",
-      priority: "low",
-      reasoning: "Avoids ambiguity and reduces future disputes",
+      reasoning:
+        "Protects business IP and prevents misuse if a partner leaves",
     },
   ],
   disclaimer:
     "This is an AI-generated draft. Please have it reviewed by a qualified lawyer before use.",
-  templateUsed: "Malaysia Employment Contract Template v2.1",
+  templateUsed: "Malaysia Partnership Agreement Template v1.0",
 };
 
 // Mock Chat Sessions
