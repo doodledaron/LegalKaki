@@ -54,14 +54,25 @@ export type DocumentAnalysisStatus = 'pending' | 'processing' | 'completed' | 'e
 
 export interface Document {
   id: string
-  filename: string
-  fileType: string
-  fileSize: number
+  originalFilename: string        // Original filename for display (e.g., "My Contract.pdf")
+  storedFilename: string          // S3 filename using document ID (e.g., "550e8400-e29b-41d4-a716-446655440000.pdf")
+  fileType: string                // MIME type
+  fileSize: number                // Size in bytes
+  s3Bucket: string                // S3 bucket name
+  s3Key: string                   // Full S3 key/path
   uploadDate: Date
   analysisStatus: DocumentAnalysisStatus
-  contentText?: string
+  contentText?: string            // Extracted text content
+  contentSummary?: string         // AI-generated summary
   highlights?: DocumentHighlight[]
   thumbnail?: string
+  collectionId?: string           // ID of the collection this document belongs to
+  metadata?: {
+    pages?: number
+    language?: string
+    wordCount?: number
+    [key: string]: unknown
+  }
 }
 
 export interface DocumentHighlight {
@@ -95,6 +106,7 @@ export interface ChatSession {
   createdAt: Date
   updatedAt: Date
   title?: string
+  collectionId?: string  // ID of the collection this conversation belongs to
 }
 
 export interface ResponseAnalysis {

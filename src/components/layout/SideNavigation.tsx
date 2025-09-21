@@ -4,15 +4,17 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Home, MessageCircle, Bookmark, User, ChevronLeft, ChevronRight, Menu, X } from 'lucide-react'
 import { NavItem } from '@/types'
 import { useState, useEffect } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
 
 interface SideNavigationProps {
-  activeRoute: string
-  onNavigate: (route: string) => void
+  // No longer need activeRoute or onNavigate - using Next.js routing
 }
 
-export function SideNavigation({ activeRoute, onNavigate }: SideNavigationProps) {
+export function SideNavigation({}: SideNavigationProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
+  const router = useRouter()
+  const pathname = usePathname()
 
   useEffect(() => {
     setIsMounted(true)
@@ -24,28 +26,28 @@ export function SideNavigation({ activeRoute, onNavigate }: SideNavigationProps)
       label: 'Home',
       icon: 'home',
       route: '/',
-      isActive: activeRoute === '/' || activeRoute === 'welcome'
+      isActive: pathname === '/'
     },
     {
       id: 'chat',
       label: 'Chat',
       icon: 'message-circle',
-      route: '/chat',
-      isActive: activeRoute === '/chat' || activeRoute === 'chat' || activeRoute === 'domain-selection'
+      route: '/domains',
+      isActive: pathname.startsWith('/chat') || pathname.startsWith('/domains')
     },
     {
       id: 'collection',
       label: 'Collection',
       icon: 'bookmark',
-      route: '/collection',
-      isActive: activeRoute === '/collection' || activeRoute === 'collection'
+      route: '/collections',
+      isActive: pathname.startsWith('/collections')
     },
     {
       id: 'profile',
       label: 'Profile',
       icon: 'user',
       route: '/profile',
-      isActive: activeRoute === '/profile' || activeRoute === 'profile'
+      isActive: pathname === '/profile'
     }
   ]
 
@@ -71,22 +73,10 @@ export function SideNavigation({ activeRoute, onNavigate }: SideNavigationProps)
   }
 
   const handleNavClick = (item: NavItem) => {
-    // Map nav routes to app screen states
-    switch (item.id) {
-      case 'home':
-        onNavigate('welcome')
-        break
-      case 'chat':
-        onNavigate('domain-selection')
-        break
-      case 'collection':
-        onNavigate('collection')
-        break
-      case 'profile':
-        onNavigate('profile')
-        break
-      default:
-        onNavigate('welcome')
+    router.push(item.route)
+    // Close mobile menu after navigation
+    if (window.innerWidth < 1024) {
+      setIsExpanded(false)
     }
   }
 

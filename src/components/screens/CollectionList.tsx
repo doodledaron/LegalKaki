@@ -1,24 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
-import { ArrowLeft, MessageCircle, FileText, AlertTriangle, CheckCircle, ChevronRight, Search, Grid, List } from 'lucide-react'
-
-interface Collection {
-  id: string
-  title: string
-  domain: string
-  summary: string
-  lastUpdated: Date
-  messageCount: number
-  documentCount: number
-  actionItemsCount: number
-  urgentActionsCount: number
-  status: 'active' | 'archived' | 'completed'
-  thumbnail?: string
-}
+import { ArrowLeft, MessageCircle, FileText, AlertTriangle, CheckCircle, ChevronRight, Search, Grid, List, Loader2 } from 'lucide-react'
+import { collectionsApi, userApi, Collection, useApiCall } from '@/api'
 
 interface CollectionListProps {
   onBack: () => void
@@ -31,74 +18,38 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'archived' | 'completed'>('all')
 
-  // Mock data - in real app this would come from API/state management
-  const mockCollections: Collection[] = [
-    {
-      id: '1',
-      title: 'Employment Contract Review',
-      domain: 'Employment Law',
-      summary: 'Comprehensive review of employment contract terms, salary compliance analysis, and identification of potentially problematic clauses requiring immediate legal attention.',
-      lastUpdated: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
-      messageCount: 12,
-      documentCount: 2,
-      actionItemsCount: 3,
-      urgentActionsCount: 1,
-      status: 'active'
-    },
-    {
-      id: '2',
-      title: 'Business Registration Malaysia',
-      domain: 'Business Law',
-      summary: 'Complete guidance for SSM registration process, business structure analysis, and regulatory compliance requirements for starting a new company in Malaysia.',
-      lastUpdated: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
-      messageCount: 8,
-      documentCount: 1,
-      actionItemsCount: 2,
-      urgentActionsCount: 0,
-      status: 'completed'
-    },
-    {
-      id: '3',
-      title: 'Property Purchase Agreement',
-      domain: 'Property Law',
-      summary: 'Analysis of property purchase agreement, stamp duty calculations, and legal requirements for property transfer in Kuala Lumpur.',
-      lastUpdated: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 1 week ago
-      messageCount: 15,
-      documentCount: 4,
-      actionItemsCount: 5,
-      urgentActionsCount: 2,
-      status: 'active'
-    },
-    {
-      id: '4',
-      title: 'Divorce Proceedings Consultation',
-      domain: 'Family Law',
-      summary: 'Initial consultation regarding divorce proceedings, child custody arrangements, and asset division under Malaysian family law.',
-      lastUpdated: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000), // 2 weeks ago
-      messageCount: 6,
-      documentCount: 1,
-      actionItemsCount: 1,
-      urgentActionsCount: 0,
-      status: 'archived'
-    }
-  ]
+  // Load collections from API with filters
+  const { 
+    data: collections, 
+    loading: collectionsLoading, 
+    error: collectionsError 
+  } = useApiCall(() => collectionsApi.getCollections({
+    status: statusFilter === 'all' ? undefined : statusFilter,
+    search: searchQuery || undefined,
+    limit: 50
+  }), [statusFilter, searchQuery])
 
-  const stats = {
-    totalCollections: mockCollections.length,
-    activeCollections: mockCollections.filter(c => c.status === 'active').length,
-    totalActions: mockCollections.reduce((sum, c) => sum + c.actionItemsCount, 0),
-    urgentActions: mockCollections.reduce((sum, c) => sum + c.urgentActionsCount, 0)
+  // Load user stats from API  
+  const { 
+    data: userStats, 
+    loading: statsLoading, 
+    error: statsError 
+  } = useApiCall(() => userApi.getStats(), [])
+
+  const stats = userStats ? {
+    totalCollections: userStats.totalCollections,
+    activeCollections: userStats.activeCollections,
+    totalActions: userStats.totalActions,
+    urgentActions: userStats.urgentActions
+  } : {
+    totalCollections: 0,
+    activeCollections: 0,
+    totalActions: 0,
+    urgentActions: 0
   }
 
-  const filteredCollections = mockCollections.filter(collection => {
-    const matchesSearch = collection.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         collection.domain.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         collection.summary.toLowerCase().includes(searchQuery.toLowerCase())
-    
-    const matchesStatus = statusFilter === 'all' || collection.status === statusFilter
-    
-    return matchesSearch && matchesStatus
-  })
+  // Collections are already filtered by API, no need for client-side filtering
+  const filteredCollections = collections || []
 
 
   return (
@@ -142,7 +93,11 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
               whileHover={{ scale: 1.02 }}
               transition={{ duration: 0.2 }}
             >
-              <div className="text-2xl font-bold text-purple-primary">{stats.totalCollections}</div>
+              {statsLoading ? (
+                <Loader2 className="w-6 h-6 animate-spin mx-auto text-purple-primary" />
+              ) : (
+                <div className="text-2xl font-bold text-purple-primary">{stats.totalCollections}</div>
+              )}
               <div className="body-small text-text-secondary">Total Collections</div>
             </motion.div>
             <motion.div 
@@ -150,7 +105,11 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
               whileHover={{ scale: 1.02 }}
               transition={{ duration: 0.2 }}
             >
-              <div className="text-2xl font-bold text-success">{stats.activeCollections}</div>
+              {statsLoading ? (
+                <Loader2 className="w-6 h-6 animate-spin mx-auto text-success" />
+              ) : (
+                <div className="text-2xl font-bold text-success">{stats.activeCollections}</div>
+              )}
               <div className="body-small text-text-secondary">Active</div>
             </motion.div>
             <motion.div 
@@ -158,7 +117,11 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
               whileHover={{ scale: 1.02 }}
               transition={{ duration: 0.2 }}
             >
-              <div className="text-2xl font-bold text-info">{stats.totalActions}</div>
+              {statsLoading ? (
+                <Loader2 className="w-6 h-6 animate-spin mx-auto text-info" />
+              ) : (
+                <div className="text-2xl font-bold text-info">{stats.totalActions}</div>
+              )}
               <div className="body-small text-text-secondary">Total Actions</div>
             </motion.div>
             <motion.div 
@@ -166,7 +129,11 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
               whileHover={{ scale: 1.02 }}
               transition={{ duration: 0.2 }}
             >
-              <div className="text-2xl font-bold text-warning">{stats.urgentActions}</div>
+              {statsLoading ? (
+                <Loader2 className="w-6 h-6 animate-spin mx-auto text-warning" />
+              ) : (
+                <div className="text-2xl font-bold text-warning">{stats.urgentActions}</div>
+              )}
               <div className="body-small text-text-secondary">Urgent</div>
             </motion.div>
           </div>
@@ -238,7 +205,38 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
         >
-          {filteredCollections.length === 0 ? (
+          {/* Error State */}
+          {collectionsError && (
+            <Card className="text-center py-12 border-red-200 bg-red-50">
+              <CardContent>
+                <div className="mb-4 flex justify-center">
+                  <AlertTriangle className="w-16 h-16 text-red-500" />
+                </div>
+                <h3 className="heading-3 mb-2 text-red-700">Error Loading Collections</h3>
+                <p className="body-regular text-red-600 mb-4">
+                  {collectionsError}
+                </p>
+                <Button 
+                  onClick={() => window.location.reload()} 
+                  variant="secondary"
+                  className="border-red-300 text-red-700 hover:bg-red-100"
+                >
+                  Try Again
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Loading State */}
+          {collectionsLoading && !collectionsError && (
+            <div className="text-center py-12">
+              <Loader2 className="w-12 h-12 animate-spin mx-auto text-purple-primary mb-4" />
+              <p className="body-regular text-text-secondary">Loading your collections...</p>
+            </div>
+          )}
+
+          {/* Empty State */}
+          {!collectionsLoading && !collectionsError && filteredCollections.length === 0 && (
             <Card className="text-center py-12">
               <CardContent>
                 <div className="mb-4 flex justify-center">
@@ -256,7 +254,10 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
                 </Button>
               </CardContent>
             </Card>
-          ) : (
+          )}
+
+          {/* Collections Grid/List */}
+          {!collectionsLoading && !collectionsError && filteredCollections.length > 0 && (
             <div className={viewMode === 'grid' 
               ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' 
               : 'space-y-4'

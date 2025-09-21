@@ -5,9 +5,10 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/Button'
 import { Textarea } from '@/components/ui/Input'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs'
-import { ArrowLeft, Send, Paperclip, Bookmark, FileText, Lightbulb, Search, ClipboardList, AlertTriangle, CheckCircle, ExternalLink, PanelLeftOpen, PanelLeftClose, X, Download, Eye } from 'lucide-react'
-import { LegalDomain, Message, FileAttachment } from '@/types'
+import { ArrowLeft, Send, Paperclip, Bookmark, FileText, Lightbulb, Search, ClipboardList, AlertTriangle, CheckCircle, ExternalLink, PanelLeftOpen, PanelLeftClose, X, Download, Eye, ChevronDown, Edit } from 'lucide-react'
+import { LegalDomain, Message, FileAttachment, Document } from '@/types'
 import { LEGAL_DOMAINS } from '@/constants/domains'
+import { documentsApi, chatApi, useApiCall, useApiMutation } from '@/api'
 
 interface ChatbotScreenProps {
   domain: LegalDomain
@@ -108,7 +109,7 @@ const mockAnalysis = {
 }
 
 // Memoized Draft Message Bubble Component
-const DraftMessageBubble = memo(() => (
+const DraftMessageBubble = memo(({ draftResult }: { draftResult: any }) => (
   <motion.div
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
@@ -127,7 +128,7 @@ const DraftMessageBubble = memo(() => (
       <div className="p-4">
         <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 mb-4">
           <pre className="whitespace-pre-wrap text-sm text-text-primary font-mono leading-relaxed">
-            {mockDraftResponse.documentDraft}
+            {draftResult.content}
           </pre>
         </div>
         
@@ -137,7 +138,7 @@ const DraftMessageBubble = memo(() => (
             <span>Editing Suggestions</span>
           </h4>
           
-          {mockDraftResponse.editingSuggestions.map((suggestion, index) => (
+          {(draftResult.suggestions || []).map((suggestion: any, index: number) => (
             <div key={index} className="flex items-start space-x-3 p-3 bg-purple-subtle/20 rounded-lg border border-purple-primary/10">
               <div className={`w-2 h-2 rounded-full mt-2 ${
                 suggestion.priority === 'high' ? 'bg-red-500' : 
@@ -186,8 +187,8 @@ const DraftMessageBubble = memo(() => (
 
 DraftMessageBubble.displayName = 'DraftMessageBubble'
 
-// Memoized Analysis Message Bubble Component
-const AnalysisMessageBubble = memo(() => (
+// Memoized Analysis Message Bubble Component  
+const AnalysisMessageBubble = memo(({ analysisResult }: { analysisResult: any }) => (
   <motion.div
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
@@ -222,7 +223,7 @@ const AnalysisMessageBubble = memo(() => (
               <Lightbulb className="w-4 h-4 text-purple-primary" />
               <span className="body-small font-medium text-purple-primary">Legal Explanation</span>
             </div>
-            <p className="body-regular text-text-primary">{mockAnalysis.explanation}</p>
+            <p className="body-regular text-text-primary">{analysisResult.explanation}</p>
           </div>
         </TabsContent>
 
@@ -233,9 +234,9 @@ const AnalysisMessageBubble = memo(() => (
               <span>Risk Assessment</span>
             </h4>
             <div className="space-y-2">
-              {mockAnalysis.risks.map((risk, index) => (
+              {analysisResult.risks.map((risk: any, index: number) => (
                 <div key={index} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
-                  <risk.icon className={`w-4 h-4 mt-0.5 ${
+                  <AlertTriangle className={`w-4 h-4 mt-0.5 ${
                     risk.level === 'high' ? 'text-red-500' : 
                     risk.level === 'medium' ? 'text-yellow-500' : 'text-green-500'
                   }`} />
@@ -248,6 +249,9 @@ const AnalysisMessageBubble = memo(() => (
                       {risk.level.toUpperCase()}
                     </span>
                     <p className="body-small text-text-primary">{risk.description}</p>
+                    {risk.recommendation && (
+                      <p className="caption text-text-secondary mt-1">{risk.recommendation}</p>
+                    )}
                   </div>
                 </div>
               ))}
@@ -260,7 +264,7 @@ const AnalysisMessageBubble = memo(() => (
               <span>Key Points</span>
             </h4>
             <div className="space-y-2">
-              {mockAnalysis.keyPoints.map((point, index) => (
+              {analysisResult.keyPoints.map((point: string, index: number) => (
                 <div key={index} className="flex items-start space-x-3 p-2">
                   <span className="text-purple-primary mt-1 text-sm">•</span>
                   <span className="body-small text-text-primary">{point}</span>
@@ -271,7 +275,7 @@ const AnalysisMessageBubble = memo(() => (
         </TabsContent>
 
         <TabsContent value="actions" className="p-4 space-y-3">
-          {mockAnalysis.actions.map((action) => (
+          {analysisResult.actionItems.map((action: any) => (
             <div key={action.id} className="border border-purple-primary/20 bg-purple-subtle/20 rounded-lg p-4">
               <div className="flex items-start space-x-3">
                 <input 
@@ -292,12 +296,12 @@ const AnalysisMessageBubble = memo(() => (
                   <p className="body-small text-text-secondary mb-3">{action.description}</p>
                   {action.externalLinks && (
                     <div className="flex flex-wrap gap-2">
-                      {action.externalLinks.map((link, index) => (
+                      {action.externalLinks.map((link: any, index: number) => (
                         <Button 
                           key={index} 
                           variant="secondary" 
                           size="small"
-                          leftIcon={link.icon ? <link.icon className="w-3 h-3" /> : undefined}
+                          leftIcon={<ExternalLink className="w-3 h-3" />}
                           className="text-xs"
                         >
                           {link.text}
@@ -355,29 +359,54 @@ RegularMessageBubble.displayName = 'RegularMessageBubble'
 
 export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
   const [showDocumentPrompt, setShowDocumentPrompt] = useState(true)
-  const [messages, setMessages] = useState<Message[]>([])
+  const [currentSession, setCurrentSession] = useState<any>(null) // Will use proper type from API
   const [inputValue, setInputValue] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
   const [isDraftMode, setIsDraftMode] = useState(false)
+  const [selectedDocumentForEdit, setSelectedDocumentForEdit] = useState<Document | null>(null)
+  const [showDocumentDropdown, setShowDocumentDropdown] = useState(false)
   const [isDragOver, setIsDragOver] = useState(false)
   const [isSidePanelOpen, setIsSidePanelOpen] = useState(false)
-  const [uploadedFiles, setUploadedFiles] = useState<FileAttachment[]>([
-    // Mock files for demonstration
-    {
-      id: 'mock-1',
-      filename: 'employment_contract_template.pdf',
-      fileType: 'application/pdf',
-      fileSize: 245760, // 240 KB
-      url: '#'
-    },
-    {
-      id: 'mock-2', 
-      filename: 'company_bylaws_draft.pdf',
-      fileType: 'application/pdf',
-      fileSize: 512000, // 500 KB
-      url: '#'
+  const [analysisData, setAnalysisData] = useState<any>(null)
+  const [draftData, setDraftData] = useState<any>(null)
+
+  // API hooks
+  // #TODO: Replace documentsApi.getDocuments() with real backend endpoint
+  // GET /api/documents - Fetch user's uploaded documents
+  const { data: availableDocuments, loading: documentsLoading } = useApiCall(
+    () => documentsApi.getDocuments(),
+    []
+  )
+  
+  // #TODO: Replace chatApi.createSession with real backend endpoint  
+  // POST /api/chat/sessions - Create new chat session
+  const { mutate: createSession, loading: creatingSession } = useApiMutation(chatApi.createSession)
+  
+  // Custom sendMessage function since the API takes multiple parameters
+  const [sendingMessage, setSendingMessage] = useState(false)
+  const sendMessage = async (sessionId: string, request: any) => {
+    setSendingMessage(true)
+    try {
+      // #TODO: Replace chatApi.sendMessage with real backend endpoint
+      // POST /api/chat/sessions/{sessionId}/messages - Send message and get AI response
+      const response = await chatApi.sendMessage(sessionId, request)
+      return response
+    } finally {
+      setSendingMessage(false)
     }
-  ])
+  }
+
+  // Convert API documents to FileAttachment format for display consistency
+  const uploadedFiles: FileAttachment[] = useMemo(() => {
+    if (!availableDocuments) return []
+    
+    return availableDocuments.map(doc => ({
+      id: doc.id,
+      filename: doc.originalFilename,
+      fileType: doc.fileType,
+      fileSize: doc.fileSize,
+      url: `#document-${doc.id}` // Placeholder URL
+    }))
+  }, [availableDocuments])
   // Remove separate state variables - we'll use message types instead
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -390,83 +419,87 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
 
   useEffect(() => {
     scrollToBottom()
-  }, [messages])
+  }, [currentSession?.messages])
+
+  // Click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      const dropdown = document.querySelector('.document-dropdown')
+      const button = document.querySelector('.document-dropdown-button')
+      
+      if (showDocumentDropdown && dropdown && button && 
+          !dropdown.contains(target) && !button.contains(target)) {
+        setShowDocumentDropdown(false)
+      }
+    }
+
+    if (showDocumentDropdown) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showDocumentDropdown])
 
   const handleSendMessage = async () => {
-    if (!inputValue.trim()) return
+    if (!inputValue.trim() || !currentSession) return
 
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      content: inputValue,
+    const messageType = isDraftMode ? 'draft_request' : 'analysis_request'
+    const messageContent = inputValue.trim()
+    setInputValue('')
+
+    // Create user message immediately
+    const userMessage: Message = {
+      id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      content: messageContent,
       sender: 'user',
       timestamp: new Date(),
       domain
     }
 
-    setMessages(prev => [...prev, newMessage])
-    setInputValue('')
-    setIsLoading(true)
+    // Add user message to session immediately
+    const newMessages = [...currentSession.messages, userMessage]
+    setCurrentSession({
+      ...currentSession,
+      messages: newMessages
+    })
 
-    // Simulate AI response based on mode
-    setTimeout(() => {
-      let responseContent = ''
-      if (isDraftMode) {
-        responseContent = `I'm ready to draft a legal document for you regarding ${inputValue.toLowerCase()}. 
+    try {
+      const response = await sendMessage(
+        currentSession.id,
+        {
+          content: messageContent,
+          messageType: messageType,
+          attachments: selectedDocumentForEdit ? [selectedDocumentForEdit.id] : undefined
+        }
+      )
 
-⚠️ **Important Disclaimer**: This draft is AI-generated and should be reviewed by a qualified lawyer before use. However, it can help you convey your message faster and serve as a starting point.
+      if (response && response.success) {
+        const responseData = response.data as any
+        
+        // Add AI response if provided
+        if (responseData.aiResponse) {
+          const updatedMessages = [...newMessages, responseData.aiResponse]
+          setCurrentSession({
+            ...currentSession,
+            messages: updatedMessages
+          })
+        }
 
-Would you like me to:
-1. Create a new document draft
-2. Upload an existing document for me to help you edit
-
-Please let me know how you'd like to proceed!`
-      } else {
-        responseContent = `I understand you're asking about ${inputValue.toLowerCase()}. Let me analyze this for you and provide detailed guidance.`
+        // Store analysis/draft data separately for special message bubbles
+        if (responseData.analysisResult) {
+          setAnalysisData(responseData.analysisResult)
+        }
+        if (responseData.draftResult) {
+          setDraftData(responseData.draftResult)
+        }
       }
-
-      const botResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        content: responseContent,
-        sender: 'assistant',
-        timestamp: new Date(),
-        domain,
-        type: 'text'
-      }
-      setMessages(prev => [...prev, botResponse])
-      
-      // Add appropriate response based on mode directly to messages
-      if (isDraftMode) {
-        // Add draft response after a delay
-        setTimeout(() => {
-          const draftResponse: Message = {
-            id: (Date.now() + 2).toString(),
-            content: "Here's your document draft:",
-            sender: 'assistant',
-            timestamp: new Date(),
-            domain,
-            type: 'draft'
-          }
-          setMessages(prev => [...prev, draftResponse])
-        }, 1000)
-      } else {
-        // Add analysis response after a delay
-        setTimeout(() => {
-          const analysisResponse: Message = {
-            id: (Date.now() + 2).toString(),
-            content: "Here's my detailed analysis:",
-            sender: 'assistant',
-            timestamp: new Date(),
-            domain,
-            type: 'analysis'
-          }
-          setMessages(prev => [...prev, analysisResponse])
-        }, 800)
-      }
-      setIsLoading(false)
-    }, 1500)
+    } catch (error) {
+      console.error('Failed to send message:', error)
+      // Could add error handling UI here
+    }
   }
 
-  const handleFileUpload = (files: FileList | null) => {
+  const handleFileUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return
     
     const pdfFiles = Array.from(files).filter(file => file.type === 'application/pdf')
@@ -485,97 +518,57 @@ Please let me know how you'd like to proceed!`
       url: URL.createObjectURL(file)
     }))
     
-    setUploadedFiles(prev => [...prev, ...newFiles])
+    // #TODO: Implement file upload with documentsApi.upload() 
+    // POST /api/documents/upload - Upload PDF files with progress tracking
+    // Should call API to upload files and refresh availableDocuments
+    // setUploadedFiles(prev => [...prev, ...newFiles])
 
     // If this is the first upload (document prompt is showing), start the chat
     if (showDocumentPrompt) {
-      setShowDocumentPrompt(false)
-      
-      // Initialize with upload-focused welcome message
-      const uploadMessage: Message = {
-        id: '1',
-        content: `Perfect! I've received your ${pdfFiles.length > 1 ? 'documents' : 'document'} and I'm ready to analyze ${pdfFiles.length > 1 ? 'them' : 'it'}. Let me know what specific questions you have about your legal documents.`,
-        sender: 'assistant',
-        timestamp: new Date(),
-        domain,
-        type: 'text'
-      }
-      setMessages([uploadMessage])
+      handleUploadFirst()
       return
     }
 
-    // Handle uploads during chat
-    const file = pdfFiles[0] // For backwards compatibility with existing logic
+    // Handle uploads during chat - trigger AI analysis
+    if (currentSession) {
+      const file = pdfFiles[0]
+      const messageType = isDraftMode ? 'draft_request' : 'analysis_request'
+      
+      try {
+        const response = await sendMessage(
+          currentSession.id,
+          {
+            content: `I've uploaded "${file.name}" for ${isDraftMode ? 'editing' : 'analysis'}. Please help me with this document.`,
+            messageType: messageType
+          }
+        )
 
-    // Simulate file upload and analysis
-    const fileMessage: Message = {
-      id: Date.now().toString(),
-      content: `📄 Uploaded: ${file.name}`,
-      sender: 'user',
-      timestamp: new Date(),
-      domain
+        if (response && response.success) {
+          const responseData = response.data as any
+          // Update session with new messages
+          const newMessages = [...currentSession.messages, responseData.message]
+          
+          if (responseData.aiResponse) {
+            newMessages.push(responseData.aiResponse)
+          }
+
+          // Store analysis/draft data
+          if (responseData.analysisResult) {
+            setAnalysisData(responseData.analysisResult)
+          }
+          if (responseData.draftResult) {
+            setDraftData(responseData.draftResult)
+          }
+
+          setCurrentSession({
+            ...currentSession,
+            messages: newMessages
+          })
+        }
+      } catch (error) {
+        console.error('Failed to analyze uploaded file:', error)
+      }
     }
-    
-    setMessages(prev => [...prev, fileMessage])
-    setIsLoading(true)
-    
-    setTimeout(() => {
-        let responseContent = ''
-        if (isDraftMode) {
-          responseContent = `I've received your document "${file.name}" and I'm ready to help you edit it!
-
-⚠️ **Important Disclaimer**: My edits are AI-generated suggestions and should be reviewed by a qualified lawyer before use.
-
-I can help you with:
-• Improving clarity and structure
-• Suggesting legal language improvements
-• Identifying potential gaps or issues
-• Formatting and organization
-
-What specific aspects would you like me to focus on while editing your document?`
-        } else {
-          responseContent = `I've analyzed your document "${file.name}". Here's my detailed assessment:`
-        }
-
-        const analysisResponse: Message = {
-          id: (Date.now() + 1).toString(),
-          content: responseContent,
-          sender: 'assistant',
-          timestamp: new Date(),
-          domain
-        }
-        setMessages(prev => [...prev, analysisResponse])
-        
-        // Add appropriate response based on mode directly to messages
-        if (isDraftMode) {
-          // Add editing suggestions after a delay in draft mode
-          setTimeout(() => {
-            const editResponse: Message = {
-              id: (Date.now() + 3).toString(),
-              content: "Here are my editing suggestions:",
-              sender: 'assistant',
-              timestamp: new Date(),
-              domain,
-              type: 'draft'
-            }
-            setMessages(prev => [...prev, editResponse])
-          }, 1000)
-        } else {
-          // Add analysis response after a delay
-          setTimeout(() => {
-            const detailAnalysisResponse: Message = {
-              id: (Date.now() + 3).toString(),
-              content: "Here's my detailed analysis:",
-              sender: 'assistant',
-              timestamp: new Date(),
-              domain,
-              type: 'analysis'
-            }
-            setMessages(prev => [...prev, detailAnalysisResponse])
-          }, 800)
-        }
-        setIsLoading(false)
-      }, 2000)
   }
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -602,40 +595,42 @@ What specific aspects would you like me to focus on while editing your document?
   }
 
   const handleSaveToCollection = () => {
-    // TODO: Implement save to collection
+    // #TODO: Implement save to collection with collectionsApi.createCollection()
+    // POST /api/collections - Save current chat session to a collection
     console.log('Save to collection clicked')
   }
 
-  const handleStartChat = () => {
-    setShowDocumentPrompt(false)
-    // Initialize with welcome message
-    const welcomeMessage: Message = {
-      id: '1',
-      content: `Hi! I'm your legal assistant for ${LEGAL_DOMAINS[domain]?.title || 'General'} matters. How can I help you today?`,
-      sender: 'assistant',
-      timestamp: new Date(),
-      domain,
-      type: 'text'
+  const handleStartChat = async () => {
+    try {
+      const response = await createSession({ domain })
+      
+      if (response) {
+        setCurrentSession(response)
+        setShowDocumentPrompt(false)
+      }
+    } catch (error) {
+      console.error('Failed to create session:', error)
     }
-    setMessages([welcomeMessage])
   }
 
   const handleSkipUpload = () => {
     handleStartChat()
   }
 
-  const handleUploadFirst = () => {
-    setShowDocumentPrompt(false)
-    // Initialize with upload-focused welcome message
-    const uploadMessage: Message = {
-      id: '1',
-      content: `Perfect! I'm ready to analyze your ${LEGAL_DOMAINS[domain]?.title || 'General'} documents. Please upload your contracts, agreements, or any legal documents you'd like me to review.`,
-      sender: 'assistant',
-      timestamp: new Date(),
-      domain,
-      type: 'text'
+  const handleUploadFirst = async () => {
+    try {
+      const response = await createSession({ 
+        domain,
+        initialMessage: "I have documents to upload for analysis"
+      })
+      
+      if (response) {
+        setCurrentSession(response)
+        setShowDocumentPrompt(false)
+      }
+    } catch (error) {
+      console.error('Failed to create session:', error)
     }
-    setMessages([uploadMessage])
   }
 
   const formatFileSize = (bytes: number): string => {
@@ -938,34 +933,131 @@ What specific aspects would you like me to focus on while editing your document?
             </div>
           </div>
 
-          <Button
-            variant={isDraftMode ? 'primary' : 'secondary'}
-            size="small"
-            leftIcon={isDraftMode ? <FileText className="w-3 h-3" /> : <Search className="w-3 h-3" />}
-            onClick={() => {
-              const newMode = !isDraftMode
-              setIsDraftMode(newMode)
-              
-              // Add a system message when switching modes
-              const modeMessage: Message = {
-                id: Date.now().toString(),
-                content: newMode 
-                  ? "🔄 Switched to Draft Mode - I'm now ready to help you create and edit legal documents! All previous conversations remain accessible."
-                  : "🔄 Switched to Analysis Mode - I'm now ready to provide legal analysis and guidance! All previous conversations remain accessible.",
-                sender: 'assistant',
-                timestamp: new Date(),
-                domain
-              }
-              setMessages(prev => [...prev, modeMessage])
-            }}
-            className={`transition-all duration-300 ${
-              isDraftMode 
-                ? 'shadow-lg shadow-purple-primary/20 ring-2 ring-purple-primary/20' 
-                : 'hover:shadow-md'
-            }`}
-          >
-            {isDraftMode ? 'Analysis Mode' : 'Draft Mode'}
-          </Button>
+          {/* Document Edit Mode Dropdown */}
+          <div className="relative">
+            <Button
+              variant={selectedDocumentForEdit ? 'primary' : 'secondary'}
+              size="small"
+              leftIcon={selectedDocumentForEdit ? <Edit className="w-3 h-3" /> : <Search className="w-3 h-3" />}
+              rightIcon={<ChevronDown className="w-3 h-3" />}
+              onClick={() => setShowDocumentDropdown(!showDocumentDropdown)}
+              className={`document-dropdown-button transition-all duration-300 ${
+                selectedDocumentForEdit 
+                  ? 'shadow-lg shadow-purple-primary/20 ring-2 ring-purple-primary/20' 
+                  : 'hover:shadow-md'
+              }`}
+            >
+              {selectedDocumentForEdit ? `Editing: ${selectedDocumentForEdit.originalFilename}` : 'Analysis Mode'}
+            </Button>
+
+            {/* Dropdown Menu */}
+            <AnimatePresence>
+              {showDocumentDropdown && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
+                  className="document-dropdown absolute top-full left-0 mt-2 w-80 bg-surface-white border border-gray-200 rounded-lg shadow-xl z-50"
+                >
+                  <div className="p-2">
+                    {/* Analysis Mode Option */}
+                    <button
+                      onClick={() => {
+                        setSelectedDocumentForEdit(null)
+                        setIsDraftMode(false)
+                        setShowDocumentDropdown(false)
+                        
+                        if (currentSession) {
+                          const modeMessage: Message = {
+                            id: Date.now().toString(),
+                            content: "🔄 Switched to Analysis Mode - I'm ready to provide legal analysis and guidance!",
+                            sender: 'assistant',
+                            timestamp: new Date(),
+                            domain
+                          }
+                          setCurrentSession({
+                            ...currentSession,
+                            messages: [...currentSession.messages, modeMessage]
+                          })
+                        }
+                      }}
+                      className={`w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors ${
+                        !selectedDocumentForEdit ? 'bg-purple-subtle text-purple-primary' : 'text-text-primary'
+                      }`}
+                    >
+                      <Search className="w-4 h-4" />
+                      <div className="text-left">
+                        <div className="font-medium">Analysis Mode</div>
+                        <div className="text-sm opacity-70">Get legal advice and document analysis</div>
+                      </div>
+                    </button>
+
+                    {/* Documents List */}
+                    <div className="mt-2 border-t border-gray-100 pt-2">
+                      <div className="px-3 py-2">
+                        <div className="text-sm font-medium text-text-secondary">Draft Agent:</div>
+                      </div>
+                      
+                      {documentsLoading ? (
+                        <div className="px-3 py-4 text-center text-text-secondary">
+                          <div className="animate-spin w-4 h-4 border-2 border-purple-primary border-t-transparent rounded-full mx-auto mb-2"></div>
+                          Loading documents...
+                        </div>
+                      ) : availableDocuments && availableDocuments.length > 0 ? (
+                        <div className="max-h-60 overflow-y-auto">
+                          {availableDocuments.map((document) => (
+                            <button
+                              key={document.id}
+                              onClick={() => {
+                                setSelectedDocumentForEdit(document)
+                                setIsDraftMode(true)
+                                setShowDocumentDropdown(false)
+                                
+                                if (currentSession) {
+                                  const modeMessage: Message = {
+                                    id: Date.now().toString(),
+                                    content: `🔄 Switched to Edit Mode for "${document.originalFilename}" - I'm ready to help you edit this document!`,
+                                    sender: 'assistant',
+                                    timestamp: new Date(),
+                                    domain
+                                  }
+                                  setCurrentSession({
+                                    ...currentSession,
+                                    messages: [...currentSession.messages, modeMessage]
+                                  })
+                                }
+                              }}
+                              className={`w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors ${
+                                selectedDocumentForEdit?.id === document.id ? 'bg-purple-subtle text-purple-primary' : 'text-text-primary'
+                              }`}
+                            >
+                              <FileText className="w-4 h-4" />
+                              <div className="text-left flex-1 min-w-0">
+                                <div className="font-medium truncate">{document.originalFilename}</div>
+                                <div className="text-sm opacity-70">
+                                  {Math.round(document.fileSize / 1024)}KB • {document.analysisStatus}
+                                </div>
+                              </div>
+                              {selectedDocumentForEdit?.id === document.id && (
+                                <div className="w-2 h-2 bg-purple-primary rounded-full"></div>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="px-3 py-4 text-center text-text-secondary">
+                          <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                          <div className="text-sm">No documents available</div>
+                          <div className="text-xs opacity-70">Upload documents to edit them</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
           <Button
             variant="ghost"
@@ -1002,54 +1094,54 @@ What specific aspects would you like me to focus on while editing your document?
       ) : (
         <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-4">
           <AnimatePresence>
-            {messages.map((message) => {
-            // Handle special message types
-            if (message.type === 'analysis') {
-              return <AnalysisMessageBubble key={message.id} />
-            }
-            if (message.type === 'draft') {
-              return <DraftMessageBubble key={message.id} />
-            }
-            
-            // Handle regular text messages
-            return <RegularMessageBubble key={message.id} message={message} />
-          })}
-        </AnimatePresence>
+            {currentSession?.messages.map((message: Message) => {
+              // Handle special message types
+              if (message.type === 'analysis' && analysisData) {
+                return <AnalysisMessageBubble key={message.id} analysisResult={analysisData} />
+              }
+              if (message.type === 'draft' && draftData) {
+                return <DraftMessageBubble key={message.id} draftResult={draftData} />
+              }
+              
+              // Handle regular text messages
+              return <RegularMessageBubble key={message.id} message={message} />
+            })}
+          </AnimatePresence>
 
-        {isLoading && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex justify-start"
-          >
-            <div className="bg-surface-white border border-gray-200 px-4 py-3 rounded-2xl rounded-bl-sm max-w-[85%]">
-              <div className="flex space-x-1">
-                <motion.div
-                  className="w-2 h-2 bg-text-secondary rounded-full"
-                  animate={{ opacity: [0.3, 1, 0.3] }}
-                  transition={{ duration: 1, repeat: Infinity, delay: 0 }}
-                />
-                <motion.div
-                  className="w-2 h-2 bg-text-secondary rounded-full"
-                  animate={{ opacity: [0.3, 1, 0.3] }}
-                  transition={{ duration: 1, repeat: Infinity, delay: 0.2 }}
-                />
-                <motion.div
-                  className="w-2 h-2 bg-text-secondary rounded-full"
-                  animate={{ opacity: [0.3, 1, 0.3] }}
-                  transition={{ duration: 1, repeat: Infinity, delay: 0.4 }}
-                />
+          {(sendingMessage || creatingSession) && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex justify-start"
+            >
+              <div className="bg-surface-white border border-gray-200 px-4 py-3 rounded-2xl rounded-bl-sm max-w-[85%]">
+                <div className="flex space-x-1">
+                  <motion.div
+                    className="w-2 h-2 bg-text-secondary rounded-full"
+                    animate={{ opacity: [0.3, 1, 0.3] }}
+                    transition={{ duration: 1, repeat: Infinity, delay: 0 }}
+                  />
+                  <motion.div
+                    className="w-2 h-2 bg-text-secondary rounded-full"
+                    animate={{ opacity: [0.3, 1, 0.3] }}
+                    transition={{ duration: 1, repeat: Infinity, delay: 0.2 }}
+                  />
+                  <motion.div
+                    className="w-2 h-2 bg-text-secondary rounded-full"
+                    animate={{ opacity: [0.3, 1, 0.3] }}
+                    transition={{ duration: 1, repeat: Infinity, delay: 0.4 }}
+                  />
+                </div>
               </div>
-            </div>
-          </motion.div>
-        )}
+            </motion.div>
+          )}
         
           <div ref={messagesEndRef} />
         </div>
       )}
 
-      {/* Input Section - Only show when not showing document prompt */}
-      {!showDocumentPrompt && (
+      {/* Input Section - Only show when session exists */}
+      {currentSession && (
         <div className="bg-surface-white border-t border-gray-200 p-4 pb-nav">
         <div className="flex items-center space-x-2 mb-3">
           <Button
@@ -1089,12 +1181,12 @@ What specific aspects would you like me to focus on while editing your document?
             rows={1}
           />
           
-          <Button
-            size="small"
-            onClick={handleSendMessage}
-            disabled={!inputValue.trim() || isLoading}
-            className="absolute right-2 bottom-2 rounded-full w-8 h-8 p-0"
-          >
+            <Button
+              size="small"
+              onClick={handleSendMessage}
+              disabled={!inputValue.trim() || sendingMessage}
+              className="absolute right-2 bottom-2 rounded-full w-8 h-8 p-0"
+            >
             <Send className="w-4 h-4" />
           </Button>
         </div>

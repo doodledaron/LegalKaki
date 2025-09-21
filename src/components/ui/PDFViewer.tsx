@@ -3,13 +3,19 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/Button'
-import { Eye, EyeOff, ZoomIn, ZoomOut, Download, X, Lightbulb } from 'lucide-react'
+import { Eye, EyeOff, ZoomIn, ZoomOut, Download, X, Lightbulb, AlertCircle, Loader2 } from 'lucide-react'
+import { Document, Page, pdfjs } from 'react-pdf'
+import { pdfApi } from '@/api'
 
-interface LegalTerm {
-  word: string
-  explanation: string
-  category: 'clause' | 'legal-term' | 'obligation' | 'right' | 'warning'
-}
+// Configure PDF.js worker for react-pdf v9
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url,
+).toString()
+
+// Import necessary CSS for text layer and annotations
+import 'react-pdf/dist/Page/AnnotationLayer.css'
+import 'react-pdf/dist/Page/TextLayer.css'
 
 interface Tooltip {
   content: string
@@ -18,6 +24,7 @@ interface Tooltip {
   visible: boolean
   category: string
   selectedText?: string
+  confidence?: number
 }
 
 interface PDFViewerProps {
@@ -26,173 +33,68 @@ interface PDFViewerProps {
   onClose?: () => void
 }
 
-// Mock legal document content with interactive terms
-const mockDocumentContent = `
-EMPLOYMENT AGREEMENT
-
-This Employment Agreement ("Agreement") is entered into on [DATE] between [COMPANY NAME], a company incorporated under the laws of Malaysia ("Company"), and [EMPLOYEE NAME] ("Employee").
-
-1. POSITION AND DUTIES
-The Employee is hereby engaged as [JOB TITLE] and shall perform such duties as may be assigned by the Company from time to time. The Employee agrees to devote their full time and attention to the business of the Company during normal working hours.
-
-2. COMPENSATION AND BENEFITS
-a) Basic Salary: The Company shall pay the Employee a basic salary of RM [AMOUNT] per month.
-b) EPF Contribution: The Company will make mandatory contributions to the Employee's EPF account as required by law.
-c) SOCSO: Both parties shall contribute to SOCSO as mandated by Malaysian employment legislation.
-d) Annual Leave: The Employee is entitled to [NUMBER] days of annual leave per calendar year.
-
-3. TERMINATION
-Either party may terminate this Agreement by giving not less than one (1) month's written notice to the other party. The Company reserves the right to terminate this Agreement immediately for just cause, including but not limited to misconduct, breach of confidentiality, or violation of company policies.
-
-4. CONFIDENTIALITY
-The Employee acknowledges that during the course of employment, they may have access to confidential information belonging to the Company. The Employee agrees to maintain strict confidentiality and not to disclose such information to any third party.
-
-5. NON-COMPETE CLAUSE
-For a period of twelve (12) months after termination of employment, the Employee agrees not to engage in any business that competes directly with the Company's business within Malaysia.
-
-6. GOVERNING LAW
-This Agreement shall be governed by and construed in accordance with the laws of Malaysia.
-`
-
-// Mock explanations for legal terms
-const legalTerms: LegalTerm[] = [
-  {
-    word: "EPF",
-    explanation: "Employees Provident Fund - A mandatory retirement savings scheme in Malaysia where both employer and employee contribute.",
-    category: "legal-term"
-  },
-  {
-    word: "SOCSO",
-    explanation: "Social Security Organisation - Provides social security protection to employees through employment injury and invalidity pension schemes.",
-    category: "legal-term"
-  },
-  {
-    word: "just cause",
-    explanation: "A legally valid reason for immediate termination, such as serious misconduct, theft, or breach of contract terms.",
-    category: "legal-term"
-  },
-  {
-    word: "confidential information",
-    explanation: "Private company data including trade secrets, client lists, financial information, and proprietary methods.",
-    category: "obligation"
-  },
-  {
-    word: "non-compete clause",
-    explanation: "A contract provision that prevents the employee from working for competitors or starting a competing business for a specified period.",
-    category: "clause"
-  },
-  {
-    word: "written notice",
-    explanation: "Formal notification in writing (letter, email) required to terminate employment. Verbal notice is not sufficient.",
-    category: "obligation"
-  },
-  {
-    word: "annual leave",
-    explanation: "Paid vacation days that employees are legally entitled to. Minimum 8 days per year under Malaysian Employment Act.",
-    category: "right"
-  },
-  {
-    word: "mandatory contributions",
-    explanation: "Required by law - employer must contribute 12-13% of salary to EPF, cannot be waived or negotiated.",
-    category: "obligation"
-  },
-  {
-    word: "twelve (12) months",
-    explanation: "⚠️ This is a long non-compete period. Malaysian courts may consider 6 months more reasonable for most positions.",
-    category: "warning"
-  }
-]
-
 export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
   const [isHighlightMode, setIsHighlightMode] = useState(false)
-  const [zoom, setZoom] = useState(100)
-  const [tooltip, setTooltip] = useState<Tooltip>({ content: '', x: 0, y: 0, visible: false, category: '' })
+  const [zoom, setZoom] = useState(1.0)
+  const [tooltip, setTooltip] = useState<Tooltip>({ 
+    content: '', 
+    x: 0, 
+    y: 0, 
+    visible: false, 
+    category: '',
+    confidence: 0
+  })
   const [highlightedTerms, setHighlightedTerms] = useState<Set<string>>(new Set())
   const [isGeneratingExplanation, setIsGeneratingExplanation] = useState(false)
+  const [pdfError, setPdfError] = useState<string | null>(null)
+  const [pdfLoading, setPdfLoading] = useState(true)
+  const [numPages, setNumPages] = useState<number | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pdfUrl, setPdfUrl] = useState<string>('')
   const viewerRef = useRef<HTMLDivElement>(null)
-  const documentRef = useRef<HTMLDivElement>(null)
 
-  const handleWordClick = (event: React.MouseEvent, word: string) => {
-    if (!isHighlightMode) return
-    
-    event.preventDefault()
-    event.stopPropagation()
-    
-    const term = legalTerms.find(t => 
-      word.toLowerCase().includes(t.word.toLowerCase()) || 
-      t.word.toLowerCase().includes(word.toLowerCase())
-    )
-    
-    if (term) {
-      const rect = (event.target as HTMLElement).getBoundingClientRect()
-      const viewerRect = viewerRef.current?.getBoundingClientRect()
-      
-      if (viewerRect) {
-        setTooltip({
-          content: term.explanation,
-          x: rect.left - viewerRect.left + rect.width / 2,
-          y: rect.top - viewerRect.top - 10,
-          visible: true,
-          category: term.category
-        })
+  // Initialize PDF URL
+  useEffect(() => {
+    const loadPdfUrl = async () => {
+      try {
+        setPdfLoading(true)
+        const response = await pdfApi.getDocumentUrl(documentId)
         
-        setHighlightedTerms(prev => new Set([...prev, term.word]))
+        if (response.success) {
+          setPdfUrl(response.data.url)
+        } else {
+          setPdfError('Failed to load document URL')
+        }
+      } catch (error) {
+        console.error('Error loading PDF URL:', error)
+        setPdfError('Failed to load document')
+      } finally {
+        setPdfLoading(false)
       }
     }
+
+    loadPdfUrl()
+  }, [documentId])
+
+  // PDF loading handlers
+  const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
+    setNumPages(numPages)
+    setPdfLoading(false)
+    setPdfError(null)
+  }
+
+  const onDocumentLoadError = (error: Error) => {
+    console.error('PDF load error:', error)
+    setPdfError('Failed to load PDF document')
+    setPdfLoading(false)
   }
 
   const closeTooltip = () => {
     setTooltip(prev => ({ ...prev, visible: false }))
   }
 
-  // Generate AI explanation for any selected text
-  const generateExplanation = (text: string): string => {
-    // Mock AI explanation generator - in real app this would call an AI API
-    const lowerText = text.toLowerCase()
-    
-    // Check for specific legal patterns and provide explanations
-    if (lowerText.includes('shall') || lowerText.includes('agrees to')) {
-      return `This creates a legal obligation. "${text}" means this is a binding requirement that must be fulfilled by the specified party.`
-    }
-    
-    if (lowerText.includes('may') || lowerText.includes('reserves the right')) {
-      return `This gives optional power or discretion. "${text}" means the party has the choice to take this action but is not required to.`
-    }
-    
-    if (lowerText.includes('written notice') || lowerText.includes('in writing')) {
-      return `This requires formal documentation. "${text}" means verbal communication is not sufficient - it must be documented in writing (email, letter, etc.).`
-    }
-    
-    if (lowerText.includes('terminate') || lowerText.includes('termination')) {
-      return `This relates to ending the agreement. "${text}" refers to the conditions and procedures for ending this employment relationship.`
-    }
-    
-    if (lowerText.includes('confidential') || lowerText.includes('proprietary')) {
-      return `This concerns private information protection. "${text}" refers to sensitive company information that must be kept secret and not shared with others.`
-    }
-    
-    if (lowerText.includes('month') || lowerText.includes('days')) {
-      return `This is a time period requirement. "${text}" specifies the duration or deadline that must be followed for this provision.`
-    }
-    
-    if (lowerText.includes('epf') || lowerText.includes('socso')) {
-      return `This refers to Malaysian statutory benefits. "${text}" relates to mandatory employee benefits required by Malaysian employment law.`
-    }
-    
-    if (lowerText.includes('competing') || lowerText.includes('compete')) {
-      return `This is a non-compete restriction. "${text}" prevents you from working for competitors or starting a competing business for the specified period.`
-    }
-    
-    if (lowerText.includes('laws of malaysia') || lowerText.includes('malaysian')) {
-      return `This establishes legal jurisdiction. "${text}" means Malaysian courts and laws will govern any disputes or interpretations of this agreement.`
-    }
-    
-    // Default explanation for any other text
-    return `"${text}" - This appears to be a legal provision that establishes rights, obligations, or procedures. In legal documents, this type of language creates binding commitments between the parties involved.`
-  }
-
-  // Handle text selection
-  const handleTextSelection = useCallback(() => {
+  // Handle text selection for AI analysis
+  const handleTextSelection = useCallback(async () => {
     if (!isHighlightMode) return
     
     const selection = window.getSelection()
@@ -209,23 +111,75 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
     if (viewerRect && selectedText) {
       setIsGeneratingExplanation(true)
       
-      // Simulate AI processing delay
-      setTimeout(() => {
-        const explanation = generateExplanation(selectedText)
+      try {
+        // Get surrounding context for better analysis
+        const context = getSelectionContext(selectedText, range)
         
+        // Call API for AI explanation
+        const response = await pdfApi.analyzeTextSelection({
+          documentId,
+          selectedText,
+          context,
+          pageNumber: currentPage
+        })
+        
+        if (response.success) {
+          console.log('AI Response:', response.data.explanation) // Debug log
+          setTooltip({
+            content: response.data.explanation,
+            x: rect.left - viewerRect.left + rect.width / 2,
+            y: rect.top - viewerRect.top - 10,
+            visible: true,
+            category: response.data.category,
+            selectedText: selectedText,
+            confidence: response.data.confidence
+          })
+          
+          // Add to highlighted terms
+          setHighlightedTerms(prev => new Set([...prev, selectedText]))
+        } else {
+          throw new Error('error' in response ? response.error : 'Analysis failed')
+        }
+        
+      } catch (error) {
+        console.error('Failed to analyze text:', error)
+        
+        // Fallback explanation
         setTooltip({
-          content: explanation,
+          content: `"${selectedText}" - This text requires professional interpretation. The AI analysis service is currently unavailable.`,
           x: rect.left - viewerRect.left + rect.width / 2,
           y: rect.top - viewerRect.top - 10,
           visible: true,
-          category: 'selected-text',
-          selectedText: selectedText
+          category: 'general',
+          selectedText: selectedText,
+          confidence: 0
         })
-        
+      } finally {
         setIsGeneratingExplanation(false)
-      }, 800) // Simulate AI processing time
+      }
     }
-  }, [isHighlightMode])
+  }, [isHighlightMode, currentPage, documentId])
+
+  // Get context around the selected text
+  const getSelectionContext = (selectedText: string, range: Range): string => {
+    try {
+      // Get the parent element and extract surrounding text
+      const parentElement = range.commonAncestorContainer.parentElement
+      if (parentElement) {
+        const fullText = parentElement.textContent || ''
+        const selectedIndex = fullText.indexOf(selectedText)
+        
+        if (selectedIndex !== -1) {
+          const start = Math.max(0, selectedIndex - 100)
+          const end = Math.min(fullText.length, selectedIndex + selectedText.length + 100)
+          return fullText.substring(start, end)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to get context:', error)
+    }
+    return ''
+  }
 
   const getCategoryColor = (category: string) => {
     switch (category) {
@@ -234,7 +188,7 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
       case 'obligation': return 'bg-orange-500'
       case 'right': return 'bg-green-500'
       case 'warning': return 'bg-red-500'
-      case 'selected-text': return 'bg-indigo-500'
+      case 'general': return 'bg-indigo-500'
       default: return 'bg-gray-500'
     }
   }
@@ -246,46 +200,12 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
       case 'obligation': return 'border-orange-200 bg-orange-50'
       case 'right': return 'border-green-200 bg-green-50'
       case 'warning': return 'border-red-200 bg-red-50'
-      case 'selected-text': return 'border-indigo-200 bg-indigo-50'
+      case 'general': return 'border-indigo-200 bg-indigo-50'
       default: return 'border-gray-200 bg-gray-50'
     }
   }
 
-  const renderHighlightableText = (text: string) => {
-    if (!isHighlightMode) {
-      return <span>{text}</span>
-    }
-
-    const words = text.split(/(\s+)/)
-    return words.map((word, index) => {
-      const cleanWord = word.replace(/[^\w]/g, '').toLowerCase()
-      const matchedTerm = legalTerms.find(term => 
-        cleanWord.includes(term.word.toLowerCase()) || 
-        term.word.toLowerCase().includes(cleanWord)
-      )
-
-      if (matchedTerm && cleanWord.length > 2) {
-        const isHighlighted = highlightedTerms.has(matchedTerm.word)
-        return (
-          <span
-            key={index}
-            onClick={(e) => handleWordClick(e, word)}
-            className={`cursor-pointer transition-all duration-200 ${
-              isHighlighted 
-                ? `${getCategoryColor(matchedTerm.category)} text-white px-1 rounded`
-                : 'hover:bg-yellow-200 hover:shadow-sm px-1 rounded'
-            }`}
-            title={isHighlightMode ? "Click for explanation" : ""}
-          >
-            {word}
-          </span>
-        )
-      }
-      
-      return <span key={index}>{word}</span>
-    })
-  }
-
+  // Text selection event listeners
   useEffect(() => {
     const handleClickOutside = () => closeTooltip()
     document.addEventListener('click', handleClickOutside)
@@ -352,16 +272,16 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
               <Button
                 variant="ghost"
                 size="small"
-                onClick={() => setZoom(Math.max(50, zoom - 25))}
+                onClick={() => setZoom(Math.max(0.5, zoom - 0.25))}
                 className="p-1"
               >
                 <ZoomOut className="w-4 h-4" />
               </Button>
-              <span className="caption text-text-secondary px-2">{zoom}%</span>
+              <span className="caption text-text-secondary px-2">{Math.round(zoom * 100)}%</span>
               <Button
                 variant="ghost"
                 size="small"
-                onClick={() => setZoom(Math.min(200, zoom + 25))}
+                onClick={() => setZoom(Math.min(2.0, zoom + 0.25))}
                 className="p-1"
               >
                 <ZoomIn className="w-4 h-4" />
@@ -392,13 +312,13 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
               <div className="flex items-center space-x-2">
                 <Lightbulb className="w-4 h-4 text-yellow-600" />
                 <span className="body-small text-yellow-800">
-                  <strong>Highlight Explainer Mode Active:</strong> Click on highlighted legal terms OR select any text to get AI explanations. 
+                  <strong>AI Highlight Explainer Active:</strong> Select any text for <strong>concise, layman-friendly explanations</strong> with highlighted key points. 
                   <span className="inline-block w-3 h-3 bg-purple-500 rounded mx-1"></span>Legal Terms
                   <span className="inline-block w-3 h-3 bg-blue-500 rounded mx-1"></span>Clauses
                   <span className="inline-block w-3 h-3 bg-orange-500 rounded mx-1"></span>Obligations
                   <span className="inline-block w-3 h-3 bg-green-500 rounded mx-1"></span>Rights
                   <span className="inline-block w-3 h-3 bg-red-500 rounded mx-1"></span>Warnings
-                  <span className="inline-block w-3 h-3 bg-indigo-500 rounded mx-1"></span>Selected Text
+                  <span className="inline-block w-3 h-3 bg-indigo-500 rounded mx-1"></span>General
                 </span>
               </div>
             </motion.div>
@@ -409,28 +329,88 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
         <div 
           ref={viewerRef}
           className="flex-1 overflow-auto p-6 bg-white relative"
-          style={{ fontSize: `${zoom}%` }}
         >
-          <div className="max-w-3xl mx-auto">
-            <div 
-              ref={documentRef}
-              className={`bg-white shadow-lg rounded-lg p-8 border border-gray-200 ${
-                isHighlightMode ? 'select-text cursor-text' : 'select-none'
-              }`}
-              style={{ userSelect: isHighlightMode ? 'text' : 'none' }}
-            >
-              <div className="space-y-4 leading-relaxed text-gray-800">
-                {mockDocumentContent.split('\n\n').map((paragraph, index) => (
-                  <div key={index}>
-                    {paragraph.trim() && (
-                      <p className="mb-4">
-                        {renderHighlightableText(paragraph.trim())}
-                      </p>
-                    )}
-                  </div>
-                ))}
+          <div className="max-w-4xl mx-auto">
+            {pdfLoading && (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <Loader2 className="w-8 h-8 animate-spin mx-auto text-purple-primary mb-4" />
+                  <p className="body-regular text-text-secondary">Loading PDF document...</p>
+                </div>
               </div>
-            </div>
+            )}
+            
+            {pdfError && (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+                  <h3 className="heading-3 mb-2 text-red-700">Error Loading PDF</h3>
+                  <p className="body-regular text-red-600 mb-4">{pdfError}</p>
+                  <Button onClick={() => window.location.reload()} variant="secondary">
+                    Retry
+                  </Button>
+                </div>
+              </div>
+            )}
+            
+            {pdfUrl && !pdfLoading && !pdfError && (
+              <div 
+                className={`bg-white shadow-lg rounded-lg border border-gray-200 ${
+                  isHighlightMode ? 'select-text cursor-text' : 'select-none'
+                }`}
+                style={{ userSelect: isHighlightMode ? 'text' : 'none' }}
+              >
+                <Document
+                  file={pdfUrl}
+                  onLoadSuccess={onDocumentLoadSuccess}
+                  onLoadError={onDocumentLoadError}
+                  loading={
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin text-purple-primary" />
+                    </div>
+                  }
+                  error={
+                    <div className="text-center py-8 text-red-600">
+                      <AlertCircle className="w-8 h-8 mx-auto mb-2" />
+                      <p>Failed to load PDF</p>
+                    </div>
+                  }
+                >
+                  <Page 
+                    pageNumber={currentPage}
+                    scale={zoom}
+                    renderTextLayer={true}
+                    renderAnnotationLayer={true}
+                    className="shadow-sm"
+                  />
+                </Document>
+                
+                {/* Page Navigation */}
+                {numPages && numPages > 1 && (
+                  <div className="flex items-center justify-center space-x-4 p-4 bg-gray-50 border-t">
+                    <Button
+                      variant="ghost"
+                      size="small"
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage <= 1}
+                    >
+                      Previous
+                    </Button>
+                    <span className="body-small text-text-secondary">
+                      Page {currentPage} of {numPages}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="small"
+                      onClick={() => setCurrentPage(prev => Math.min(numPages, prev + 1))}
+                      disabled={currentPage >= numPages}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Loading Indicator for AI Explanation */}
@@ -445,7 +425,7 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
                 <div className="flex items-center space-x-2">
                   <div className="animate-spin w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
                   <span className="body-small text-indigo-700 font-medium">
-                    Generating explanation...
+                    AI analyzing text...
                   </span>
                 </div>
               </motion.div>
@@ -470,21 +450,21 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
                 <div className="flex items-start space-x-2">
                   <div className={`w-3 h-3 rounded-full ${getCategoryColor(tooltip.category)} flex-shrink-0 mt-1`}></div>
                   <div>
-                    {tooltip.selectedText && (
-                      <div className="mb-2 p-2 bg-white/60 rounded border">
-                        <span className="caption text-text-secondary">Selected text:</span>
-                        <p className="body-small font-medium text-text-primary italic">
-                          &ldquo;{tooltip.selectedText}&rdquo;
-                        </p>
-                      </div>
-                    )}
-                    <p className="body-small text-text-primary leading-relaxed">
-                      {tooltip.content}
-                    </p>
+                    <div 
+                      className="body-small text-text-primary leading-relaxed [&_strong]:font-bold [&_strong]:text-gray-900"
+                      dangerouslySetInnerHTML={{ __html: tooltip.content }}
+                    />
                     <div className="flex items-center justify-between mt-2">
-                      <span className="caption text-text-secondary capitalize">
-                        {tooltip.category === 'selected-text' ? 'AI Explanation' : tooltip.category.replace('-', ' ')}
-                      </span>
+                      <div className="flex items-center space-x-2">
+                        <span className="caption text-text-secondary capitalize">
+                          {tooltip.category.replace('-', ' ')}
+                        </span>
+                        {tooltip.confidence !== undefined && tooltip.confidence > 0 && (
+                          <span className="caption text-text-secondary">
+                            • {tooltip.confidence}% confidence
+                          </span>
+                        )}
+                      </div>
                       <Button
                         variant="ghost"
                         size="small"
@@ -505,7 +485,7 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
                     tooltip.category === 'obligation' ? 'border-t-orange-200' :
                     tooltip.category === 'clause' ? 'border-t-blue-200' :
                     tooltip.category === 'legal-term' ? 'border-t-purple-200' :
-                    tooltip.category === 'selected-text' ? 'border-t-indigo-200' :
+                    tooltip.category === 'general' ? 'border-t-indigo-200' :
                     'border-t-gray-200'
                   }`}
                 ></div>
@@ -518,7 +498,9 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
         <div className="p-4 bg-gray-50 border-t border-gray-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4 text-text-secondary body-small">
-              <span>Page 1 of 1</span>
+              <span>
+                {numPages ? `Page ${currentPage} of ${numPages}` : 'Loading...'}
+              </span>
               {isHighlightMode && (
                 <span className="flex items-center space-x-1">
                   <span className="w-2 h-2 bg-yellow-400 rounded-full"></span>
@@ -527,7 +509,9 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
               )}
             </div>
             <div className="flex items-center space-x-2">
-              <span className="caption text-text-secondary">Legal document analysis</span>
+              <span className="caption text-text-secondary">
+                {isHighlightMode ? 'AI-powered legal analysis by Amazon Bedrock' : 'Legal document viewer'}
+              </span>
             </div>
           </div>
         </div>

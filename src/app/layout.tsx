@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { SideNavigation } from '@/components/layout/SideNavigation'
 
 export const metadata: Metadata = {
   title: "LegalKaki - Legal Information for Every Rakyat",
@@ -22,7 +23,12 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full">
       <body className="h-full font-sans text-text-primary bg-background antialiased">
-        {children}
+        <div className="flex h-full">
+          <SideNavigation />
+          <main className="flex-1 overflow-auto">
+            {children}
+          </main>
+        </div>
       </body>
     </html>
   );

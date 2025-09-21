@@ -4,14 +4,17 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
-import { ArrowLeft, Grid, List, CheckCircle, Clock, AlertTriangle, Upload, Eye, MoreVertical, ExternalLink, ClipboardList, FileText, Settings, Calendar, MessageCircle, Brain, Music, BarChart3, FileIcon, FileSpreadsheet, ImageIcon } from 'lucide-react'
+import { ArrowLeft, Grid, List, CheckCircle, Clock, AlertTriangle, Eye, MoreVertical, ExternalLink, ClipboardList, FileText, Settings, Calendar, MessageCircle, Brain, Music, BarChart3, FileIcon, FileSpreadsheet, ImageIcon, Loader2 } from 'lucide-react'
 import { PDFViewer } from '@/components/ui/PDFViewer'
 import { ActionItem, Document } from '@/types'
+// TODO: Uncomment when API is ready
+// import { collectionsApi, useApiCall } from '@/api'
 
 interface CollectionDashboardProps {
   collectionId: string
   onBack: () => void
-  onStartNewChat: () => void
+  // TODO: Remove onStartNewChat when API is ready - this is for viewing user history only
+  onStartNewChat?: () => void
 }
 
 export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: CollectionDashboardProps) {
@@ -19,26 +22,66 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
   const [activeFilter, setActiveFilter] = useState<'all' | 'urgent' | 'pending' | 'completed'>('all')
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null)
 
-  // Mock collection data - in real app this would come from API based on collectionId
+  // TODO: Replace with API call when backend is ready
+  // const { 
+  //   data: dashboardData, 
+  //   loading: dashboardLoading, 
+  //   error: dashboardError 
+  // } = useApiCall(() => collectionsApi.getCollectionDashboard(collectionId), [collectionId])
+
+  // Mock data for development - TODO: Remove when API is ready
+  const dashboardLoading = false
+  const dashboardError = null
   const collectionData = {
     id: collectionId,
     title: 'Employment Contract Review',
-    domain: 'Employment Law',
+    domain: 'employment',
     summary: 'Comprehensive review of employment contract terms, salary compliance analysis, and identification of potentially problematic clauses requiring immediate legal attention.',
-    created: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 1 week ago
-    lastUpdated: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
-    messageCount: 12,
-    status: 'active' as const
+    status: 'active' as const,
+    createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 1 week ago
+    updatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
   }
 
-  // Mock data - in real app this would come from API/state management
-  const stats = {
-    activeActions: 3,
-    documents: 2,
-    conversations: collectionData.messageCount
-  }
+  const documents: Document[] = [
+    {
+      id: '550e8400-e29b-41d4-a716-446655440001',
+      originalFilename: 'Employment_Contract_2024.pdf',
+      storedFilename: '550e8400-e29b-41d4-a716-446655440001.pdf',
+      fileType: 'application/pdf',
+      fileSize: 245760, // ~240KB
+      s3Bucket: 'legalkaki-documents',
+      s3Key: 'documents/user-1/550e8400-e29b-41d4-a716-446655440001.pdf',
+      uploadDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
+      analysisStatus: 'completed',
+      contentSummary: 'Standard employment contract outlining terms of employment, salary structure, working hours, and employee benefits. Contains standard clauses for annual leave, sick leave, and termination procedures.',
+      collectionId: collectionId,
+      metadata: {
+        pages: 5,
+        language: 'en',
+        wordCount: 1250
+      }
+    },
+    {
+      id: '550e8400-e29b-41d4-a716-446655440002',
+      originalFilename: 'Business_Plan_Draft.docx',
+      storedFilename: '550e8400-e29b-41d4-a716-446655440002.docx',
+      fileType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      fileSize: 1048576, // 1MB
+      s3Bucket: 'legalkaki-documents',
+      s3Key: 'documents/user-1/550e8400-e29b-41d4-a716-446655440002.docx',
+      uploadDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
+      analysisStatus: 'processing',
+      contentSummary: 'Comprehensive business plan draft covering market analysis, financial projections, operational strategies, and growth plans for a new startup venture in the technology sector.',
+      collectionId: collectionId,
+      metadata: {
+        pages: 12,
+        language: 'en',
+        wordCount: 3500
+      }
+    }
+  ]
 
-  const mockActions: ActionItem[] = [
+  const actionItems: ActionItem[] = [
     {
       id: '1',
       title: 'Seek legal advice immediately',
@@ -47,7 +90,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
       status: 'pending',
       dueDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // 2 days from now
       externalLinks: [
-        { text: 'Find Legal Aid', url: 'https://www.legalaid.gov.my', icon: ExternalLink }
+        { text: 'Find Legal Aid', url: 'https://www.legalaid.gov.my', icon: ExternalLink } // TODO: Replace with LegalKaki resource URL
       ],
       sourceConversation: 'Employment Contract Review'
     },
@@ -59,7 +102,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
       status: 'pending',
       dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 1 week from now
       externalLinks: [
-        { text: 'Check Minimum Wage Rates', url: 'https://www.mohr.gov.my', icon: ExternalLink }
+        { text: 'Check Minimum Wage Rates', url: 'https://www.mohr.gov.my', icon: ExternalLink } // TODO: Replace with LegalKaki resource URL
       ],
       sourceConversation: 'Employment Contract Review'
     },
@@ -70,40 +113,45 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
       priority: 'normal',
       status: 'completed',
       externalLinks: [
-        { text: 'SSM Portal', url: 'https://www.ssm.com.my', icon: ExternalLink }
+        { text: 'SSM Portal', url: 'https://www.ssm.com.my', icon: ExternalLink } // TODO: Replace with LegalKaki resource URL
       ],
       sourceConversation: 'Business Registration Inquiry'
     }
   ]
 
-  const mockDocuments: Document[] = [
+  const conversations = [
     {
       id: '1',
-      filename: 'Employment_Contract_2024.pdf',
-      fileType: 'pdf',
-      fileSize: 245760, // ~240KB
-      uploadDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
-      analysisStatus: 'completed',
-      thumbnail: undefined
-    },
-    {
-      id: '2',
-      filename: 'Business_Plan_Draft.docx',
-      fileType: 'docx',
-      fileSize: 1048576, // 1MB
-      uploadDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
-      analysisStatus: 'processing',
-      thumbnail: undefined
+      domain: 'employment' as const,
+      title: 'Employment Contract Review',
+      messages: [],
+      createdAt: new Date(Date.now() - 60 * 60 * 1000),
+      updatedAt: new Date(Date.now() - 50 * 60 * 1000),
+      collectionId: collectionId
     }
   ]
 
-  const filteredActions = mockActions.filter(action => {
+  const stats = {
+    totalConversations: conversations.length,
+    totalDocuments: documents.length,
+    totalActions: actionItems.length,
+    urgentActions: actionItems.filter(a => a.priority === 'urgent' && a.status !== 'completed').length,
+    completedActions: actionItems.filter(a => a.status === 'completed').length
+  }
+
+  // Filter action items based on active filter
+  const filteredActions = actionItems.filter(action => {
     if (activeFilter === 'all') return true
     if (activeFilter === 'urgent') return action.priority === 'urgent'
     if (activeFilter === 'pending') return action.status === 'pending'
     if (activeFilter === 'completed') return action.status === 'completed'
     return true
+  }).sort((a, b) => {
+    // Sort by urgency: urgent > important > normal
+    const priorityOrder = { urgent: 0, important: 1, normal: 2 }
+    return priorityOrder[a.priority as keyof typeof priorityOrder] - priorityOrder[b.priority as keyof typeof priorityOrder]
   })
+
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes'
@@ -164,6 +212,60 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
     }
   }
 
+  // TODO: Uncomment when API is ready
+  // Loading state
+  // if (dashboardLoading) {
+  //   return (
+  //     <div className="min-h-screen bg-background p-4 pb-nav">
+  //       <div className="max-w-6xl mx-auto">
+  //         <div className="text-center py-12">
+  //           <Loader2 className="w-12 h-12 animate-spin mx-auto text-purple-primary mb-4" />
+  //           <p className="body-regular text-text-secondary">Loading collection dashboard...</p>
+  //         </div>
+  //       </div>
+  //     </div>
+  //   )
+  // }
+
+  // TODO: Uncomment when API is ready
+  // Error state
+  // if (dashboardError || !collectionData) {
+  //   return (
+  //     <div className="min-h-screen bg-background p-4 pb-nav">
+  //       <div className="max-w-6xl mx-auto">
+  //         <div className="flex items-center justify-between mb-4">
+  //           <Button
+  //             variant="ghost"
+  //             size="small"
+  //             onClick={onBack}
+  //             leftIcon={<ArrowLeft className="w-4 h-4" />}
+  //           >
+  //             Back
+  //           </Button>
+  //         </div>
+  //         <Card className="text-center py-12 border-red-200 bg-red-50">
+  //           <CardContent>
+  //             <div className="mb-4 flex justify-center">
+  //               <AlertTriangle className="w-16 h-16 text-red-500" />
+  //             </div>
+  //             <h3 className="heading-3 mb-2 text-red-700">Error Loading Collection</h3>
+  //             <p className="body-regular text-red-600 mb-4">
+  //               {dashboardError || 'Collection not found'}
+  //             </p>
+  //             <Button 
+  //               onClick={onBack} 
+  //               variant="secondary"
+  //               className="border-red-300 text-red-700 hover:bg-red-100"
+  //             >
+  //               Go Back
+  //             </Button>
+  //           </CardContent>
+  //         </Card>
+  //       </div>
+  //     </div>
+  //   )
+  // }
+
   return (
     <div className="min-h-screen bg-background p-4 pb-nav">
       <div className="max-w-6xl mx-auto">
@@ -205,35 +307,27 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
             <div className="flex items-center space-x-4 text-text-secondary body-small">
               <span className="flex items-center space-x-1">
                 <Calendar className="w-4 h-4" />
-                <span>Created {collectionData.created.toLocaleDateString()}</span>
+                <span>Created {collectionData.createdAt.toLocaleDateString()}</span>
               </span>
               <span className="flex items-center space-x-1">
                 <Clock className="w-4 h-4" />
-                <span>Updated {collectionData.lastUpdated.toLocaleDateString()}</span>
+                <span>Updated {collectionData.updatedAt.toLocaleDateString()}</span>
               </span>
               <span className="flex items-center space-x-1">
                 <MessageCircle className="w-4 h-4" />
-                <span>{collectionData.messageCount} messages</span>
+                <span>{stats.totalConversations} messages</span>
               </span>
             </div>
           </div>
 
           {/* Stats Row */}
           <div className="grid grid-cols-3 gap-4 mb-6">
-            <motion.div 
+          <motion.div 
               className="text-center p-4 bg-surface-white rounded-lg border border-gray-200"
               whileHover={{ scale: 1.02 }}
               transition={{ duration: 0.2 }}
             >
-              <div className="text-2xl font-bold text-purple-primary">{stats.activeActions}</div>
-              <div className="body-small text-text-secondary">Active Actions</div>
-            </motion.div>
-            <motion.div 
-              className="text-center p-4 bg-surface-white rounded-lg border border-gray-200"
-              whileHover={{ scale: 1.02 }}
-              transition={{ duration: 0.2 }}
-            >
-              <div className="text-2xl font-bold text-success">{stats.documents}</div>
+              <div className="text-2xl font-bold text-purple-primary">{stats.totalDocuments}</div>
               <div className="body-small text-text-secondary">Documents</div>
             </motion.div>
             <motion.div 
@@ -241,13 +335,22 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
               whileHover={{ scale: 1.02 }}
               transition={{ duration: 0.2 }}
             >
-              <div className="text-2xl font-bold text-info">{stats.conversations}</div>
+              <div className="text-2xl font-bold text-purple-primary">{stats.totalActions}</div>
+              <div className="body-small text-text-secondary">Total Actions</div>
+            </motion.div>
+
+            <motion.div 
+              className="text-center p-4 bg-surface-white rounded-lg border border-gray-200"
+              whileHover={{ scale: 1.02 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div className="text-2xl font-bold text-purple-primary">{stats.totalConversations}</div>
               <div className="body-small text-text-secondary">Conversations</div>
             </motion.div>
           </div>
         </motion.div>
 
-        {/* Action Items Section */}
+        {/* Documents Section */}
         <motion.div 
           className="mb-8"
           initial={{ opacity: 0, y: 20 }}
@@ -255,10 +358,119 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
           transition={{ duration: 0.5, delay: 0.1 }}
         >
           <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-2">
-            <ClipboardList className="w-6 h-6 text-purple-primary" />
-            <h2 className="heading-3">Action Items</h2>
+            <div className="flex items-center space-x-2">
+              <FileText className="w-6 h-6 text-purple-primary" />
+              <h2 className="heading-3">Your Documents</h2>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              {documents.length > 0 && (
+                <Button
+                  variant="primary"
+                  size="small"
+                  onClick={() => setSelectedDocument(documents[0])}
+                  leftIcon={<Eye className="w-4 h-4" />}
+                  className="bg-gradient-to-r from-purple-primary to-purple-light"
+                >
+                  View Document
+                </Button>
+              )}
+              
+              <Button
+                variant={viewMode === 'grid' ? 'primary' : 'ghost'}
+                size="small"
+                onClick={() => setViewMode('grid')}
+                leftIcon={<Grid className="w-4 h-4" />}
+              >
+                Grid
+              </Button>
+              <Button
+                variant={viewMode === 'list' ? 'primary' : 'ghost'}
+                size="small"
+                onClick={() => setViewMode('list')}
+                leftIcon={<List className="w-4 h-4" />}
+              >
+                List
+              </Button>
+            </div>
           </div>
+
+          {documents.length === 0 ? (
+            <Card className="text-center py-8">
+              <CardContent>
+                <div className="mb-4 flex justify-center">
+                  <FileText className="w-16 h-16 text-gray-400" />
+                </div>
+                <h3 className="heading-3 mb-2">No documents in this collection</h3>
+                <p className="body-regular text-text-secondary mb-4">
+                  This collection doesn't contain any documents yet
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 gap-6' : 'space-y-4'}>
+              {documents.map((document, index) => (
+                <motion.div
+                  key={document.id}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.3, delay: index * 0.1 }}
+                >
+                  <Card className="relative bg-white border-0 shadow-sm hover:shadow-2xl hover:shadow-purple-primary/20 transition-all duration-300 transform hover:-translate-y-2 hover:scale-105 rounded-xl overflow-hidden group">
+                    <div className="absolute inset-0 bg-gradient-to-br from-purple-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-primary to-purple-light transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></div>
+                    <CardContent className="relative p-6 z-10">
+                      <div className="flex items-start space-x-4">
+                        <div className="mt-1 transform group-hover:scale-110 transition-transform duration-300">
+                          {(() => {
+                            const IconComponent = getFileIcon(document.fileType)
+                            return <IconComponent className="w-10 h-10 text-purple-primary group-hover:text-purple-light transition-colors duration-300" />
+                          })()}
+                        </div>
+                        
+                        <div className="flex-1 min-w-0">
+                          <h4 className="heading-4 text-text-primary mb-2 group-hover:text-purple-primary transition-colors duration-300">
+                            {document.originalFilename}
+                          </h4>
+                          
+                          <p className="body-regular text-text-secondary mb-4 leading-relaxed">
+                            {document.contentSummary || 'No summary available for this document.'}
+                          </p>
+                          
+                          
+                          <div className="flex justify-end">
+                            <Button 
+                              variant="primary" 
+                              size="default" 
+                              leftIcon={<Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />}
+                              onClick={() => setSelectedDocument(document)}
+                              className="bg-gradient-to-r from-purple-primary to-purple-light hover:from-purple-light hover:to-purple-primary shadow-lg hover:shadow-xl hover:shadow-purple-primary/30 transform hover:scale-105 transition-all duration-300 border-0"
+                            >
+                              View Document
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </motion.div>
+
+        {/* Action Items Section */}
+        <motion.div 
+          className="mb-8"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-2">
+              <ClipboardList className="w-6 h-6 text-purple-primary" />
+              <h2 className="heading-3">Action Items</h2>
+            </div>
             
             <div className="flex space-x-2">
               {['all', 'urgent', 'pending', 'completed'].map((filter) => (
@@ -284,13 +496,10 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
                 <h3 className="heading-3 mb-2">No action items found</h3>
                 <p className="body-regular text-text-secondary mb-4">
                   {activeFilter === 'all' 
-                    ? 'Start a conversation to get personalized legal action items'
+                    ? 'No action items have been generated for this collection yet'
                     : `No ${activeFilter} action items at the moment`
                   }
                 </p>
-                <Button onClick={onStartNewChat}>
-                  Start New Chat
-                </Button>
               </CardContent>
             </Card>
           ) : (
@@ -325,20 +534,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
                             </span>
                           </div>
                           
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-4 text-text-secondary body-small">
-                              {action.dueDate && (
-                                <span className="flex items-center space-x-1">
-                                  <Calendar className="w-4 h-4" />
-                                  <span>{formatDate(action.dueDate)}</span>
-                                </span>
-                              )}
-                              <span className="flex items-center space-x-1">
-                                <MessageCircle className="w-4 h-4" />
-                                <span>{action.sourceConversation}</span>
-                              </span>
-                            </div>
-                            
+                          <div className="flex items-center justify-end">
                             <div className="flex space-x-2">
                               {action.externalLinks?.map((link, linkIndex) => (
                                 <Button
@@ -346,131 +542,14 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
                                   variant="secondary"
                                   size="small"
                                   rightIcon={<ExternalLink className="w-3 h-3" />}
+                                  onClick={() => {
+                                    // TODO: Replace with actual LegalKaki resource URLs
+                                    window.open(link.url, '_blank')
+                                  }}
                                 >
                                   {link.text}
                                 </Button>
                               ))}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
-            </div>
-          )}
-        </motion.div>
-
-        {/* Documents Section */}
-        <motion.div 
-          className="mb-8"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-2">
-              <FileText className="w-6 h-6 text-purple-primary" />
-              <h2 className="heading-3">Your Documents</h2>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              {mockDocuments.length > 0 && (
-                <Button
-                  variant="primary"
-                  size="small"
-                  onClick={() => setSelectedDocument(mockDocuments[0])}
-                  leftIcon={<Eye className="w-4 h-4" />}
-                  className="bg-gradient-to-r from-purple-primary to-purple-light"
-                >
-                  Demo PDF Explainer
-                </Button>
-              )}
-              
-              <Button
-                variant={viewMode === 'grid' ? 'primary' : 'ghost'}
-                size="small"
-                onClick={() => setViewMode('grid')}
-                leftIcon={<Grid className="w-4 h-4" />}
-              >
-                Grid
-              </Button>
-              <Button
-                variant={viewMode === 'list' ? 'primary' : 'ghost'}
-                size="small"
-                onClick={() => setViewMode('list')}
-                leftIcon={<List className="w-4 h-4" />}
-              >
-                List
-              </Button>
-            </div>
-          </div>
-
-          {mockDocuments.length === 0 ? (
-            <Card className="text-center py-8">
-              <CardContent>
-                <div className="mb-4 flex justify-center">
-                  <Upload className="w-16 h-16 text-gray-400" />
-                </div>
-                <h3 className="heading-3 mb-2">No documents uploaded yet</h3>
-                <p className="body-regular text-text-secondary mb-4">
-                  Upload legal documents to get AI-powered analysis and explanations
-                </p>
-                <Button leftIcon={<Upload className="w-4 h-4" />}>
-                  Upload Document
-                </Button>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-3'}>
-              {mockDocuments.map((document, index) => (
-                <motion.div
-                  key={document.id}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.3, delay: index * 0.1 }}
-                >
-                  <Card className="card-interactive">
-                    <CardContent className="p-4">
-                      <div className="flex items-start space-x-3">
-                        <div className="mt-1">
-                          {(() => {
-                            const IconComponent = getFileIcon(document.fileType)
-                            return <IconComponent className="w-8 h-8 text-purple-primary" />
-                          })()}
-                        </div>
-                        
-                        <div className="flex-1 min-w-0">
-                          <h4 className="body-regular font-medium text-text-primary mb-1 truncate">
-                            {document.filename}
-                          </h4>
-                          
-                          <div className="flex items-center space-x-3 text-text-secondary body-small mb-2">
-                            <span>{formatFileSize(document.fileSize)}</span>
-                            <span>{formatDate(document.uploadDate)}</span>
-                          </div>
-                          
-                          <div className="flex items-center justify-between">
-                            <div className={`flex items-center space-x-1 ${getAnalysisStatusColor(document.analysisStatus)}`}>
-                              {document.analysisStatus === 'completed' && <CheckCircle className="w-4 h-4" />}
-                              {document.analysisStatus === 'processing' && <Clock className="w-4 h-4" />}
-                              {document.analysisStatus === 'error' && <AlertTriangle className="w-4 h-4" />}
-                              <span className="body-small capitalize">{document.analysisStatus}</span>
-                            </div>
-                            
-                            <div className="flex space-x-1">
-                              <Button 
-                                variant="ghost" 
-                                size="small" 
-                                leftIcon={<Eye className="w-3 h-3" />}
-                                onClick={() => setSelectedDocument(document)}
-                              >
-                                View
-                              </Button>
-                              <Button variant="ghost" size="small" leftIcon={<MoreVertical className="w-3 h-3" />}>
-                                More
-                              </Button>
                             </div>
                           </div>
                         </div>
@@ -538,26 +617,6 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
               </Card>
             </motion.div>
 
-            {/* Summary Report */}
-            <motion.div
-              whileHover={{ scale: 1.02 }}
-              transition={{ duration: 0.2 }}
-            >
-              <Card className="bg-gradient-to-br from-info to-blue-600 text-white cursor-pointer">
-                <CardContent className="p-6">
-                  <div className="mb-3">
-                    <BarChart3 className="w-8 h-8 text-white" />
-                  </div>
-                  <h3 className="heading-3 text-white mb-2">Legal Summary Report</h3>
-                  <p className="body-regular text-blue-100 mb-4">
-                    Generate a comprehensive report of your legal matters and recommendations
-                  </p>
-                  <Button variant="secondary" className="bg-white text-info hover:bg-blue-50">
-                    Generate Report
-                  </Button>
-                </CardContent>
-              </Card>
-            </motion.div>
           </div>
         </motion.div>
       </div>
@@ -566,7 +625,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
       {selectedDocument && (
         <PDFViewer
           documentId={selectedDocument.id}
-          filename={selectedDocument.filename}
+          filename={selectedDocument.originalFilename}
           onClose={() => setSelectedDocument(null)}
         />
       )}
