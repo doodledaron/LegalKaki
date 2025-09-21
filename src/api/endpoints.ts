@@ -1,5 +1,5 @@
 import { mockClient } from './mockClient'
-import { bedrockService, TextAnalysisRequest } from './bedrockService'
+import { bedrockService, TextAnalysisRequest, MindMapAnalysisRequest } from './bedrockService'
 import { 
   mockUser, 
   mockDomains, 
@@ -739,6 +739,77 @@ export const toolsApi = {
       }
     }, 'slow', {
       successMessage: 'Mind map generated successfully'
+    })
+  },
+
+  async generateMindMapInsights(request: {
+    collectionTitle: string
+    collectionDomain: string
+    collectionSummary: string
+    conversations: Array<{
+      id: string
+      title: string
+      domain: string
+      messages: unknown[]
+    }>
+    documents: Array<{
+      id: string
+      originalFilename: string
+      contentSummary?: string
+    }>
+    actionItems: Array<{
+      id: string
+      title: string
+      description: string
+      priority: 'urgent' | 'important' | 'normal'
+      status: 'pending' | 'in_progress' | 'completed'
+    }>
+  }): Promise<ApiResponse<{
+    keyThemes: Array<{
+      id: string
+      name: string
+      description: string
+      importance: 'high' | 'medium' | 'low'
+      relatedItems: Array<{
+        type: 'document' | 'conversation' | 'action'
+        id: string
+        title: string
+      }>
+    }>
+    urgentActions: Array<{
+      id: string
+      title: string
+      reasoning: string
+      suggestedDeadline: string
+    }>
+    riskFactors: Array<{
+      description: string
+      severity: 'high' | 'medium' | 'low'
+      affectedItems: string[]
+    }>
+    recommendations: string[]
+    connections: Array<{
+      fromId: string
+      toId: string
+      relationship: string
+      strength: number
+    }>
+  }> | ApiError> {
+    return mockClient.request(async () => {
+      // Call Bedrock service for real AI analysis (server-side only)
+      const analysisRequest: MindMapAnalysisRequest = {
+        collectionTitle: request.collectionTitle,
+        collectionDomain: request.collectionDomain,
+        collectionSummary: request.collectionSummary,
+        conversations: request.conversations,
+        documents: request.documents,
+        actionItems: request.actionItems
+      }
+      
+      const result = await bedrockService.generateMindMapInsights(analysisRequest)
+      return result
+    }, 'ai', {
+      successMessage: 'Mind map insights generated'
     })
   }
 }

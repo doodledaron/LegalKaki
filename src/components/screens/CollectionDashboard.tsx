@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
 import { ArrowLeft, Grid, List, CheckCircle, Clock, AlertTriangle, Eye, MoreVertical, ExternalLink, ClipboardList, FileText, Settings, Calendar, MessageCircle, Brain, Music, BarChart3, FileIcon, FileSpreadsheet, ImageIcon, Loader2 } from 'lucide-react'
 import { PDFViewer } from '@/components/ui/PDFViewer'
+import { MindMapViewer } from '@/components/ui/MindMapViewer'
 import { ActionItem, Document } from '@/types'
+import { generateMindMapCode, createMindMapDataFromCollection, generateEnhancedMindMap, EnhancedMindMapData, InteractiveMindMapNode } from '@/lib/mindMapGenerator'
 // TODO: Uncomment when API is ready
 // import { collectionsApi, useApiCall } from '@/api'
 
@@ -21,6 +23,10 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [activeFilter, setActiveFilter] = useState<'all' | 'urgent' | 'pending' | 'completed'>('all')
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null)
+  const [showMindMap, setShowMindMap] = useState(false)
+  const [mindMapCode, setMindMapCode] = useState('')
+  const [enhancedMindMapData, setEnhancedMindMapData] = useState<EnhancedMindMapData | null>(null)
+  const [isGeneratingMindMap, setIsGeneratingMindMap] = useState(false)
 
   // TODO: Replace with API call when backend is ready
   // const { 
@@ -209,6 +215,98 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
       case 'processing': return 'text-yellow-500'
       case 'error': return 'text-red-500'
       default: return 'text-gray-500'
+    }
+  }
+
+  const handleGenerateMindMap = async () => {
+    try {
+      setIsGeneratingMindMap(true)
+      console.log('🚀 Starting enhanced AI mind map generation...')
+      console.log('📊 Collection data:', collectionData)
+      console.log('💬 Conversations:', conversations.length)
+      console.log('📄 Documents:', documents.length)
+      console.log('✅ Action items:', actionItems.length)
+      
+      // Create mind map data from current collection data
+      const mindMapData = createMindMapDataFromCollection(
+        collectionData,
+        conversations,
+        documents,
+        actionItems
+      )
+      
+      console.log('🧩 Mind map data created:', mindMapData)
+      
+      // Generate enhanced mind map with AI insights
+      const startTime = performance.now()
+      const enhancedData = await generateEnhancedMindMap(mindMapData)
+      const endTime = performance.now()
+      
+      console.log(`⚡ Enhanced mind map generation took ${(endTime - startTime).toFixed(2)}ms`)
+      console.log('🧠 AI insights generated:', enhancedData.insights)
+      console.log('📝 Generated code length:', enhancedData.mermaidCode.length)
+      console.log('🔍 Generated code preview:', enhancedData.mermaidCode.substring(0, 300) + '...')
+      
+      setMindMapCode(enhancedData.mermaidCode)
+      setEnhancedMindMapData(enhancedData)
+      setShowMindMap(true)
+      
+      console.log('✨ Enhanced mind map modal should now open')
+    } catch (error) {
+      console.error('❌ Error generating enhanced mind map:', error)
+      
+      // Fallback to basic mind map
+      try {
+        console.log('🔄 Falling back to basic mind map...')
+        const mindMapData = createMindMapDataFromCollection(
+          collectionData,
+          conversations,
+          documents,
+          actionItems
+        )
+        const basicCode = generateMindMapCode(mindMapData)
+        setMindMapCode(basicCode)
+        setShowMindMap(true)
+        console.log('✅ Basic mind map fallback successful')
+      } catch (fallbackError) {
+        console.error('❌ Even basic mind map failed:', fallbackError)
+      }
+    } finally {
+      setIsGeneratingMindMap(false)
+    }
+  }
+
+  const handleNodeClick = (node: InteractiveMindMapNode) => {
+    console.log('🖱️ Node clicked in CollectionDashboard:', node)
+    
+    switch (node.navigationTarget?.action) {
+      case 'openDocument':
+        const doc = node.navigationTarget.data as Document
+        setSelectedDocument(doc)
+        setShowMindMap(false) // Close mind map to show document
+        break
+        
+      case 'startChat':
+        if (onStartNewChat) {
+          onStartNewChat()
+          setShowMindMap(false)
+        }
+        break
+        
+      case 'showAction':
+        // Could scroll to action items section or open action details
+        console.log('📝 Action clicked:', node.navigationTarget.data)
+        // For now, just close mind map and user can see actions below
+        setShowMindMap(false)
+        break
+        
+      case 'showInsight':
+        // Insight details are already shown in the AI panel
+        console.log('🧠 Insight clicked:', node.navigationTarget.data)
+        break
+        
+      default:
+        console.log('❓ Unknown navigation action:', node.navigationTarget?.action)
     }
   }
 
@@ -403,7 +501,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
                 </div>
                 <h3 className="heading-3 mb-2">No documents in this collection</h3>
                 <p className="body-regular text-text-secondary mb-4">
-                  This collection doesn't contain any documents yet
+                  This collection does not contain any documents yet
                 </p>
               </CardContent>
             </Card>
@@ -434,7 +532,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
                           </h4>
                           
                           <p className="body-regular text-text-secondary mb-4 leading-relaxed">
-                            {document.contentSummary || 'No summary available for this document.'}
+                            {document.contentSummary || "No summary available for this document."}
                           </p>
                           
                           
@@ -589,8 +687,14 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
                   <p className="body-regular text-purple-subtle mb-4">
                     Create a visual overview of all your conversations, documents, and action items
                   </p>
-                  <Button variant="secondary" className="bg-white text-purple-primary hover:bg-purple-subtle">
-                    Generate Mind Map
+                  <Button 
+                    variant="secondary" 
+                    className="bg-white text-purple-primary hover:bg-purple-subtle"
+                    onClick={handleGenerateMindMap}
+                    disabled={isGeneratingMindMap}
+                    leftIcon={isGeneratingMindMap ? <Loader2 className="w-4 h-4 animate-spin" /> : <Brain className="w-4 h-4" />}
+                  >
+                    {isGeneratingMindMap ? 'Generating AI Mind Map...' : 'Generate AI Mind Map'}
                   </Button>
                 </CardContent>
               </Card>
@@ -627,6 +731,18 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
           documentId={selectedDocument.id}
           filename={selectedDocument.originalFilename}
           onClose={() => setSelectedDocument(null)}
+        />
+      )}
+
+      {/* Enhanced Mind Map Modal */}
+      {showMindMap && (
+        <MindMapViewer
+          isOpen={showMindMap}
+          onClose={() => setShowMindMap(false)}
+          mermaidCode={mindMapCode}
+          title={collectionData.title}
+          enhancedData={enhancedMindMapData || undefined}
+          onNodeClick={handleNodeClick}
         />
       )}
     </div>

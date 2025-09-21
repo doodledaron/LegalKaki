@@ -14,6 +14,62 @@ export interface TextAnalysisResponse {
   confidence: number
 }
 
+export interface MindMapAnalysisRequest {
+  collectionTitle: string
+  collectionDomain: string
+  collectionSummary: string
+  conversations: Array<{
+    id: string
+    title: string
+    domain: string
+    messages: unknown[]
+  }>
+  documents: Array<{
+    id: string
+    originalFilename: string
+    contentSummary?: string
+  }>
+  actionItems: Array<{
+    id: string
+    title: string
+    description: string
+    priority: 'urgent' | 'important' | 'normal'
+    status: 'pending' | 'in_progress' | 'completed'
+  }>
+}
+
+export interface MindMapInsights {
+  keyThemes: Array<{
+    id: string
+    name: string
+    description: string
+    importance: 'high' | 'medium' | 'low'
+    relatedItems: Array<{
+      type: 'document' | 'conversation' | 'action'
+      id: string
+      title: string
+    }>
+  }>
+  urgentActions: Array<{
+    id: string
+    title: string
+    reasoning: string
+    suggestedDeadline: string
+  }>
+  riskFactors: Array<{
+    description: string
+    severity: 'high' | 'medium' | 'low'
+    affectedItems: string[]
+  }>
+  recommendations: string[]
+  connections: Array<{
+    fromId: string
+    toId: string
+    relationship: string
+    strength: number
+  }>
+}
+
 // Bedrock configuration
 const BEDROCK_CONFIG = {
   region: 'us-east-1',
@@ -69,6 +125,45 @@ class BedrockService {
       
       // Fallback to local analysis if Bedrock fails
       return this.fallbackAnalysis(request.selectedText)
+    }
+  }
+
+  async generateMindMapInsights(request: MindMapAnalysisRequest): Promise<MindMapInsights> {
+    try {
+      console.log('🧠 Generating AI mind map insights for:', request.collectionTitle)
+      
+      // Construct the prompt for mind map analysis
+      const prompt = this.buildMindMapAnalysisPrompt(request)
+      
+      // Prepare the request for Llama 3.3 70B
+      const input = {
+        modelId: BEDROCK_CONFIG.modelId,
+        contentType: 'application/json',
+        accept: 'application/json',
+        body: JSON.stringify({
+          prompt: prompt,
+          max_gen_len: 1500, // Longer response for mind map analysis
+          temperature: 0.4,  // Slightly higher for creativity
+          top_p: 0.9
+        })
+      }
+
+      // Call Bedrock
+      const command = new InvokeModelCommand(input)
+      const response = await this.client.send(command)
+      
+      // Parse the response
+      const responseBody = JSON.parse(new TextDecoder().decode(response.body))
+      const generatedText = responseBody.generation
+
+      // Parse the structured response
+      return this.parseMindMapResponse(generatedText, request)
+      
+    } catch (error) {
+      console.error('Bedrock mind map analysis error:', error)
+      
+      // Fallback to basic analysis if Bedrock fails
+      return this.fallbackMindMapAnalysis(request)
     }
   }
 
@@ -171,7 +266,7 @@ Analyze this text and explain what it means in simple terms, focusing on Malaysi
 
   private cleanupResponse(text: string): string {
     // Remove asterisks and other unwanted markdown-style formatting
-    let cleaned = text
+    const cleaned = text
       .replace(/\*\*/g, '') // Remove ** bold markers
       .replace(/\*/g, '')   // Remove * italic markers
       .replace(/##/g, '')   // Remove ## headers
@@ -235,7 +330,218 @@ Analyze this text and explain what it means in simple terms, focusing on Malaysi
       'clause', 'legal-term', 'obligation', 'right', 'warning', 'general'
     ]
     
-    return validCategories.includes(category as any) ? category as TextAnalysisResponse['category'] : 'general'
+    return validCategories.includes(category as TextAnalysisResponse['category']) ? category as TextAnalysisResponse['category'] : 'general'
+  }
+
+  private buildMindMapAnalysisPrompt(request: MindMapAnalysisRequest): string {
+    const { collectionTitle, collectionDomain, collectionSummary, conversations, documents, actionItems } = request
+    
+    return `<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+
+You are a legal expert specializing in Malaysian law. Your task is to analyze a legal collection and generate insights for an interactive mind map.
+
+INSTRUCTIONS:
+- Analyze the collection data and identify key themes, relationships, and insights
+- Focus on Malaysian legal context and practical implications
+- Identify urgent actions and risk factors
+- Provide clear recommendations
+- Generate meaningful connections between items
+
+Respond in this exact JSON format:
+{
+  "keyThemes": [
+    {
+      "id": "theme_1",
+      "name": "Theme Name",
+      "description": "Brief description of the theme",
+      "importance": "high|medium|low",
+      "relatedItems": [
+        {"type": "document|conversation|action", "id": "item_id", "title": "Item Title"}
+      ]
+    }
+  ],
+  "urgentActions": [
+    {
+      "id": "action_id",
+      "title": "Action Title",
+      "reasoning": "Why this is urgent",
+      "suggestedDeadline": "Timeline suggestion"
+    }
+  ],
+  "riskFactors": [
+    {
+      "description": "Risk description",
+      "severity": "high|medium|low",
+      "affectedItems": ["item_id1", "item_id2"]
+    }
+  ],
+  "recommendations": [
+    "Recommendation 1",
+    "Recommendation 2"
+  ],
+  "connections": [
+    {
+      "fromId": "item_id_1",
+      "toId": "item_id_2",
+      "relationship": "relationship description",
+      "strength": 0.8
+    }
+  ]
+}
+
+<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+COLLECTION ANALYSIS REQUEST:
+
+Title: ${collectionTitle}
+Domain: ${collectionDomain}
+Summary: ${collectionSummary}
+
+CONVERSATIONS (${conversations.length} total):
+${conversations.map(conv => `- ID: ${conv.id}, Title: "${conv.title}", Messages: ${conv.messages.length}`).join('\n')}
+
+DOCUMENTS (${documents.length} total):
+${documents.map(doc => `- ID: ${doc.id}, Filename: "${doc.originalFilename}"${doc.contentSummary ? `, Summary: "${doc.contentSummary}"` : ''}`).join('\n')}
+
+ACTION ITEMS (${actionItems.length} total):
+${actionItems.map(action => `- ID: ${action.id}, Title: "${action.title}", Priority: ${action.priority}, Status: ${action.status}, Description: "${action.description}"`).join('\n')}
+
+Analyze this legal collection and provide insights for a mind map, focusing on Malaysian law context.<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+`
+  }
+
+  private parseMindMapResponse(generatedText: string, request: MindMapAnalysisRequest): MindMapInsights {
+    try {
+      // Try to extract JSON from the response
+      const jsonMatch = generatedText.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0])
+        
+        return {
+          keyThemes: this.validateThemes(parsed.keyThemes || []),
+          urgentActions: this.validateUrgentActions(parsed.urgentActions || []),
+          riskFactors: this.validateRiskFactors(parsed.riskFactors || []),
+          recommendations: parsed.recommendations || [],
+          connections: this.validateConnections(parsed.connections || [])
+        }
+      }
+      
+      // If no JSON found, return fallback
+      return this.fallbackMindMapAnalysis(request)
+      
+    } catch (error) {
+      console.error('Error parsing mind map response:', error)
+      return this.fallbackMindMapAnalysis(request)
+    }
+  }
+
+  private validateThemes(themes: any[]): MindMapInsights['keyThemes'] {
+    return themes.filter(theme => theme.id && theme.name).map(theme => ({
+      id: theme.id,
+      name: theme.name,
+      description: theme.description || '',
+      importance: ['high', 'medium', 'low'].includes(theme.importance) ? theme.importance : 'medium',
+      relatedItems: (theme.relatedItems || []).filter((item: any) => item.type && item.id && item.title)
+    }))
+  }
+
+  private validateUrgentActions(actions: any[]): MindMapInsights['urgentActions'] {
+    return actions.filter(action => action.id && action.title).map(action => ({
+      id: action.id,
+      title: action.title,
+      reasoning: action.reasoning || 'Requires immediate attention',
+      suggestedDeadline: action.suggestedDeadline || 'Within 7 days'
+    }))
+  }
+
+  private validateRiskFactors(risks: any[]): MindMapInsights['riskFactors'] {
+    return risks.filter(risk => risk.description).map(risk => ({
+      description: risk.description,
+      severity: ['high', 'medium', 'low'].includes(risk.severity) ? risk.severity : 'medium',
+      affectedItems: Array.isArray(risk.affectedItems) ? risk.affectedItems : []
+    }))
+  }
+
+  private validateConnections(connections: any[]): MindMapInsights['connections'] {
+    return connections.filter(conn => conn.fromId && conn.toId && conn.relationship).map(conn => ({
+      fromId: conn.fromId,
+      toId: conn.toId,
+      relationship: conn.relationship,
+      strength: typeof conn.strength === 'number' ? Math.max(0, Math.min(1, conn.strength)) : 0.5
+    }))
+  }
+
+  private fallbackMindMapAnalysis(request: MindMapAnalysisRequest): MindMapInsights {
+    // Basic fallback analysis when AI is unavailable
+    const urgentActions = request.actionItems.filter(action => action.priority === 'urgent')
+    const pendingActions = request.actionItems.filter(action => action.status === 'pending')
+    
+    const keyThemes: MindMapInsights['keyThemes'] = []
+    
+    // Create themes based on content
+    if (request.documents.length > 0) {
+      keyThemes.push({
+        id: 'documents_theme',
+        name: 'Document Analysis',
+        description: `${request.documents.length} documents requiring review`,
+        importance: 'high',
+        relatedItems: request.documents.map(doc => ({
+          type: 'document',
+          id: doc.id,
+          title: doc.originalFilename
+        }))
+      })
+    }
+    
+    if (request.conversations.length > 0) {
+      keyThemes.push({
+        id: 'conversations_theme',
+        name: 'Legal Discussions',
+        description: `${request.conversations.length} active conversations`,
+        importance: 'medium',
+        relatedItems: request.conversations.map(conv => ({
+          type: 'conversation',
+          id: conv.id,
+          title: conv.title
+        }))
+      })
+    }
+    
+    if (urgentActions.length > 0) {
+      keyThemes.push({
+        id: 'urgent_theme',
+        name: 'Urgent Matters',
+        description: `${urgentActions.length} urgent actions requiring immediate attention`,
+        importance: 'high',
+        relatedItems: urgentActions.map(action => ({
+          type: 'action',
+          id: action.id,
+          title: action.title
+        }))
+      })
+    }
+    
+    return {
+      keyThemes,
+      urgentActions: urgentActions.map(action => ({
+        id: action.id,
+        title: action.title,
+        reasoning: 'Marked as urgent priority',
+        suggestedDeadline: 'Within 48 hours'
+      })),
+      riskFactors: urgentActions.length > 0 ? [{
+        description: 'Multiple urgent actions may indicate time-sensitive legal matters',
+        severity: 'medium' as const,
+        affectedItems: urgentActions.map(a => a.id)
+      }] : [],
+      recommendations: [
+        'Review all urgent action items immediately',
+        'Consider scheduling a legal consultation',
+        'Ensure all documents are properly analyzed'
+      ],
+      connections: []
+    }
   }
 
   private fallbackAnalysis(selectedText: string): TextAnalysisResponse {
