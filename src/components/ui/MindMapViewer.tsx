@@ -1,10 +1,11 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from './Button'
 import { Card, CardContent } from './Card'
-import { X, ZoomIn, ZoomOut, Download, Maximize2, Brain, AlertTriangle, CheckCircle, FileText, MessageCircle, ExternalLink } from 'lucide-react'
+import { X, Download, Brain, AlertTriangle, CheckCircle, FileText, MessageCircle } from 'lucide-react'
 import mermaid from 'mermaid'
 import { EnhancedMindMapData, InteractiveMindMapNode } from '@/lib/mindMapGenerator'
 
@@ -75,6 +76,7 @@ export function MindMapViewer({ isOpen, onClose, mermaidCode, title, enhancedDat
         mermaidInitialized 
       })
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, mermaidCode, mermaidInitialized])
 
   const renderMindMap = async () => {

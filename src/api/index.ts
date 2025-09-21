@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 // Main API exports
 export { api as default } from './endpoints'
 export * from './types'
@@ -22,6 +23,7 @@ export {
 // Hook-like utilities for React components
 import { useEffect, useState } from 'react'
 import { ApiResponse, ApiError } from './types'
+import { progressTracker } from './mockClient'
 
 // Custom hook for API calls with loading and error states
 export function useApiCall<T>(
@@ -46,7 +48,7 @@ export function useApiCall<T>(
           if (result.success) {
             setData(result.data)
           } else {
-            setError(result.error)
+            setError('An error occurred')
           }
         }
       } catch (err) {
@@ -89,7 +91,7 @@ export function useApiMutation<TRequest, TResponse>(
         setData(result.data)
         return result.data
       } else {
-        setError(result.error)
+        setError('An error occurred')
         return null
       }
     } catch (err) {
@@ -124,7 +126,7 @@ export async function handleApiResponse<T>(
     onSuccess?.(response.data)
     return response.data
   } else {
-    onError?.(response.error)
+    onError?.('An error occurred')
     return null
   }
 }

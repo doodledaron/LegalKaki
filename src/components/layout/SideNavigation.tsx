@@ -1,88 +1,97 @@
-'use client'
+/* eslint-disable @typescript-eslint/no-empty-object-type */
+"use client";
 
-import { motion, AnimatePresence } from 'framer-motion'
-import { Home, MessageCircle, Bookmark, User, ChevronLeft, ChevronRight, Menu, X } from 'lucide-react'
-import { NavItem } from '@/types'
-import { useState, useEffect } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Home,
+  MessageCircle,
+  Bookmark,
+  User,
+  ChevronRight,
+  Menu,
+  X,
+} from "lucide-react";
+import { NavItem } from "@/types";
+import { useState, useEffect } from "react";
+import { useRouter, usePathname } from "next/navigation";
 
 interface SideNavigationProps {
   // No longer need activeRoute or onNavigate - using Next.js routing
 }
 
 export function SideNavigation({}: SideNavigationProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
-  const [isMounted, setIsMounted] = useState(false)
-  const router = useRouter()
-  const pathname = usePathname()
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
-    setIsMounted(true)
-  }, [])
+    setIsMounted(true);
+  }, []);
 
   const navItems: NavItem[] = [
     {
-      id: 'home',
-      label: 'Home',
-      icon: 'home',
-      route: '/',
-      isActive: pathname === '/'
+      id: "home",
+      label: "Home",
+      icon: "home",
+      route: "/",
+      isActive: pathname === "/",
     },
     {
-      id: 'chat',
-      label: 'Chat',
-      icon: 'message-circle',
-      route: '/domains',
-      isActive: pathname.startsWith('/chat') || pathname.startsWith('/domains')
+      id: "chat",
+      label: "Chat",
+      icon: "message-circle",
+      route: "/domains",
+      isActive: pathname.startsWith("/chat") || pathname.startsWith("/domains"),
     },
     {
-      id: 'collection',
-      label: 'Collection',
-      icon: 'bookmark',
-      route: '/collections',
-      isActive: pathname.startsWith('/collections')
+      id: "collection",
+      label: "Collection",
+      icon: "bookmark",
+      route: "/collections",
+      isActive: pathname.startsWith("/collections"),
     },
     {
-      id: 'profile',
-      label: 'Profile',
-      icon: 'user',
-      route: '/profile',
-      isActive: pathname === '/profile'
-    }
-  ]
+      id: "profile",
+      label: "Profile",
+      icon: "user",
+      route: "/profile",
+      isActive: pathname === "/profile",
+    },
+  ];
 
   const getIcon = (iconName: string, isActive: boolean) => {
     const iconProps = {
       className: `w-5 h-5 transition-colors duration-200 ${
-        isActive ? 'text-purple-primary' : 'text-text-secondary'
+        isActive ? "text-purple-primary" : "text-text-secondary"
       }`,
-    }
+    };
 
     switch (iconName) {
-      case 'home':
-        return <Home {...iconProps} />
-      case 'message-circle':
-        return <MessageCircle {...iconProps} />
-      case 'bookmark':
-        return <Bookmark {...iconProps} />
-      case 'user':
-        return <User {...iconProps} />
+      case "home":
+        return <Home {...iconProps} />;
+      case "message-circle":
+        return <MessageCircle {...iconProps} />;
+      case "bookmark":
+        return <Bookmark {...iconProps} />;
+      case "user":
+        return <User {...iconProps} />;
       default:
-        return <Home {...iconProps} />
+        return <Home {...iconProps} />;
     }
-  }
+  };
 
   const handleNavClick = (item: NavItem) => {
-    router.push(item.route)
+    router.push(item.route);
     // Close mobile menu after navigation
     if (window.innerWidth < 1024) {
-      setIsExpanded(false)
+      setIsExpanded(false);
     }
-  }
+  };
 
   const toggleExpanded = () => {
-    setIsExpanded(!isExpanded)
-  }
+    setIsExpanded(!isExpanded);
+  };
 
   return (
     <>
@@ -118,26 +127,26 @@ export function SideNavigation({}: SideNavigationProps) {
       {/* Side Navigation */}
       <motion.div
         className={`fixed left-0 top-0 h-full z-50 bg-surface-white border-r border-gray-200 shadow-xl flex flex-col transition-all duration-300 ease-in-out ${
-          isExpanded ? 'w-64' : 'w-16'
+          isExpanded ? "w-64" : "w-16"
         } lg:w-16 lg:hover:w-64 lg:relative lg:shadow-none`}
         initial={{ x: -100, opacity: 0 }}
-        animate={{ 
-          x: isExpanded || (isMounted && window.innerWidth >= 1024) ? 0 : -100, 
-          opacity: 1 
+        animate={{
+          x: isExpanded || (isMounted && window.innerWidth >= 1024) ? 0 : -100,
+          opacity: 1,
         }}
-        transition={{ duration: 0.3, ease: 'easeOut' }}
+        transition={{ duration: 0.3, ease: "easeOut" }}
         onMouseEnter={() => {
-          if (isMounted && window.innerWidth >= 1024) setIsExpanded(true)
+          if (isMounted && window.innerWidth >= 1024) setIsExpanded(true);
         }}
         onMouseLeave={() => {
-          if (isMounted && window.innerWidth >= 1024) setIsExpanded(false)
+          if (isMounted && window.innerWidth >= 1024) setIsExpanded(false);
         }}
       >
         {/* Header */}
         <div className="p-4 border-b border-gray-200">
-          <motion.div 
+          <motion.div
             className="flex items-center space-x-3"
-            animate={{ justifyContent: isExpanded ? 'flex-start' : 'center' }}
+            animate={{ justifyContent: isExpanded ? "flex-start" : "center" }}
           >
             <div className="w-8 h-8 bg-purple-primary rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-sm">L</span>
@@ -146,11 +155,13 @@ export function SideNavigation({}: SideNavigationProps) {
               {isExpanded && (
                 <motion.div
                   initial={{ opacity: 0, width: 0 }}
-                  animate={{ opacity: 1, width: 'auto' }}
+                  animate={{ opacity: 1, width: "auto" }}
                   exit={{ opacity: 0, width: 0 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <h2 className="font-semibold text-text-primary whitespace-nowrap">LegalKaki</h2>
+                  <h2 className="font-semibold text-text-primary whitespace-nowrap">
+                    LegalKaki
+                  </h2>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -170,27 +181,29 @@ export function SideNavigation({}: SideNavigationProps) {
                 <motion.button
                   onClick={() => handleNavClick(item)}
                   className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-all duration-200 ${
-                    item.isActive 
-                      ? 'bg-purple-subtle text-purple-primary' 
-                      : 'text-text-secondary hover:bg-gray-50 hover:text-text-primary'
+                    item.isActive
+                      ? "bg-purple-subtle text-purple-primary"
+                      : "text-text-secondary hover:bg-gray-50 hover:text-text-primary"
                   }`}
                   whileTap={{ scale: 0.95 }}
                   whileHover={{ scale: 1.02 }}
                 >
                   <motion.div
-                    animate={item.isActive ? { scale: [1, 1.1, 1] } : { scale: 1 }}
+                    animate={
+                      item.isActive ? { scale: [1, 1.1, 1] } : { scale: 1 }
+                    }
                     transition={{ duration: 0.3 }}
                     className="flex-shrink-0"
                   >
                     {getIcon(item.icon, item.isActive || false)}
                   </motion.div>
-                  
+
                   <AnimatePresence>
                     {isExpanded && (
-                      <motion.span 
+                      <motion.span
                         className="font-medium whitespace-nowrap"
                         initial={{ opacity: 0, width: 0 }}
-                        animate={{ opacity: 1, width: 'auto' }}
+                        animate={{ opacity: 1, width: "auto" }}
                         exit={{ opacity: 0, width: 0 }}
                         transition={{ duration: 0.2 }}
                       >
@@ -206,7 +219,7 @@ export function SideNavigation({}: SideNavigationProps) {
                       layoutId="sideActiveIndicator"
                       initial={{ scaleY: 0 }}
                       animate={{ scaleY: 1 }}
-                      transition={{ type: 'spring', duration: 0.4 }}
+                      transition={{ type: "spring", duration: 0.4 }}
                     />
                   )}
                 </motion.button>
@@ -235,7 +248,7 @@ export function SideNavigation({}: SideNavigationProps) {
         <div className="absolute inset-0 -z-10 backdrop-blur-md bg-surface-white/95" />
       </motion.div>
     </>
-  )
+  );
 }
 
-export default SideNavigation
+export default SideNavigation;

@@ -1,27 +1,13 @@
 import {
   User,
   Collection,
-  ActionItem,
-  Document,
-  Message,
-  ChatSession,
   DomainInfo,
   AnalysisResult,
   DraftResult,
   UserStats,
   ActivityItem,
 } from "./types";
-import { LegalDomain } from "@/types";
-import {
-  Briefcase,
-  User as UserIcon,
-  Home,
-  Handshake,
-  BookOpen,
-  AlertTriangle,
-  CheckCircle,
-  ExternalLink,
-} from "lucide-react";
+import { LegalDomain, ChatSession, Document, ActionItem } from "@/types";
 
 // User Data
 export const mockUser: User = {

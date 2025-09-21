@@ -155,7 +155,7 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
         setIsGeneratingExplanation(false)
       }
     }
-  }, [isHighlightMode, currentPage, documentId])
+  }, [isHighlightMode, currentPage])
 
   // Get context around the selected text
   const getSelectionContext = (selectedText: string, range: Range): string => {

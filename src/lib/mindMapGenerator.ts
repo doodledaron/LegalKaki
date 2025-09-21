@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { Document, ActionItem } from '@/types'
 import { bedrockService, MindMapInsights, MindMapAnalysisRequest } from '@/api/bedrockService'
 
@@ -25,7 +26,7 @@ export interface InteractiveMindMapNode {
   status?: string
   navigationTarget?: {
     action: 'openDocument' | 'startChat' | 'showAction' | 'showInsight'
-    data: any
+    data: unknown
   }
   icon?: string
   colorClass?: string

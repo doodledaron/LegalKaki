@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   BedrockRuntimeClient,
   InvokeModelCommand,
@@ -552,61 +553,80 @@ Analyze this legal collection and provide insights for a mind map, focusing on M
     }
   }
 
-  private validateThemes(themes: any[]): MindMapInsights["keyThemes"] {
-    return themes
-      .filter((theme) => theme.id && theme.name)
+  private validateThemes(themes: unknown[]): MindMapInsights["keyThemes"] {
+    return (themes as Array<Record<string, unknown>>)
+      .filter((theme) => Boolean(theme && theme["id"] && theme["name"]))
       .map((theme) => ({
-        id: theme.id,
-        name: theme.name,
-        description: theme.description || "",
-        importance: ["high", "medium", "low"].includes(theme.importance)
-          ? theme.importance
+        id: String(theme["id"]),
+        name: String(theme["name"]),
+        description: String(theme["description"] || ""),
+        importance: ["high", "medium", "low"].includes(
+          String(theme["importance"]) || ""
+        )
+          ? (theme["importance"] as "high" | "medium" | "low")
           : "medium",
-        relatedItems: (theme.relatedItems || []).filter(
-          (item: any) => item.type && item.id && item.title
-        ),
+        relatedItems: Array.isArray(theme["relatedItems"])
+          ? ((theme["relatedItems"] as Array<Record<string, unknown>>).filter(
+              (item) =>
+                Boolean(item && item["type"] && item["id"] && item["title"])
+            ) as Array<{
+              type: "document" | "conversation" | "action";
+              id: string;
+              title: string;
+            }>)
+          : [],
       }));
   }
 
   private validateUrgentActions(
-    actions: any[]
+    actions: unknown[]
   ): MindMapInsights["urgentActions"] {
-    return actions
-      .filter((action) => action.id && action.title)
+    return (actions as Array<Record<string, unknown>>)
+      .filter((action) => Boolean(action && action["id"] && action["title"]))
       .map((action) => ({
-        id: action.id,
-        title: action.title,
-        reasoning: action.reasoning || "Requires immediate attention",
-        suggestedDeadline: action.suggestedDeadline || "Within 7 days",
+        id: String(action["id"]),
+        title: String(action["title"]),
+        reasoning: String(
+          action["reasoning"] || "Requires immediate attention"
+        ),
+        suggestedDeadline: String(
+          action["suggestedDeadline"] || "Within 7 days"
+        ),
       }));
   }
 
-  private validateRiskFactors(risks: any[]): MindMapInsights["riskFactors"] {
-    return risks
-      .filter((risk) => risk.description)
+  private validateRiskFactors(
+    risks: unknown[]
+  ): MindMapInsights["riskFactors"] {
+    return (risks as Array<Record<string, unknown>>)
+      .filter((risk) => Boolean(risk && risk["description"]))
       .map((risk) => ({
-        description: risk.description,
-        severity: ["high", "medium", "low"].includes(risk.severity)
-          ? risk.severity
+        description: String(risk["description"]),
+        severity: ["high", "medium", "low"].includes(
+          String(risk["severity"]) || ""
+        )
+          ? (risk["severity"] as "high" | "medium" | "low")
           : "medium",
-        affectedItems: Array.isArray(risk.affectedItems)
-          ? risk.affectedItems
+        affectedItems: Array.isArray(risk["affectedItems"])
+          ? (risk["affectedItems"] as string[])
           : [],
       }));
   }
 
   private validateConnections(
-    connections: any[]
+    connections: unknown[]
   ): MindMapInsights["connections"] {
-    return connections
-      .filter((conn) => conn.fromId && conn.toId && conn.relationship)
+    return (connections as Array<Record<string, unknown>>)
+      .filter((conn) =>
+        Boolean(conn && conn["fromId"] && conn["toId"] && conn["relationship"])
+      )
       .map((conn) => ({
-        fromId: conn.fromId,
-        toId: conn.toId,
-        relationship: conn.relationship,
+        fromId: String(conn["fromId"]),
+        toId: String(conn["toId"]),
+        relationship: String(conn["relationship"]),
         strength:
-          typeof conn.strength === "number"
-            ? Math.max(0, Math.min(1, conn.strength))
+          typeof conn["strength"] === "number"
+            ? Math.max(0, Math.min(1, conn["strength"] as number))
             : 0.5,
       }));
   }

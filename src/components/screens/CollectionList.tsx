@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
 import { ArrowLeft, MessageCircle, FileText, AlertTriangle, CheckCircle, ChevronRight, Search, Grid, List, Loader2 } from 'lucide-react'
-import { collectionsApi, userApi, Collection, useApiCall } from '@/api'
+import { collectionsApi, userApi, useApiCall } from '@/api'
 
 interface CollectionListProps {
   onBack: () => void
@@ -33,6 +33,7 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
   const { 
     data: userStats, 
     loading: statsLoading, 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     error: statsError 
   } = useApiCall(() => userApi.getStats(), [])
 

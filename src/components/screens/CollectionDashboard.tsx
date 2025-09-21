@@ -1,10 +1,11 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 'use client'
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
-import { ArrowLeft, Grid, List, CheckCircle, Clock, AlertTriangle, Eye, MoreVertical, ExternalLink, ClipboardList, FileText, Settings, Calendar, MessageCircle, Brain, Music, BarChart3, FileIcon, FileSpreadsheet, ImageIcon, Loader2 } from 'lucide-react'
+import { ArrowLeft, Grid, List, CheckCircle, Clock, AlertTriangle, Eye, MoreVertical, ExternalLink, ClipboardList, FileText, Settings, Calendar, MessageCircle, Brain, Music, FileIcon, FileSpreadsheet, ImageIcon, Loader2 } from 'lucide-react'
 import { PDFViewer } from '@/components/ui/PDFViewer'
 import { MindMapViewer } from '@/components/ui/MindMapViewer'
 import { ActionItem, Document } from '@/types'

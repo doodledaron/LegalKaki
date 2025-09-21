@@ -1,4 +1,4 @@
-import { LegalDomain, ActionItem, Document, Message, ChatSession, CollectionItem } from '@/types'
+import { LegalDomain, ActionItem, Document, Message } from '@/types'
 
 // Base API Response Types
 export interface ApiResponse<T> {
