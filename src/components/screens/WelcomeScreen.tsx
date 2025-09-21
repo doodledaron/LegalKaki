@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/Button'
 import { useState } from 'react'
-import { Scale, ChevronRight } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 
 interface WelcomeScreenProps {
   onGetStarted: () => void
@@ -208,9 +208,11 @@ export function WelcomeScreen({ onGetStarted, onViewCollection }: WelcomeScreenP
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.6, delay: 0.2 }}
         >
-          <div className="w-20 h-20 mx-auto mb-8 bg-purple-subtle rounded-2xl flex items-center justify-center border border-purple-primary/20">
-            <Scale className="w-10 h-10 text-purple-primary" />
-          </div>
+          <img 
+            src="/Logo.png" 
+            alt="LegalKaki Logo" 
+            className="w-24 h-24 mx-auto mb-8 object-contain"
+          />
         </motion.div>
 
         {/* Main Headline */}
