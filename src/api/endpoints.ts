@@ -1,5 +1,6 @@
 import { mockClient } from './mockClient'
 import { bedrockService, TextAnalysisRequest, MindMapAnalysisRequest } from './bedrockService'
+import { realApiClient } from './realApi'
 import { 
   mockUser, 
   mockDomains, 
@@ -187,88 +188,119 @@ export const chatApi = {
     request: SendMessageRequest,
     onProgress?: (stage: string, progress: number) => void
   ): Promise<ApiResponse<SendMessageResponse> | ApiError> {
-    return mockClient.request(async () => {
-      const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      const now = new Date()
-
-      // Create user message
-      const userMessage: Message = {
-        id: messageId,
-        content: request.content,
-        sender: 'user',
-        timestamp: now,
-        attachments: request.attachments?.map(id => ({
-          id,
-          filename: 'attached_file.pdf',
-          fileType: 'application/pdf',
-          fileSize: 245760,
-          url: '#'
-        }))
-      }
-
-      let aiResponse: Message | undefined
-      let analysisResult: AnalysisResult | undefined
-      let draftResult: DraftResult | undefined
-
-      // Simulate AI processing
+    try {
+      // Use real API for streaming chat
+      let streamingContent = ''
+      
+      const realResponse = await realApiClient.sendMessage(
+        request.content,
+        request.messageType || 'text',
+        (content) => {
+          streamingContent = content
+          if (onProgress) {
+            const progress = Math.min(95, content.length / 10) // Rough progress estimate
+            onProgress('Receiving response...', progress)
+          }
+        }
+      )
+      
       if (onProgress) {
-        onProgress('Processing your message...', 25)
-        await new Promise(resolve => setTimeout(resolve, 500))
-        onProgress('Analyzing content...', 50)
-        await new Promise(resolve => setTimeout(resolve, 500))
-        onProgress('Generating response...', 75)
-        await new Promise(resolve => setTimeout(resolve, 500))
-        onProgress('Finalizing...', 100)
+        onProgress('Processing complete', 100)
       }
-
-      // Generate AI response based on message type
-      if (request.messageType === 'analysis_request') {
-        analysisResult = {
-          ...mockAnalysisResult,
-          id: `analysis_${Date.now()}`
-        }
-        
-        aiResponse = {
-          id: `msg_${Date.now() + 1}`,
-          content: "Here's my detailed analysis:",
-          sender: 'assistant',
-          timestamp: new Date(now.getTime() + 2000),
-          type: 'analysis'
-        }
-      } else if (request.messageType === 'draft_request') {
-        draftResult = {
-          ...mockDraftResult,
-          id: `draft_${Date.now()}`
-        }
-        
-        aiResponse = {
-          id: `msg_${Date.now() + 1}`,
-          content: "Here's your document draft:",
-          sender: 'assistant',
-          timestamp: new Date(now.getTime() + 2000),
-          type: 'draft'
-        }
-      } else {
-        // Regular text response
-        aiResponse = {
-          id: `msg_${Date.now() + 1}`,
-          content: `I understand you're asking about "${request.content}". Let me help you with that.`,
-          sender: 'assistant',
-          timestamp: new Date(now.getTime() + 1500),
-          type: 'text'
-        }
-      }
-
+      
       return {
-        message: userMessage,
-        aiResponse,
-        analysisResult,
-        draftResult
+        success: true,
+        data: realResponse,
+        timestamp: new Date().toISOString(),
+        message: 'Message sent successfully'
       }
-    }, 'ai', {
-      progressId: 'send_message',
-      progressSteps: ['Processing message...', 'Analyzing content...', 'Generating response...', 'Finalizing...']
-    })
+    } catch (error) {
+      console.error('Real API chat failed, falling back to mock:', error)
+      
+      // Fallback to mock implementation
+      return mockClient.request(async () => {
+        const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        const now = new Date()
+
+        // Create user message
+        const userMessage: Message = {
+          id: messageId,
+          content: request.content,
+          sender: 'user',
+          timestamp: now,
+          attachments: request.attachments?.map(id => ({
+            id,
+            filename: 'attached_file.pdf',
+            fileType: 'application/pdf',
+            fileSize: 245760,
+            url: '#'
+          }))
+        }
+
+        let aiResponse: Message | undefined
+        let analysisResult: AnalysisResult | undefined
+        let draftResult: DraftResult | undefined
+
+        // Simulate AI processing
+        if (onProgress) {
+          onProgress('Processing your message...', 25)
+          await new Promise(resolve => setTimeout(resolve, 500))
+          onProgress('Analyzing content...', 50)
+          await new Promise(resolve => setTimeout(resolve, 500))
+          onProgress('Generating response...', 75)
+          await new Promise(resolve => setTimeout(resolve, 500))
+          onProgress('Finalizing...', 100)
+        }
+
+        // Generate AI response based on message type
+        if (request.messageType === 'analysis_request') {
+          analysisResult = {
+            ...mockAnalysisResult,
+            id: `analysis_${Date.now()}`
+          }
+          
+          aiResponse = {
+            id: `msg_${Date.now() + 1}`,
+            content: "Here's my detailed analysis:",
+            sender: 'assistant',
+            timestamp: new Date(now.getTime() + 2000),
+            type: 'analysis'
+          }
+        } else if (request.messageType === 'draft_request') {
+          draftResult = {
+            ...mockDraftResult,
+            id: `draft_${Date.now()}`
+          }
+          
+          aiResponse = {
+            id: `msg_${Date.now() + 1}`,
+            content: "Here's your document draft:",
+            sender: 'assistant',
+            timestamp: new Date(now.getTime() + 2000),
+            type: 'draft'
+          }
+        } else {
+          // Regular text response
+          aiResponse = {
+            id: `msg_${Date.now() + 1}`,
+            content: `I understand you're asking about "${request.content}". Let me help you with that.`,
+            sender: 'assistant',
+            timestamp: new Date(now.getTime() + 1500),
+            type: 'text'
+          }
+        }
+
+        return {
+          message: userMessage,
+          aiResponse,
+          analysisResult,
+          draftResult
+        }
+      }, 'ai', {
+        progressId: 'send_message',
+        progressSteps: ['Processing message...', 'Analyzing content...', 'Generating response...', 'Finalizing...']
+      })
+    }
   },
 
   async getSessions(limit: number = 10): Promise<ApiResponse<ChatSessionResponse[]> | ApiError> {
@@ -284,33 +316,48 @@ export const documentsApi = {
     request: UploadDocumentRequest,
     onProgress?: (progress: number) => void
   ): Promise<ApiResponse<UploadDocumentResponse> | ApiError> {
-    const uploadResult = await mockClient.uploadFile(request.file, onProgress)
-    
-    if (!uploadResult.success) {
-      return uploadResult as ApiError
-    }
-
-    return mockClient.request(async () => {
-      const document: Document = {
-        id: uploadResult.data.fileId,
-        originalFilename: request.file.name,
-        storedFilename: `${uploadResult.data.fileId}.${request.file.name.split('.').pop()}`,
-        fileType: request.file.type,
-        fileSize: request.file.size,
-        s3Bucket: 'legalkaki-documents',
-        s3Key: `documents/user-1/${uploadResult.data.fileId}.${request.file.name.split('.').pop()}`,
-        uploadDate: new Date(),
-        analysisStatus: 'pending'
-      }
-
+    try {
+      // Use real API for document upload
+      const uploadResult = await realApiClient.uploadDocument(request.file, onProgress)
+      
       return {
-        document,
-        uploadUrl: uploadResult.data.url,
-        analysisJobId: `analysis_job_${Date.now()}`
+        success: true,
+        data: uploadResult,
+        timestamp: new Date().toISOString(),
+        message: 'Document uploaded successfully'
       }
-    }, 'fast', {
-      successMessage: 'Document uploaded successfully'
-    })
+    } catch (error) {
+      console.error('Real API upload failed, falling back to mock:', error)
+      
+      // Fallback to mock implementation
+      const uploadResult = await mockClient.uploadFile(request.file, onProgress)
+      
+      if (!uploadResult.success) {
+        return uploadResult as ApiError
+      }
+
+      return mockClient.request(async () => {
+        const document: Document = {
+          id: uploadResult.data.fileId,
+          originalFilename: request.file.name,
+          storedFilename: `${uploadResult.data.fileId}.${request.file.name.split('.').pop()}`,
+          fileType: request.file.type,
+          fileSize: request.file.size,
+          s3Bucket: 'legalkaki-documents',
+          s3Key: `documents/user-1/${uploadResult.data.fileId}.${request.file.name.split('.').pop()}`,
+          uploadDate: new Date(),
+          analysisStatus: 'pending'
+        }
+
+        return {
+          document,
+          uploadUrl: uploadResult.data.url,
+          analysisJobId: `analysis_job_${Date.now()}`
+        }
+      }, 'fast', {
+        successMessage: 'Document uploaded successfully (mock)'
+      })
+    }
   },
 
   async getDocument(documentId: string): Promise<ApiResponse<Document> | ApiError> {

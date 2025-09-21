@@ -96,6 +96,18 @@ export interface SendMessageResponse {
   aiResponse?: Message
   analysisResult?: AnalysisResult
   draftResult?: DraftResult
+  modeSwitch?: {
+    detected: boolean
+    mode: "A" | "B" | "C" | null
+    toDraftMode: boolean
+    toAnalysisMode: boolean
+    structuredData?: {
+      Mode: "A" | "B" | "C"
+      answer: string
+      steps?: string[]
+      source?: string
+    }
+  }
 }
 
 export interface AnalysisResult {
