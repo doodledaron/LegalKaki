@@ -918,7 +918,6 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
     try {
       const response = await createSession({
         domain,
-        initialMessage: "I have documents to upload for analysis",
       });
 
       if (response) {
