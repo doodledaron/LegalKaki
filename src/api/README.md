@@ -605,7 +605,7 @@ CREATE TABLE users (
 
 ### Chat Sessions Table
 ```sql
-CREATE TABLE chat_sessions (
+CREATE TABLE dialog (
   id UUID PRIMARY KEY,
   user_id UUID REFERENCES users(id),
   collection_id UUID REFERENCES collections(id),
@@ -625,7 +625,7 @@ CREATE INDEX idx_chat_sessions_created_at ON chat_sessions(created_at);
 
 ### Messages Table
 ```sql
-CREATE TABLE messages (
+CREATE TABLE conversation (
   id UUID PRIMARY KEY,
   session_id UUID REFERENCES chat_sessions(id),
   content TEXT NOT NULL,

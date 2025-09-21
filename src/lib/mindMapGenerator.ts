@@ -1,38 +1,5 @@
 import { Document, ActionItem } from '@/types'
-import { toolsApi } from '@/api/endpoints'
-
-// Re-export the types from bedrockService for compatibility
-export interface MindMapInsights {
-  keyThemes: Array<{
-    id: string
-    name: string
-    description: string
-    importance: 'high' | 'medium' | 'low'
-    relatedItems: Array<{
-      type: 'document' | 'conversation' | 'action'
-      id: string
-      title: string
-    }>
-  }>
-  urgentActions: Array<{
-    id: string
-    title: string
-    reasoning: string
-    suggestedDeadline: string
-  }>
-  riskFactors: Array<{
-    description: string
-    severity: 'high' | 'medium' | 'low'
-    affectedItems: string[]
-  }>
-  recommendations: string[]
-  connections: Array<{
-    fromId: string
-    toId: string
-    relationship: string
-    strength: number
-  }>
-}
+import { bedrockService, MindMapInsights, MindMapAnalysisRequest } from '@/api/bedrockService'
 
 export interface CollectionMindMapData {
   id: string
@@ -75,8 +42,8 @@ export async function generateEnhancedMindMap(data: CollectionMindMapData): Prom
   console.log('🧠 Generating enhanced AI mind map for:', data.title)
   
   try {
-    // Prepare request for mind map insights API
-    const analysisRequest = {
+    // Prepare request for Bedrock AI analysis (direct client-side call for hackathon)
+    const analysisRequest: MindMapAnalysisRequest = {
       collectionTitle: data.title,
       collectionDomain: data.domain,
       collectionSummary: data.summary,
@@ -89,14 +56,8 @@ export async function generateEnhancedMindMap(data: CollectionMindMapData): Prom
       actionItems: data.actionItems
     }
     
-    // Get AI insights through API (server-side call)
-    const response = await toolsApi.generateMindMapInsights(analysisRequest)
-    
-    if ('error' in response) {
-      throw new Error(response.error)
-    }
-    
-    const insights = response.data
+    // Get AI insights directly from Bedrock (client-side call)
+    const insights = await bedrockService.generateMindMapInsights(analysisRequest)
     console.log('✨ AI insights generated:', insights)
     
     // Generate interactive nodes
@@ -139,8 +100,7 @@ function generateInteractiveNodes(data: CollectionMindMapData, insights: MindMap
     id: `collection_${data.id}`,
     type: 'collection',
     title: data.title,
-    clickable: false,
-    colorClass: 'purple'
+    clickable: false
   })
   
   // AI Insight nodes
@@ -155,8 +115,7 @@ function generateInteractiveNodes(data: CollectionMindMapData, insights: MindMap
         action: 'showInsight',
         data: theme
       },
-      icon: '🧠',
-      colorClass: theme.importance === 'high' ? 'red' : theme.importance === 'medium' ? 'yellow' : 'green'
+      icon: '🧠'
     })
   })
   
@@ -171,8 +130,7 @@ function generateInteractiveNodes(data: CollectionMindMapData, insights: MindMap
         action: 'openDocument',
         data: doc
       },
-      icon: '📄',
-      colorClass: 'blue'
+      icon: '📄'
     })
   })
   
@@ -187,8 +145,7 @@ function generateInteractiveNodes(data: CollectionMindMapData, insights: MindMap
         action: 'startChat',
         data: conv
       },
-      icon: '💬',
-      colorClass: 'indigo'
+      icon: '💬'
     })
   })
   
@@ -205,8 +162,7 @@ function generateInteractiveNodes(data: CollectionMindMapData, insights: MindMap
         action: 'showAction',
         data: action
       },
-      icon: action.status === 'completed' ? '✅' : action.priority === 'urgent' ? '🚨' : '📝',
-      colorClass: action.priority === 'urgent' ? 'red' : action.priority === 'important' ? 'yellow' : 'green'
+      icon: action.status === 'completed' ? '✅' : action.priority === 'urgent' ? '🚨' : '📝'
     })
   })
   
@@ -378,8 +334,7 @@ function generateBasicNodes(data: CollectionMindMapData): InteractiveMindMapNode
         action: 'openDocument',
         data: doc
       },
-      icon: '📄',
-      colorClass: 'blue'
+      icon: '📄'
     })
   })
   
@@ -393,8 +348,7 @@ function generateBasicNodes(data: CollectionMindMapData): InteractiveMindMapNode
         action: 'startChat',
         data: conv
       },
-      icon: '💬',
-      colorClass: 'indigo'
+      icon: '💬'
     })
   })
   
@@ -410,8 +364,7 @@ function generateBasicNodes(data: CollectionMindMapData): InteractiveMindMapNode
         action: 'showAction',
         data: action
       },
-      icon: action.status === 'completed' ? '✅' : action.priority === 'urgent' ? '🚨' : '📝',
-      colorClass: action.priority === 'urgent' ? 'red' : action.priority === 'important' ? 'yellow' : 'green'
+      icon: action.status === 'completed' ? '✅' : action.priority === 'urgent' ? '🚨' : '📝'
     })
   })
   

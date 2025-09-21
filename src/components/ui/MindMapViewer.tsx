@@ -32,19 +32,7 @@ export function MindMapViewer({ isOpen, onClose, mermaidCode, title, enhancedDat
         console.log('🔧 Initializing Mermaid...')
         mermaid.initialize({
           startOnLoad: false,
-          theme: 'base',
-          themeVariables: {
-            primaryColor: '#8B5CF6',
-            primaryTextColor: '#1F2937',
-            primaryBorderColor: '#8B5CF6',
-            lineColor: '#6B7280',
-            secondaryColor: '#F3F4F6',
-            tertiaryColor: '#E5E7EB',
-            background: '#FFFFFF',
-            mainBkg: '#FFFFFF',
-            secondBkg: '#F8FAFC',
-            tertiaryBkg: '#EFF6FF'
-          },
+          theme: 'default',
           mindmap: {
             padding: 20
           }
@@ -196,7 +184,6 @@ export function MindMapViewer({ isOpen, onClose, mermaidCode, title, enhancedDat
         
         // Style the clickable element
         textElement.style.cursor = 'pointer'
-        textElement.style.fill = getNodeColor(matchingNode.colorClass || 'purple')
         textElement.classList.add('clickable-node')
         
         // Add hover effects
@@ -223,17 +210,6 @@ export function MindMapViewer({ isOpen, onClose, mermaidCode, title, enhancedDat
     })
   }
 
-  const getNodeColor = (colorClass: string): string => {
-    switch (colorClass) {
-      case 'red': return '#EF4444'
-      case 'yellow': return '#F59E0B'
-      case 'green': return '#10B981'
-      case 'blue': return '#3B82F6'
-      case 'indigo': return '#6366F1'
-      case 'purple': return '#8B5CF6'
-      default: return '#6B7280'
-    }
-  }
 
   const handleDownload = () => {
     const svgElement = mermaidRef.current?.querySelector('svg')

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/Button'
 import { Eye, EyeOff, ZoomIn, ZoomOut, Download, X, Lightbulb, AlertCircle, Loader2 } from 'lucide-react'
 import { Document, Page, pdfjs } from 'react-pdf'
-import { pdfApi } from '@/api'
+import { bedrockService } from '@/api/bedrockService'
 
 // Configure PDF.js worker for react-pdf v9
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -58,7 +58,8 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
     const loadPdfUrl = async () => {
       try {
         setPdfLoading(true)
-        const response = await pdfApi.getDocumentUrl(documentId)
+        // For hackathon: use direct PDF path (replace with actual document path)
+        const response = { success: true, data: { url: '/partnership.pdf' } }
         
         if (response.success) {
           setPdfUrl(response.data.url)
@@ -115,31 +116,27 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
         // Get surrounding context for better analysis
         const context = getSelectionContext(selectedText, range)
         
-        // Call API for AI explanation
-        const response = await pdfApi.analyzeTextSelection({
-          documentId,
+        // Call Bedrock directly for AI explanation (hackathon direct access)
+        const response = await bedrockService.analyzeText({
           selectedText,
           context,
           pageNumber: currentPage
         })
         
-        if (response.success) {
-          console.log('AI Response:', response.data.explanation) // Debug log
-          setTooltip({
-            content: response.data.explanation,
-            x: rect.left - viewerRect.left + rect.width / 2,
-            y: rect.top - viewerRect.top - 10,
-            visible: true,
-            category: response.data.category,
-            selectedText: selectedText,
-            confidence: response.data.confidence
-          })
-          
-          // Add to highlighted terms
-          setHighlightedTerms(prev => new Set([...prev, selectedText]))
-        } else {
-          throw new Error('error' in response ? response.error : 'Analysis failed')
-        }
+        // bedrockService returns the response directly, not wrapped in success/error
+        console.log('AI Response:', response.explanation) // Debug log
+        setTooltip({
+          content: response.explanation,
+          x: rect.left - viewerRect.left + rect.width / 2,
+          y: rect.top - viewerRect.top - 10,
+          visible: true,
+          category: response.category,
+          selectedText: selectedText,
+          confidence: response.confidence
+        })
+        
+        // Add to highlighted terms
+        setHighlightedTerms(prev => new Set([...prev, selectedText]))
         
       } catch (error) {
         console.error('Failed to analyze text:', error)

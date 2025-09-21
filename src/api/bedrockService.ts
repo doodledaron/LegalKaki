@@ -80,12 +80,12 @@ class BedrockService {
   private client: BedrockRuntimeClient
 
   constructor() {
-    // Initialize Bedrock client with environment variables
+    // Initialize Bedrock client with environment variables (client-side for hackathon)
     this.client = new BedrockRuntimeClient({
       region: BEDROCK_CONFIG.region,
       credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ''
+        accessKeyId: process.env.NEXT_PUBLIC_AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID || '',
+        secretAccessKey: process.env.NEXT_PUBLIC_AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY || ''
         // No session token needed for permanent credentials
       }
     })
