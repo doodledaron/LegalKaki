@@ -7,6 +7,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/Tabs";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   ArrowLeft,
   Send,
@@ -27,6 +29,8 @@ import {
   ChevronDown,
   Edit,
   Mail,
+  BookOpen,
+  Target,
 } from "lucide-react";
 import {
   LegalDomain,
@@ -431,6 +435,176 @@ const CombinedMessageBubble = memo(
 
 CombinedMessageBubble.displayName = "CombinedMessageBubble";
 
+// Supervisor Message Bubble Component - renders tabs from supervisor response
+const SupervisorMessageBubble = memo(({ supervisorData }: { supervisorData: any }) => {
+  const { explanation_tab, analysis_tab, action_tab } = supervisorData;
+  
+  // Determine which tabs are active
+  const activeTabs = {
+    explanation: explanation_tab?.status === "active",
+    analysis: analysis_tab?.status === "active",
+    action: action_tab?.status === "active",
+  };
+  
+  const hasAnyActiveTab = Object.values(activeTabs).some(Boolean);
+  
+  if (!hasAnyActiveTab) {
+    // Render as regular message if no active tabs
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex justify-start mb-4"
+      >
+        <div className="max-w-[85%] bg-surface-white border border-gray-200 text-text-primary rounded-2xl rounded-bl-sm">
+          <p className="body-regular p-4">
+            {explanation_tab?.content || "No response available."}
+          </p>
+        </div>
+      </motion.div>
+    );
+  }
+  
+  // Get default tab (first active one)
+  const getDefaultTab = () => {
+    if (activeTabs.explanation) return "explanation";
+    if (activeTabs.analysis) return "analysis";
+    if (activeTabs.action) return "action";
+    return "explanation";
+  };
+  
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex justify-start mb-4"
+    >
+      <div className="max-w-[90%] bg-surface-white border-2 border-indigo-200/50 rounded-2xl rounded-bl-sm shadow-md overflow-hidden">
+        <Tabs defaultValue={getDefaultTab()} className="w-full">
+          <TabsList className="w-full justify-start border-b border-gray-100 bg-gray-50/50 rounded-none px-4">
+            {activeTabs.explanation && (
+              <TabsTrigger value="explanation" className="flex items-center space-x-2">
+                <BookOpen className="w-4 h-4" />
+                <span>Explanation</span>
+              </TabsTrigger>
+            )}
+            {activeTabs.analysis && (
+              <TabsTrigger value="analysis" className="flex items-center space-x-2">
+                <Search className="w-4 h-4" />
+                <span>Analysis</span>
+              </TabsTrigger>
+            )}
+            {activeTabs.action && (
+              <TabsTrigger value="action" className="flex items-center space-x-2">
+                <Target className="w-4 h-4" />
+                <span>Actions</span>
+              </TabsTrigger>
+            )}
+          </TabsList>
+          
+          {activeTabs.explanation && (
+            <TabsContent value="explanation" className="p-4 max-h-96 overflow-y-auto">
+              <div className="space-y-3">
+                <ReactMarkdown 
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    p: ({children}) => <p className="body-regular text-text-primary mb-3">{children}</p>,
+                    ul: ({children}) => <ul className="list-disc list-inside space-y-2 mb-3">{children}</ul>,
+                    ol: ({children}) => <ol className="list-decimal list-inside space-y-2 mb-3">{children}</ol>,
+                    li: ({children}) => <li className="body-regular text-text-primary">{children}</li>,
+                    h1: ({children}) => <h1 className="heading-3 text-text-primary mb-3">{children}</h1>,
+                    h2: ({children}) => <h2 className="heading-4 text-text-primary mb-2">{children}</h2>,
+                    h3: ({children}) => <h3 className="body-semibold text-text-primary mb-2">{children}</h3>,
+                    strong: ({children}) => <strong className="body-semibold text-purple-primary">{children}</strong>,
+                    em: ({children}) => <em className="italic">{children}</em>,
+                    code: ({children}) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
+                  }}
+                >
+                  {explanation_tab.content}
+                </ReactMarkdown>
+                {explanation_tab.relevance && (
+                  <p className="caption text-text-secondary italic mt-3 pt-3 border-t border-gray-100">
+                    {explanation_tab.relevance}
+                  </p>
+                )}
+              </div>
+            </TabsContent>
+          )}
+          
+          {activeTabs.analysis && (
+            <TabsContent value="analysis" className="p-4 max-h-96 overflow-y-auto">
+              <div className="space-y-3">
+                <ReactMarkdown 
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    p: ({children}) => <p className="body-regular text-text-primary mb-3">{children}</p>,
+                    ul: ({children}) => <ul className="list-disc list-inside space-y-2 mb-3">{children}</ul>,
+                    ol: ({children}) => <ol className="list-decimal list-inside space-y-2 mb-3">{children}</ol>,
+                    li: ({children}) => <li className="body-regular text-text-primary">{children}</li>,
+                    h1: ({children}) => <h1 className="heading-3 text-text-primary mb-3">{children}</h1>,
+                    h2: ({children}) => <h2 className="heading-4 text-text-primary mb-2">{children}</h2>,
+                    h3: ({children}) => <h3 className="body-semibold text-text-primary mb-2">{children}</h3>,
+                    strong: ({children}) => <strong className="body-semibold text-purple-primary">{children}</strong>,
+                    em: ({children}) => <em className="italic">{children}</em>,
+                    code: ({children}) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
+                  }}
+                >
+                  {analysis_tab.content}
+                </ReactMarkdown>
+                {analysis_tab.relevance && (
+                  <p className="caption text-text-secondary italic mt-3 pt-3 border-t border-gray-100">
+                    {analysis_tab.relevance}
+                  </p>
+                )}
+              </div>
+            </TabsContent>
+          )}
+          
+          {activeTabs.action && (
+            <TabsContent value="action" className="p-4 max-h-96 overflow-y-auto">
+              <div className="space-y-3">
+                <ReactMarkdown 
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    p: ({children}) => <p className="body-regular text-text-primary mb-3">{children}</p>,
+                    ul: ({children}) => <ul className="list-disc list-inside space-y-2 mb-3">{children}</ul>,
+                    ol: ({children}) => <ol className="list-decimal list-inside space-y-2 mb-3">{children}</ol>,
+                    li: ({children}) => <li className="body-regular text-text-primary">{children}</li>,
+                    h1: ({children}) => <h1 className="heading-3 text-text-primary mb-3">{children}</h1>,
+                    h2: ({children}) => <h2 className="heading-4 text-text-primary mb-2">{children}</h2>,
+                    h3: ({children}) => <h3 className="body-semibold text-text-primary mb-2">{children}</h3>,
+                    strong: ({children}) => <strong className="body-semibold text-purple-primary">{children}</strong>,
+                    em: ({children}) => <em className="italic">{children}</em>,
+                    code: ({children}) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
+                  }}
+                >
+                  {action_tab.content}
+                </ReactMarkdown>
+                {action_tab.relevance && (
+                  <p className="caption text-text-secondary italic mt-3 pt-3 border-t border-gray-100">
+                    {action_tab.relevance}
+                  </p>
+                )}
+              </div>
+            </TabsContent>
+          )}
+        </Tabs>
+        
+        <div className="p-3 bg-gray-50/50 border-t border-gray-100">
+          <p className="caption text-text-secondary text-center">
+            {new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </p>
+        </div>
+      </div>
+    </motion.div>
+  );
+});
+
+SupervisorMessageBubble.displayName = "SupervisorMessageBubble";
+
 // Memoized Regular Message Bubble Component
 const RegularMessageBubble = memo(({ message }: { message: Message }) => (
   <motion.div
@@ -485,7 +659,11 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isSidePanelOpen, setIsSidePanelOpen] = useState(false);
   const [messagePayloads, setMessagePayloads] = useState<
-    Record<string, { analysis?: ApiAnalysisResult; draft?: ApiDraftResult }>
+    Record<string, { 
+      analysis?: ApiAnalysisResult; 
+      draft?: ApiDraftResult; 
+      supervisor?: any; // TODO: Add proper type for supervisor response
+    }>
   >({});
   // Email modal state
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
@@ -644,11 +822,15 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
           const aiMsg = responseData.aiResponse as Message;
           const updatedMessages = [...newMessages, aiMsg];
 
-          // Use real supervisor data if available, otherwise don't attach payloads
+          // Use real supervisor data if available, store it for rendering
           if (responseData.supervisorData) {
             console.log("[Chat] Using real supervisor data for message", aiMsg.id, responseData.supervisorData);
-            // Don't attach mock payloads - let the message render with its actual content
-            // The real Bedrock response is already in aiMsg.content
+            setMessagePayloads((prev) => ({
+              ...prev,
+              [aiMsg.id]: {
+                supervisor: responseData.supervisorData,
+              },
+            }));
           } else {
             // Only attach mock payloads if no supervisor data (legacy fallback)
             setMessagePayloads((prev) => ({
@@ -1480,6 +1662,17 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
                 {currentSession?.messages.map((message: Message) => {
                   const analysis = messagePayloads[message.id]?.analysis;
                   const draft = messagePayloads[message.id]?.draft;
+                  const supervisor = messagePayloads[message.id]?.supervisor;
+
+                  // Handle supervisor response (highest priority)
+                  if (supervisor && message.sender === "assistant") {
+                    return (
+                      <SupervisorMessageBubble
+                        key={message.id}
+                        supervisorData={supervisor}
+                      />
+                    );
+                  }
 
                   if (analysis && draft) {
                     return (
