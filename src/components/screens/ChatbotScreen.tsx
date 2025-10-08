@@ -60,104 +60,149 @@ interface ChatbotScreenProps {
 
 // Removed unused mock data
 
-// Memoized Draft Message Bubble Component
-const DraftMessageBubble = memo(
-  ({ draftResult }: { draftResult: ApiDraftResult }) => (
+// Memoized Analysis Message Bubble Component
+const AnalysisMessageBubble = memo(
+  ({ analysisResult }: { analysisResult: ApiAnalysisResult }) => (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className="flex justify-start mb-4"
     >
-      <div className="max-w-[90%] bg-gradient-to-br from-purple-subtle/50 to-white border-2 border-purple-primary/30 rounded-2xl rounded-bl-sm shadow-md overflow-hidden">
-        <div className="p-4 border-b border-purple-primary/10 bg-purple-subtle/20">
-          <div className="flex items-center space-x-2 mb-2">
-            <FileText className="w-5 h-5 text-purple-primary" />
-            <p className="body-regular font-medium text-purple-primary">
-              Document Draft Ready
-            </p>
-          </div>
-        </div>
-
-        <div className="p-4">
-          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 mb-4">
-            <pre className="whitespace-pre-wrap text-sm text-text-primary font-mono leading-relaxed">
-              {draftResult.content}
-            </pre>
-          </div>
-
-          <div className="space-y-3">
-            <h4 className="body-regular font-medium text-text-primary flex items-center space-x-2">
-              <CheckCircle className="w-4 h-4 text-purple-primary" />
-              <span>Editing Suggestions</span>
-            </h4>
-
-            {(draftResult.suggestions || []).map(
-              (
-                suggestion: ApiDraftResult["suggestions"][number],
-                index: number
-              ) => (
-                <div
-                  key={index}
-                  className="flex items-start space-x-3 p-3 bg-purple-subtle/20 rounded-lg border border-purple-primary/10"
-                >
-                  <div
-                    className={`w-2 h-2 rounded-full mt-2 ${
-                      suggestion.priority === "high"
-                        ? "bg-red-500"
-                        : suggestion.priority === "medium"
-                        ? "bg-yellow-500"
-                        : "bg-green-500"
-                    }`}
-                  />
-                  <div className="flex-1">
-                    <p className="body-small font-medium text-text-primary mb-1">
-                      {suggestion.section}
-                    </p>
-                    <p className="caption text-text-secondary">
-                      {suggestion.suggestion}
-                    </p>
-                  </div>
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      suggestion.priority === "high"
-                        ? "bg-red-100 text-red-700"
-                        : suggestion.priority === "medium"
-                        ? "bg-yellow-100 text-yellow-700"
-                        : "bg-green-100 text-green-700"
-                    }`}
-                  >
-                    {suggestion.priority.toUpperCase()}
+      <div className="w-[70%] bg-surface-white border-2 border-indigo-200/50 rounded-2xl rounded-bl-sm shadow-md overflow-hidden">
+        <Tabs defaultValue="explanation" className="w-full">
+          <TabsList className="w-full justify-start border-b border-gray-100 bg-gray-50/50 rounded-none px-4">
+            <TabsTrigger value="explanation" className="flex items-center space-x-2">
+              <BookOpen className="w-4 h-4" />
+              <span>Explanation</span>
+            </TabsTrigger>
+            <TabsTrigger value="analysis" className="flex items-center space-x-2">
+              <Search className="w-4 h-4" />
+              <span>Analysis</span>
+            </TabsTrigger>
+            <TabsTrigger value="action" className="flex items-center space-x-2">
+              <Target className="w-4 h-4" />
+              <span>Actions</span>
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="explanation" className="p-4 max-h-96 overflow-y-auto">
+            <div className="space-y-3">
+              <div className="bg-purple-subtle/30 rounded-lg p-4 border border-purple-primary/20">
+                <div className="flex items-center space-x-2 mb-2">
+                  <Lightbulb className="w-4 h-4 text-purple-primary" />
+                  <span className="body-small font-medium text-purple-primary">
+                    Legal Explanation
                   </span>
                 </div>
-              )
-            )}
-          </div>
+                <p className="body-regular text-text-primary">
+                  {analysisResult.explanation}
+                </p>
+              </div>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="analysis" className="p-4 max-h-96 overflow-y-auto">
+            <div className="space-y-3">
+              <div>
+                <h4 className="body-regular font-medium mb-3 flex items-center space-x-2">
+                  <AlertTriangle className="w-4 h-4 text-purple-primary" />
+                  <span>Risk Assessment</span>
+                </h4>
+                <div className="space-y-2">
+                  {analysisResult.risks.map(
+                    (risk: ApiAnalysisResult["risks"][number], index: number) => (
+                      <div
+                        key={index}
+                        className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg border border-gray-100"
+                      >
+                        <AlertTriangle
+                          className={`w-4 h-4 mt-0.5 ${
+                            risk.severity === "high"
+                              ? "text-red-500"
+                              : risk.severity === "medium"
+                              ? "text-yellow-500"
+                              : "text-green-500"
+                          }`}
+                        />
+                        <div className="flex-1">
+                          <p className="body-small text-text-primary">
+                            {risk.description}
+                          </p>
+                          {risk.recommendation && (
+                            <p className="caption text-text-secondary mt-1">
+                              {risk.recommendation}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button
-              variant="primary"
-              size="small"
-              leftIcon={<FileText className="w-3 h-3" />}
-            >
-              Download Draft
-            </Button>
-            <Button
-              variant="secondary"
-              size="small"
-              leftIcon={<Send className="w-3 h-3" />}
-            >
-              Request Revisions
-            </Button>
-            <Button
-              variant="ghost"
-              size="small"
-              leftIcon={<Bookmark className="w-3 h-3" />}
-            >
-              Save to Collection
-            </Button>
-          </div>
-        </div>
-
+              <div>
+                <h4 className="body-regular font-medium mb-3 flex items-center space-x-2">
+                  <CheckCircle className="w-4 h-4 text-purple-primary" />
+                  <span>Key Points</span>
+                </h4>
+                <div className="space-y-2">
+                  {analysisResult.keyPoints.map(
+                    (point: string, index: number) => (
+                      <div key={index} className="flex items-start space-x-3 p-2">
+                        <span className="text-purple-primary mt-1 text-sm">
+                          •
+                        </span>
+                        <span className="body-small text-text-primary">
+                          {point}
+                        </span>
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="action" className="p-4 max-h-96 overflow-y-auto">
+            <div className="space-y-3">
+              {analysisResult.actionItems.map((action: ActionItem) => (
+                <div
+                  key={action.id}
+                  className="border border-purple-primary/20 bg-purple-subtle/20 rounded-lg p-4"
+                >
+                  <div className="flex items-start space-x-3">
+                    <input
+                      type="checkbox"
+                      className="mt-1 rounded border-gray-300 text-purple-primary focus:ring-purple-primary"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            action.priority === "high"
+                              ? "bg-red-100 text-red-700"
+                              : action.priority === "medium"
+                              ? "bg-yellow-100 text-yellow-700"
+                              : "bg-green-100 text-green-700"
+                          }`}
+                        >
+                          {action.priority}
+                        </span>
+                        <span className="body-small font-medium text-text-primary">
+                          {action.title}
+                        </span>
+                      </div>
+                      <p className="caption text-text-secondary">
+                        {action.description}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </TabsContent>
+        </Tabs>
+        
         <div className="p-3 bg-gray-50/50 border-t border-gray-100">
           <p className="caption text-text-secondary text-center">
             {new Date().toLocaleTimeString([], {
@@ -171,190 +216,134 @@ const DraftMessageBubble = memo(
   )
 );
 
-DraftMessageBubble.displayName = "DraftMessageBubble";
+AnalysisMessageBubble.displayName = "AnalysisMessageBubble";
 
-// Memoized Analysis Message Bubble Component
-const AnalysisMessageBubble = memo(
-  ({ analysisResult }: { analysisResult: ApiAnalysisResult }) => (
+// Memoized Draft Message Bubble Component
+const DraftMessageBubble = memo(
+  ({ draftResult }: { draftResult: ApiDraftResult }) => (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className="flex justify-start mb-4"
     >
-      <div className="max-w-[90%] bg-surface-white border-2 border-indigo-200/50 rounded-2xl rounded-bl-sm shadow-md overflow-hidden">
-        <div className="p-4 border-b border-gray-100">
-          <p className="body-regular text-text-primary mb-2">
-            Here&apos;s my detailed analysis:
-          </p>
-        </div>
-
+      <div className="w-[70%] bg-surface-white border-2 border-indigo-200/50 rounded-2xl rounded-bl-sm shadow-md overflow-hidden">
         <Tabs defaultValue="explanation" className="w-full">
           <TabsList className="w-full justify-start border-b border-gray-100 bg-gray-50/50 rounded-none px-4">
-            <TabsTrigger
-              value="explanation"
-              className="flex items-center space-x-2"
-            >
-              <Lightbulb className="w-4 h-4" />
+            <TabsTrigger value="explanation" className="flex items-center space-x-2">
+              <BookOpen className="w-4 h-4" />
               <span>Explanation</span>
             </TabsTrigger>
-            <TabsTrigger
-              value="analysis"
-              className="flex items-center space-x-2"
-            >
+            <TabsTrigger value="analysis" className="flex items-center space-x-2">
               <Search className="w-4 h-4" />
               <span>Analysis</span>
             </TabsTrigger>
-            <TabsTrigger
-              value="actions"
-              className="flex items-center space-x-2"
-            >
-              <ClipboardList className="w-4 h-4" />
+            <TabsTrigger value="action" className="flex items-center space-x-2">
+              <Target className="w-4 h-4" />
               <span>Actions</span>
             </TabsTrigger>
           </TabsList>
-
-          <TabsContent value="explanation" className="p-4 space-y-4">
-            <div className="bg-purple-subtle/30 rounded-lg p-4 border border-purple-primary/20">
-              <div className="flex items-center space-x-2 mb-2">
-                <Lightbulb className="w-4 h-4 text-purple-primary" />
-                <span className="body-small font-medium text-purple-primary">
-                  Legal Explanation
-                </span>
+          
+          <TabsContent value="explanation" className="p-4 max-h-96 overflow-y-auto">
+            <div className="space-y-3">
+              <div className="bg-purple-subtle/30 rounded-lg p-4 border border-purple-primary/20">
+                <div className="flex items-center space-x-2 mb-2">
+                  <FileText className="w-4 h-4 text-purple-primary" />
+                  <span className="body-small font-medium text-purple-primary">
+                    Document Draft
+                  </span>
+                </div>
+                <p className="body-regular text-text-primary">
+                  {draftResult.explanation}
+                </p>
               </div>
-              <p className="body-regular text-text-primary">
-                {analysisResult.explanation}
-              </p>
             </div>
           </TabsContent>
-
-          <TabsContent value="analysis" className="p-4 space-y-4">
-            <div>
-              <h4 className="body-regular font-medium mb-3 flex items-center space-x-2">
-                <AlertTriangle className="w-4 h-4 text-purple-primary" />
-                <span>Risk Assessment</span>
-              </h4>
-              <div className="space-y-2">
-                {analysisResult.risks.map(
-                  (risk: ApiAnalysisResult["risks"][number], index: number) => (
-                    <div
-                      key={index}
-                      className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg border border-gray-100"
-                    >
-                      <AlertTriangle
-                        className={`w-4 h-4 mt-0.5 ${
-                          risk.level === "high"
-                            ? "text-red-500"
-                            : risk.level === "medium"
-                            ? "text-yellow-500"
-                            : "text-green-500"
-                        }`}
-                      />
-                      <div className="flex-1">
-                        <span
-                          className={`inline-block px-2 py-1 rounded-full text-xs font-medium mb-1 ${
-                            risk.level === "high"
-                              ? "bg-red-100 text-red-700"
-                              : risk.level === "medium"
-                              ? "bg-yellow-100 text-yellow-700"
-                              : "bg-green-100 text-green-700"
+          
+          <TabsContent value="analysis" className="p-4 max-h-96 overflow-y-auto">
+            <div className="space-y-3">
+              <div>
+                <h4 className="body-regular font-medium mb-3 flex items-center space-x-2">
+                  <AlertTriangle className="w-4 h-4 text-purple-primary" />
+                  <span>Editing Suggestions</span>
+                </h4>
+                <div className="space-y-2">
+                  {(draftResult.suggestions || []).map(
+                    (
+                      suggestion: ApiDraftResult["suggestions"][number],
+                      index: number
+                    ) => (
+                      <div
+                        key={index}
+                        className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg border border-gray-100"
+                      >
+                        <div
+                          className={`w-2 h-2 rounded-full mt-2 ${
+                            suggestion.priority === "high"
+                              ? "bg-red-500"
+                              : suggestion.priority === "medium"
+                              ? "bg-yellow-500"
+                              : "bg-green-500"
                           }`}
-                        >
-                          {risk.level.toUpperCase()}
-                        </span>
-                        <p className="body-small text-text-primary">
-                          {risk.description}
-                        </p>
-                        {risk.recommendation && (
-                          <p className="caption text-text-secondary mt-1">
-                            {risk.recommendation}
+                        />
+                        <div className="flex-1">
+                          <p className="body-small font-medium text-text-primary mb-1">
+                            {suggestion.section}
                           </p>
-                        )}
+                          <p className="caption text-text-secondary">
+                            {suggestion.suggestion}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  )
-                )}
-              </div>
-            </div>
-
-            <div>
-              <h4 className="body-regular font-medium mb-3 flex items-center space-x-2">
-                <CheckCircle className="w-4 h-4 text-purple-primary" />
-                <span>Key Points</span>
-              </h4>
-              <div className="space-y-2">
-                {analysisResult.keyPoints.map(
-                  (point: string, index: number) => (
-                    <div key={index} className="flex items-start space-x-3 p-2">
-                      <span className="text-purple-primary mt-1 text-sm">
-                        •
-                      </span>
-                      <span className="body-small text-text-primary">
-                        {point}
-                      </span>
-                    </div>
-                  )
-                )}
+                    )
+                  )}
+                </div>
               </div>
             </div>
           </TabsContent>
-
-          <TabsContent value="actions" className="p-4 space-y-3">
-            {analysisResult.actionItems.map((action: ActionItem) => (
-              <div
-                key={action.id}
-                className="border border-purple-primary/20 bg-purple-subtle/20 rounded-lg p-4"
-              >
+          
+          <TabsContent value="action" className="p-4 max-h-96 overflow-y-auto">
+            <div className="space-y-3">
+              <div className="border border-purple-primary/20 bg-purple-subtle/20 rounded-lg p-4">
                 <div className="flex items-start space-x-3">
-                  <input
-                    type="checkbox"
-                    className="mt-1 rounded border-gray-300 text-purple-primary focus:ring-purple-primary"
-                  />
+                  <FileText className="w-4 h-4 text-purple-primary mt-1" />
                   <div className="flex-1">
                     <div className="flex items-center space-x-2 mb-2">
-                      <h5 className="body-regular font-medium text-text-primary">
-                        {action.title}
-                      </h5>
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          action.priority === "urgent"
-                            ? "bg-red-100 text-red-700"
-                            : action.priority === "important"
-                            ? "bg-yellow-100 text-yellow-700"
-                            : "bg-green-100 text-green-700"
-                        }`}
-                      >
-                        {action.priority.toUpperCase()}
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                        Draft Document
+                      </span>
+                      <span className="body-small font-medium text-text-primary">
+                        {draftResult.title}
                       </span>
                     </div>
-                    <p className="body-small text-text-secondary mb-3">
-                      {action.description}
-                    </p>
-                    {action.externalLinks && (
-                      <div className="flex flex-wrap gap-2">
-                        {action.externalLinks?.map(
-                          (link: ExternalLink, index: number) => (
-                            <Button
-                              key={index}
-                              variant="secondary"
-                              size="small"
-                              leftIcon={
-                                <ExternalLinkIcon className="w-3 h-3" />
-                              }
-                              className="text-xs"
-                            >
-                              {link.text}
-                            </Button>
-                          )
-                        )}
-                      </div>
-                    )}
+                    <div className="bg-white rounded-lg p-4 border border-gray-200">
+                      <pre className="whitespace-pre-wrap text-sm text-text-primary font-mono">
+                        {draftResult.content}
+                      </pre>
+                    </div>
+                    <div className="mt-3 flex space-x-2">
+                      <Button
+                        size="sm"
+                        className="bg-purple-primary text-white hover:bg-purple-primary/90"
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Download
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-purple-primary text-purple-primary hover:bg-purple-subtle/20"
+                      >
+                        <Edit className="w-4 h-4 mr-2" />
+                        Edit
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
-            ))}
+            </div>
           </TabsContent>
         </Tabs>
-
+        
         <div className="p-3 bg-gray-50/50 border-t border-gray-100">
           <p className="caption text-text-secondary text-center">
             {new Date().toLocaleTimeString([], {
