@@ -456,6 +456,7 @@ export interface SendMessageResponse {
   aiResponse?: Message
   analysisResult?: AnalysisResult
   draftResult?: DraftResult
+  supervisorData?: any // Store the full supervisor response from Bedrock
   modeSwitch?: {
     detected: boolean
     mode: "A" | "B" | "C" | null

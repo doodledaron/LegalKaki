@@ -38,6 +38,8 @@ const BACKEND_CONFIG = {
       "/api/v1/datasets/1e99cdde96d611f08ce90242ac120005/documents",
     chatCompletions:
       "/api/v1/chats_openai/13dfe97696dd11f0a6b70242ac130005/chat/completions",
+    // New supervisor endpoint
+    supervisorMessage: "/messages/supervisor",
   },
   auth: {
     token: "ragflow-E1YWMxNmU4OTZkNTExZjBiNzUwMDI0Mm", // Backend authorization token
@@ -489,6 +491,173 @@ export class RealApiClient {
     }
 
     return processedResponse;
+  }
+
+  // Send message to supervisor agent endpoint (new structured response)
+  async sendSupervisorMessage(
+    chatId: number,
+    content: string,
+    uploadedFiles?: Array<{ name: string; type: string; size: number; content: ArrayBuffer }>,
+    onProgress?: (stage: string, progress: number) => void
+  ): Promise<SendMessageResponse> {
+    try {
+      const supervisorUrl = `${BACKEND_CONFIG.legalKakiBaseUrl}${BACKEND_CONFIG.endpoints.supervisorMessage}`;
+      console.log("Sending supervisor request to:", supervisorUrl);
+
+      // Prepare the request body
+      const requestBody = {
+        chat_id: chatId,
+        content: content,
+        uploaded_files: uploadedFiles?.map(f => ({
+          name: f.name,
+          type: f.type,
+          size: f.size,
+          content: Array.from(new Uint8Array(f.content)) // Convert ArrayBuffer to number array
+        }))
+      };
+
+      if (onProgress) {
+        onProgress("Sending request...", 10);
+      }
+
+      const response = await fetch(supervisorUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (onProgress) {
+        onProgress("Processing response...", 50);
+      }
+
+      console.log("Supervisor response status:", response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Supervisor API error response:", errorText);
+        throw new Error(
+          `Supervisor API failed: HTTP ${response.status} - ${errorText}`
+        );
+      }
+
+      const supervisorResponse = await response.json();
+      console.log("Supervisor response:", supervisorResponse);
+
+      if (onProgress) {
+        onProgress("Formatting response...", 90);
+      }
+
+      // Map supervisor response to frontend format
+      const now = new Date();
+      const userMessage = {
+        id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        content: content,
+        sender: "user" as const,
+        timestamp: now,
+      };
+
+      // Extract tab contents from supervisor response
+      const supervisorData = supervisorResponse.supervisor_response;
+      let displayContent = "";
+
+      // Check if this should be rendered as a simple message
+      const isGenericGreeting = (content: string) => {
+        const genericPhrases = [
+          "hello", "hi", "hey", "good morning", "good afternoon", "good evening",
+          "how can i help", "how can i assist", "i'm here to help", "what can i help you with",
+          "ai system", "legal assistant", "created by amazon", "inventors"
+        ];
+        return genericPhrases.some(phrase => 
+          content.toLowerCase().includes(phrase)
+        );
+      };
+
+      const hasSystemMessage = supervisorData.conversation_context?.system_message;
+      const hasActiveTabs = 
+        supervisorData.explanation_tab?.status === "active" ||
+        supervisorData.analysis_tab?.status === "active" ||
+        supervisorData.action_tab?.status === "active";
+
+      const shouldRenderAsSimple = (
+        !hasActiveTabs && hasSystemMessage
+      ) || (
+        supervisorData.explanation_tab?.status === "active" && 
+        supervisorData.analysis_tab?.status === "not_applicable" &&
+        supervisorData.action_tab?.status === "not_applicable" &&
+        isGenericGreeting(supervisorData.explanation_tab.content)
+      );
+
+      if (shouldRenderAsSimple) {
+        // Render as simple message for system messages or generic responses
+        if (hasSystemMessage && !hasActiveTabs) {
+          displayContent = supervisorData.conversation_context.system_message;
+          console.log("[RealApiClient] Rendering as simple message (system message)");
+        } else {
+          displayContent = supervisorData.explanation_tab.content;
+          console.log("[RealApiClient] Rendering as simple message (generic greeting detected)");
+        }
+      } else {
+        // Render with tabs for structured responses
+        console.log("[RealApiClient] Rendering with tabs (structured response)");
+
+        if (supervisorData.explanation_tab?.status === "active") {
+          displayContent += `## Explanation\n\n${supervisorData.explanation_tab.content}\n\n`;
+          if (supervisorData.explanation_tab.relevance) {
+            displayContent += `*${supervisorData.explanation_tab.relevance}*\n\n`;
+          }
+        }
+
+        if (supervisorData.analysis_tab?.status === "active") {
+          displayContent += `## Analysis\n\n${supervisorData.analysis_tab.content}\n\n`;
+          if (supervisorData.analysis_tab.relevance) {
+            displayContent += `*${supervisorData.analysis_tab.relevance}*\n\n`;
+          }
+        }
+
+        if (supervisorData.action_tab?.status === "active") {
+          displayContent += `## Actions\n\n${supervisorData.action_tab.content}\n\n`;
+          if (supervisorData.action_tab.relevance) {
+            displayContent += `*${supervisorData.action_tab.relevance}*\n\n`;
+          }
+        }
+      }
+
+      // Determine response type based on content
+      const getResponseType = (): "text" | "analysis" | "draft" => {
+        if (supervisorData.analysis_tab?.status === "active") {
+          return "analysis";
+        }
+        if (supervisorData.action_tab?.status === "active" && 
+            supervisorData.action_tab.content.toLowerCase().includes("draft")) {
+          return "draft";
+        }
+        return "text";
+      };
+
+      const aiResponse = {
+        id: `msg_${Date.now() + 1}`,
+        content: displayContent.trim(),
+        sender: "assistant" as const,
+        timestamp: new Date(now.getTime() + 1000),
+        type: getResponseType(),
+      };
+
+      if (onProgress) {
+        onProgress("Complete", 100);
+      }
+
+      return {
+        message: userMessage,
+        aiResponse,
+        // Store the full supervisor response for potential use
+        supervisorData: supervisorData,
+      };
+    } catch (error) {
+      console.error("Supervisor message failed:", error);
+      throw error;
+    }
   }
 
   // Parse structured JSON response and detect mode switching

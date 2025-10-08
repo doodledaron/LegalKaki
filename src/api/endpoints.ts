@@ -579,31 +579,52 @@ export const chatApi = {
     onProgress?: (stage: string, progress: number) => void
   ): Promise<ApiResponse<SendMessageResponse> | ApiError> {
     try {
-      // Use real API for streaming chat
-      let streamingContent = "";
+      // Try supervisor endpoint first (structured response with tabs)
+      try {
+        const chatId = parseInt(sessionId.replace("session_", "")) || Date.now();
 
-      const realResponse = await realApiClient.sendMessage(
-        request.content,
-        request.messageType || "text",
-        (content) => {
-          streamingContent = content;
-          if (onProgress) {
-            const progress = Math.min(95, content.length / 10); // Rough progress estimate
-            onProgress("Receiving response...", progress);
+        const supervisorResponse = await realApiClient.sendSupervisorMessage(
+          chatId,
+          request.content,
+          undefined, // TODO: Add file upload support
+          onProgress
+        );
+
+        return {
+          success: true,
+          data: supervisorResponse,
+          timestamp: new Date().toISOString(),
+          message: "Message sent successfully (supervisor)",
+        };
+      } catch (supervisorError) {
+        console.warn("Supervisor endpoint failed, trying legacy streaming:", supervisorError);
+
+        // Fallback to legacy streaming chat
+        let streamingContent = "";
+
+        const realResponse = await realApiClient.sendMessage(
+          request.content,
+          request.messageType || "text",
+          (content) => {
+            streamingContent = content;
+            if (onProgress) {
+              const progress = Math.min(95, content.length / 10);
+              onProgress("Receiving response...", progress);
+            }
           }
+        );
+
+        if (onProgress) {
+          onProgress("Processing complete", 100);
         }
-      );
 
-      if (onProgress) {
-        onProgress("Processing complete", 100);
+        return {
+          success: true,
+          data: realResponse,
+          timestamp: new Date().toISOString(),
+          message: "Message sent successfully",
+        };
       }
-
-      return {
-        success: true,
-        data: realResponse,
-        timestamp: new Date().toISOString(),
-        message: "Message sent successfully",
-      };
     } catch (error) {
       console.error("Real API chat failed, falling back to mock:", error);
 
