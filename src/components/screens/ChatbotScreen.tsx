@@ -644,19 +644,26 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
           const aiMsg = responseData.aiResponse as Message;
           const updatedMessages = [...newMessages, aiMsg];
 
-          // Attach mock payloads for rendering (force clean tabs)
-          setMessagePayloads((prev) => ({
-            ...prev,
-            [aiMsg.id]: {
-              analysis: { ...mockAnalysisResult, id: `analysis_${Date.now()}` },
-              draft: { ...mockDraftResult, id: `draft_${Date.now()}` },
-            },
-          }));
-          console.log("[Chat] stored payloads for message", aiMsg.id, {
-            type: aiMsg.type,
-            hasAnalysis: Boolean(responseData.analysisResult),
-            hasDraft: Boolean(responseData.draftResult),
-          });
+          // Use real supervisor data if available, otherwise don't attach payloads
+          if (responseData.supervisorData) {
+            console.log("[Chat] Using real supervisor data for message", aiMsg.id, responseData.supervisorData);
+            // Don't attach mock payloads - let the message render with its actual content
+            // The real Bedrock response is already in aiMsg.content
+          } else {
+            // Only attach mock payloads if no supervisor data (legacy fallback)
+            setMessagePayloads((prev) => ({
+              ...prev,
+              [aiMsg.id]: {
+                analysis: { ...mockAnalysisResult, id: `analysis_${Date.now()}` },
+                draft: { ...mockDraftResult, id: `draft_${Date.now()}` },
+              },
+            }));
+            console.log("[Chat] stored mock payloads for message", aiMsg.id, {
+              type: aiMsg.type,
+              hasAnalysis: Boolean(responseData.analysisResult),
+              hasDraft: Boolean(responseData.draftResult),
+            });
+          }
 
           // If backend indicates a mode switch, toggle UI mode and append a small system message
           if (responseData.modeSwitch?.detected) {
@@ -777,22 +784,28 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
             const aiMsg = responseData.aiResponse as Message;
             newMessages.push(aiMsg);
 
-            // Attach mock payloads for rendering (force clean tabs)
-            setMessagePayloads((prev) => ({
-              ...prev,
-              [aiMsg.id]: {
-                analysis: {
-                  ...mockAnalysisResult,
-                  id: `analysis_${Date.now()}`,
+            // Use real supervisor data if available, otherwise don't attach payloads
+            if (responseData.supervisorData) {
+              console.log("[Chat] Using real supervisor data for upload message", aiMsg.id, responseData.supervisorData);
+              // Don't attach mock payloads - let the message render with its actual content
+            } else {
+              // Only attach mock payloads if no supervisor data (legacy fallback)
+              setMessagePayloads((prev) => ({
+                ...prev,
+                [aiMsg.id]: {
+                  analysis: {
+                    ...mockAnalysisResult,
+                    id: `analysis_${Date.now()}`,
+                  },
+                  draft: { ...mockDraftResult, id: `draft_${Date.now()}` },
                 },
-                draft: { ...mockDraftResult, id: `draft_${Date.now()}` },
-              },
-            }));
-            console.log("[Chat] stored payloads for upload message", aiMsg.id, {
-              type: aiMsg.type,
-              hasAnalysis: Boolean(responseData.analysisResult),
-              hasDraft: Boolean(responseData.draftResult),
-            });
+              }));
+              console.log("[Chat] stored mock payloads for upload message", aiMsg.id, {
+                type: aiMsg.type,
+                hasAnalysis: Boolean(responseData.analysisResult),
+                hasDraft: Boolean(responseData.draftResult),
+              });
+            }
           }
 
           // Handle mode switch
