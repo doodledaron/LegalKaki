@@ -5,7 +5,7 @@ import {
   TextAnalysisRequest,
   MindMapAnalysisRequest,
 } from "./bedrockService";
-import { realApiClient } from "./realApi";
+import { realApiClient, collectionApiClient } from "./realApi";
 import {
   mockUser,
   mockDomains,
@@ -43,6 +43,11 @@ import {
   SearchResponse,
   GenerateReportRequest,
   GenerateReportResponse,
+  CollectionDashboardData,
+  mapBackendCollectionToCollection,
+  mapBackendChatToChatSession,
+  mapBackendActionToActionItem,
+  mapBackendDocumentToDocument,
 } from "./types";
 import { LegalDomain, Message, Document, ActionItem, ChatSession } from "@/types";
 
@@ -502,20 +507,30 @@ export const collectionsApi = {
     search?: string;
     limit?: number;
   }): Promise<ApiResponse<Collection[]> | ApiError> {
-    return mockClient.request(async () => {
-      let filtered = [...mockCollections];
+    try {
+      // Use real API to get collections
+      // TODO: Get user_sub from authentication context
+      const userSub = "stringstringstringstringstringstring"; // This should come from auth context
+      const limit = filters?.limit || 50;
+      const offset = 0; // Could be implemented for pagination
+      
+      const backendCollections = await collectionApiClient.getCollections(userSub, limit, offset);
+      
+      // Convert backend collections to frontend format
+      let collections = backendCollections.map(mapBackendCollectionToCollection);
 
+      // Apply filters (client-side filtering for now)
       if (filters?.status) {
-        filtered = filtered.filter((c) => c.status === filters.status);
+        collections = collections.filter((c) => c.status === filters.status);
       }
 
       if (filters?.domain) {
-        filtered = filtered.filter((c) => c.domain === filters.domain);
+        collections = collections.filter((c) => c.domain === filters.domain);
       }
 
       if (filters?.search) {
         const searchTerm = filters.search.toLowerCase();
-        filtered = filtered.filter(
+        collections = collections.filter(
           (c) =>
             c.title.toLowerCase().includes(searchTerm) ||
             c.domain.toLowerCase().includes(searchTerm) ||
@@ -523,24 +538,187 @@ export const collectionsApi = {
         );
       }
 
-      if (filters?.limit) {
-        filtered = filtered.slice(0, filters.limit);
-      }
+      return {
+        success: true,
+        data: collections,
+        timestamp: new Date().toISOString(),
+        message: "Collections fetched successfully",
+      };
+    } catch (error) {
+      console.error("Real API collections failed, falling back to mock:", error);
+      
+      // Fallback to mock implementation
+      return mockClient.request(async () => {
+        let filtered = [...mockCollections];
 
-      return filtered;
-    }, "fast");
+        if (filters?.status) {
+          filtered = filtered.filter((c) => c.status === filters.status);
+        }
+
+        if (filters?.domain) {
+          filtered = filtered.filter((c) => c.domain === filters.domain);
+        }
+
+        if (filters?.search) {
+          const searchTerm = filters.search.toLowerCase();
+          filtered = filtered.filter(
+            (c) =>
+              c.title.toLowerCase().includes(searchTerm) ||
+              c.domain.toLowerCase().includes(searchTerm) ||
+              c.summary.toLowerCase().includes(searchTerm)
+          );
+        }
+
+        if (filters?.limit) {
+          filtered = filtered.slice(0, filters.limit);
+        }
+
+        return filtered;
+      }, "fast");
+    }
   },
 
   async getCollection(
     collectionId: string
   ): Promise<ApiResponse<Collection> | ApiError> {
-    return mockClient.request(async () => {
-      const collection = mockCollections.find((c) => c.id === collectionId);
-      if (!collection) {
-        throw new Error("Collection not found");
+    try {
+      // Use real API to get collection details
+      const collectionIdNum = parseInt(collectionId);
+      if (isNaN(collectionIdNum)) {
+        throw new Error("Invalid collection ID");
       }
-      return collection;
-    }, "fast");
+      
+      const backendDetails = await collectionApiClient.getCollectionDetails(collectionIdNum);
+      const collection = mapBackendCollectionToCollection(backendDetails.collection);
+      
+      // Update collection with calculated counts
+      collection.messageCount = backendDetails.chats.length;
+      collection.documentCount = backendDetails.documents.length;
+      collection.actionItemsCount = backendDetails.actions.length;
+      collection.urgentActionsCount = backendDetails.actions.filter(
+        a => mapBackendActionToActionItem(a).priority === 'urgent'
+      ).length;
+      collection.itemCount = collection.messageCount + collection.documentCount + collection.actionItemsCount;
+
+      return {
+        success: true,
+        data: collection,
+        timestamp: new Date().toISOString(),
+        message: "Collection fetched successfully",
+      };
+    } catch (error) {
+      console.error("Real API collection failed, falling back to mock:", error);
+      
+      // Fallback to mock implementation
+      return mockClient.request(async () => {
+        const collection = mockCollections.find((c) => c.id === collectionId);
+        if (!collection) {
+          throw new Error("Collection not found");
+        }
+        return collection;
+      }, "fast");
+    }
+  },
+
+  async getCollectionDashboard(
+    collectionId: string
+  ): Promise<ApiResponse<CollectionDashboardData> | ApiError> {
+    try {
+      // Use real API to get collection details
+      const collectionIdNum = parseInt(collectionId);
+      if (isNaN(collectionIdNum)) {
+        throw new Error("Invalid collection ID");
+      }
+      
+      const backendDetails = await collectionApiClient.getCollectionDetails(collectionIdNum);
+      
+      // Convert backend data to frontend models
+      const collection = mapBackendCollectionToCollection(backendDetails.collection);
+      const conversations = backendDetails.chats.map(mapBackendChatToChatSession);
+      const actionItems = backendDetails.actions.map(mapBackendActionToActionItem);
+      
+      // Fetch documents for each chat in the collection
+      const userSub = "stringstringstringstringstringstring"; // TODO: Get from auth context
+      const allDocuments: Document[] = [];
+      
+      // Fetch documents for each chat
+      for (const chat of backendDetails.chats) {
+        try {
+          const chatDocuments = await collectionApiClient.getChatDocuments(userSub, chat.chat_id, 50, 0);
+          const mappedDocuments = chatDocuments.map(backendDoc => {
+            const doc = mapBackendDocumentToDocument(backendDoc);
+            doc.collectionId = collectionId; // Set collection ID
+            return doc;
+          });
+          allDocuments.push(...mappedDocuments);
+        } catch (docError) {
+          console.warn(`Failed to fetch documents for chat ${chat.chat_id}:`, docError);
+          // Continue with other chats even if one fails
+        }
+      }
+      
+      // Update collection with calculated counts
+      collection.messageCount = conversations.length;
+      collection.documentCount = allDocuments.length;
+      collection.actionItemsCount = actionItems.length;
+      collection.urgentActionsCount = actionItems.filter(a => a.priority === 'urgent').length;
+      collection.itemCount = collection.messageCount + collection.documentCount + collection.actionItemsCount;
+
+      // Calculate stats
+      const stats = {
+        totalConversations: conversations.length,
+        totalDocuments: allDocuments.length,
+        totalActions: actionItems.length,
+        urgentActions: actionItems.filter(a => a.priority === 'urgent').length,
+        completedActions: actionItems.filter(a => a.status === 'completed').length,
+      };
+
+      const dashboardData: CollectionDashboardData = {
+        collection,
+        documents: allDocuments,
+        conversations,
+        actionItems,
+        stats,
+      };
+
+      return {
+        success: true,
+        data: dashboardData,
+        timestamp: new Date().toISOString(),
+        message: "Collection dashboard fetched successfully",
+      };
+    } catch (error) {
+      console.error("Real API collection dashboard failed, falling back to mock:", error);
+      
+      // Fallback to mock implementation with mock data
+      return mockClient.request(async () => {
+        const collection = mockCollections.find((c) => c.id === collectionId);
+        if (!collection) {
+          throw new Error("Collection not found");
+        }
+
+        // Use mock data for dashboard
+        const conversations = mockChatSessions.filter(s => s.collectionId === collectionId).map(toChatSessionResponse);
+        const actionItems = mockActionItems.filter(a => a.sourceConversation?.includes(collection.title));
+        const documents = mockDocuments.filter(d => d.collectionId === collectionId);
+
+        const stats = {
+          totalConversations: conversations.length,
+          totalDocuments: documents.length,
+          totalActions: actionItems.length,
+          urgentActions: actionItems.filter(a => a.priority === 'urgent').length,
+          completedActions: actionItems.filter(a => a.status === 'completed').length,
+        };
+
+        return {
+          collection,
+          documents,
+          conversations,
+          actionItems,
+          stats,
+        };
+      }, "fast");
+    }
   },
 
   async createCollection(
@@ -628,13 +806,86 @@ export const collectionsApi = {
   async getCollectionDocuments(
     collectionId: string
   ): Promise<ApiResponse<Document[]> | ApiError> {
-    return mockClient.request(async () => {
-      // Filter documents that belong to this collection
-      const documents = mockDocuments.filter(
-        (doc) => doc.collectionId === collectionId
-      );
-      return documents;
-    }, "fast");
+    try {
+      // Get collection details to find chats
+      const collectionIdNum = parseInt(collectionId);
+      if (isNaN(collectionIdNum)) {
+        throw new Error("Invalid collection ID");
+      }
+      
+      const backendDetails = await collectionApiClient.getCollectionDetails(collectionIdNum);
+      const userSub = "stringstringstringstringstringstring"; // TODO: Get from auth context
+      const allDocuments: Document[] = [];
+      
+      // Fetch documents for each chat
+      for (const chat of backendDetails.chats) {
+        try {
+          const chatDocuments = await collectionApiClient.getChatDocuments(userSub, chat.chat_id, 50, 0);
+          const mappedDocuments = chatDocuments.map(backendDoc => {
+            const doc = mapBackendDocumentToDocument(backendDoc);
+            doc.collectionId = collectionId;
+            return doc;
+          });
+          allDocuments.push(...mappedDocuments);
+        } catch (docError) {
+          console.warn(`Failed to fetch documents for chat ${chat.chat_id}:`, docError);
+        }
+      }
+
+      return {
+        success: true,
+        data: allDocuments,
+        timestamp: new Date().toISOString(),
+        message: "Collection documents fetched successfully",
+      };
+    } catch (error) {
+      console.error("Real API collection documents failed, falling back to mock:", error);
+      
+      // Fallback to mock implementation
+      return mockClient.request(async () => {
+        // Filter documents that belong to this collection
+        const documents = mockDocuments.filter(
+          (doc) => doc.collectionId === collectionId
+        );
+        return documents;
+      }, "fast");
+    }
+  },
+
+  async getChatDocuments(
+    chatId: string
+  ): Promise<ApiResponse<Document[]> | ApiError> {
+    try {
+      const chatIdNum = parseInt(chatId);
+      if (isNaN(chatIdNum)) {
+        throw new Error("Invalid chat ID");
+      }
+      
+      const userSub = "stringstringstringstringstringstring"; // TODO: Get from auth context
+      const chatDocuments = await collectionApiClient.getChatDocuments(userSub, chatIdNum, 50, 0);
+      
+      const mappedDocuments = chatDocuments.map(backendDoc => {
+        return mapBackendDocumentToDocument(backendDoc);
+      });
+
+      return {
+        success: true,
+        data: mappedDocuments,
+        timestamp: new Date().toISOString(),
+        message: "Chat documents fetched successfully",
+      };
+    } catch (error) {
+      console.error("Real API chat documents failed, falling back to mock:", error);
+      
+      // Fallback to mock implementation
+      return mockClient.request(async () => {
+        // Filter documents that belong to this chat
+        const documents = mockDocuments.filter(
+          (doc) => doc.collectionId === chatId
+        );
+        return documents;
+      }, "fast");
+    }
   },
 
 

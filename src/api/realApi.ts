@@ -30,7 +30,7 @@ interface ModeSwitch {
 
 // Backend API configuration
 const BACKEND_CONFIG = {
-  baseUrl: "http://43.217.133.28",
+  baseUrl: "http://43.217.113.91:8000",
   endpoints: {
     uploadDocument:
       "/api/v1/datasets/1e99cdde96d611f08ce90242ac120005/documents",
@@ -1037,16 +1037,163 @@ export async function debugApiConnection() {
 export const realApiClient = new RealApiClient();
 export default realApiClient;
 
+// Collection API methods
+export interface BackendCollection {
+  collection_id: number;
+  owner_sub: string;
+  name: string;
+  status: string;
+  created_at: string;
+}
+
+export interface BackendChat {
+  chat_id: number;
+  user_sub: string;
+  chat_name: string;
+  status: string;
+  started_at: string;
+}
+
+export interface BackendAction {
+  action_id: number;
+  owner_sub: string;
+  title: string;
+  description: string;
+  category: string;
+  status: string;
+  external_url: string;
+  due_at: string;
+  created_from_chat_id: number;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface BackendCollectionDetails {
+  collection: BackendCollection;
+  chats: BackendChat[];
+  documents: unknown[];
+  actions: BackendAction[];
+}
+
+export interface BackendDocument {
+  document_id: number;
+  owner_sub: string;
+  chat_id: number;
+  filename: string;
+  file_type: string;
+  file_size: number;
+  upload_date: string;
+  status: string;
+  s3_key?: string;
+  analysis_status?: string;
+  content_summary?: string;
+}
+
+// Add collection methods to RealApiClient class
+export class CollectionApiClient {
+  private baseUrl: string;
+  private authToken: string;
+
+  constructor(baseUrl: string, authToken: string) {
+    this.baseUrl = baseUrl;
+    this.authToken = authToken;
+  }
+
+  async getCollections(userSub: string, limit: number = 50, offset: number = 0): Promise<BackendCollection[]> {
+    const url = `${this.baseUrl}/collections/?owner_sub=${userSub}&limit=${limit}&offset=${offset}`;
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json',
+        },
+        signal: AbortSignal.timeout(BACKEND_CONFIG.timeout.connection),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const collections: BackendCollection[] = await response.json();
+      return collections;
+    } catch (error) {
+      console.error('Error fetching collections:', error);
+      throw error;
+    }
+  }
+
+  async getCollectionDetails(collectionId: number): Promise<BackendCollectionDetails> {
+    const url = `${this.baseUrl}/collections/${collectionId}`;
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json',
+        },
+        signal: AbortSignal.timeout(BACKEND_CONFIG.timeout.connection),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const details: BackendCollectionDetails = await response.json();
+      return details;
+    } catch (error) {
+      console.error('Error fetching collection details:', error);
+      throw error;
+    }
+  }
+
+  async getChatDocuments(userSub: string, chatId: number, limit: number = 50, offset: number = 0): Promise<BackendDocument[]> {
+    const url = `${this.baseUrl}/documents/?owner_sub=${userSub}&chat_id=${chatId}&limit=${limit}&offset=${offset}`;
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json',
+        },
+        signal: AbortSignal.timeout(BACKEND_CONFIG.timeout.connection),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const documents: BackendDocument[] = await response.json();
+      return documents;
+    } catch (error) {
+      console.error('Error fetching chat documents:', error);
+      throw error;
+    }
+  }
+}
+
+// Create collection API client instance
+export const collectionApiClient = new CollectionApiClient(
+  BACKEND_CONFIG.baseUrl,
+  BACKEND_CONFIG.auth.token
+);
+
 // Make debug function globally available in development
 if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
   type DevWindow = typeof window & {
     debugApiConnection: () => Promise<{ upload: boolean; chat: boolean }>;
     realApiClient: RealApiClient;
+    collectionApiClient: CollectionApiClient;
   };
   const w = window as DevWindow;
   w.debugApiConnection = debugApiConnection;
   w.realApiClient = realApiClient;
+  w.collectionApiClient = collectionApiClient;
   console.log(
-    "Debug functions available: window.debugApiConnection(), window.realApiClient"
+    "Debug functions available: window.debugApiConnection(), window.realApiClient, window.collectionApiClient"
   );
 }
