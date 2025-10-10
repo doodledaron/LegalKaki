@@ -595,23 +595,42 @@ export class RealApiClient {
       };
 
       const hasSystemMessage = supervisorData.conversation_context?.system_message;
-      const hasActiveTabs = 
+      const hasActiveTabs =
         supervisorData.explanation_tab?.status === "active" ||
         supervisorData.analysis_tab?.status === "active" ||
         supervisorData.action_tab?.status === "active";
 
+      // Check for pending_clarification status - render as simple message with clarification questions
+      const hasClarificationStatus =
+        supervisorData.explanation_tab?.status === "pending_clarification" ||
+        supervisorData.analysis_tab?.status === "pending_clarification" ||
+        supervisorData.action_tab?.status === "pending_clarification";
+
       const shouldRenderAsSimple = (
         !hasActiveTabs && hasSystemMessage
-      ) || (
-        supervisorData.explanation_tab?.status === "active" && 
+      ) || hasClarificationStatus || (
+        supervisorData.explanation_tab?.status === "active" &&
         supervisorData.analysis_tab?.status === "not_applicable" &&
         supervisorData.action_tab?.status === "not_applicable" &&
         isGenericGreeting(supervisorData.explanation_tab.content)
       );
 
       if (shouldRenderAsSimple) {
-        // Render as simple message for system messages or generic responses
-        if (hasSystemMessage && !hasActiveTabs) {
+        // Render as simple message for system messages, clarifications, or generic responses
+        if (hasClarificationStatus && supervisorData.conversation_context) {
+          // Handle clarification needed response
+          displayContent = supervisorData.conversation_context.system_message || "Could you provide more details?";
+
+          // Add clarification questions if available
+          if (supervisorData.conversation_context.clarification_questions &&
+              supervisorData.conversation_context.clarification_questions.length > 0) {
+            displayContent += "\n\n";
+            supervisorData.conversation_context.clarification_questions.forEach((q: string, i: number) => {
+              displayContent += `${i + 1}. ${q}\n`;
+            });
+          }
+          console.log("[RealApiClient] Rendering as simple message (clarification needed)");
+        } else if (hasSystemMessage && !hasActiveTabs) {
           displayContent = supervisorData.conversation_context.system_message;
           console.log("[RealApiClient] Rendering as simple message (system message)");
         } else {
@@ -745,6 +764,21 @@ export class RealApiClient {
           extractedData.action = extracted.json;
         }
         // For new format: tabs contain plain markdown - no extraction needed
+      }
+
+      // For clarification responses, inject the formatted message into the supervisor data
+      if (hasClarificationStatus && displayContent) {
+        console.log("[RealApiClient] Injecting clarification message into supervisor data");
+        return {
+          message: userMessage,
+          aiResponse,
+          supervisorData: {
+            ...supervisorData,
+            extractedData,
+            // Add a clarification_message field that frontend can check
+            clarification_message: displayContent,
+          },
+        };
       }
 
       return {

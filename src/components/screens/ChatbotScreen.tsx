@@ -434,7 +434,7 @@ CombinedMessageBubble.displayName = "CombinedMessageBubble";
 
 // Supervisor Message Bubble Component - renders tabs from supervisor response with structured UI
 const SupervisorMessageBubble = memo(({ supervisorData }: { supervisorData: any }) => {
-  const { explanation_tab, analysis_tab, action_tab, extractedData } = supervisorData;
+  const { explanation_tab, analysis_tab, action_tab, extractedData, response_type, conversation_context } = supervisorData;
 
   // Determine which tabs are active
   const activeTabs = {
@@ -451,6 +451,44 @@ const SupervisorMessageBubble = memo(({ supervisorData }: { supervisorData: any 
   const hasActionJson = extractedData?.action && isAdvisorResponse(extractedData.action);
   const hasVisualizationJson = extractedData?.visualization && isVisualizationResponse(extractedData.visualization);
   const hasDraftJson = extractedData?.draft && isDraftResponse(extractedData.draft);
+
+  // Handle clarification_needed response type
+  if (response_type === "clarification_needed" && conversation_context) {
+    const systemMessage = conversation_context.system_message || "";
+    const clarificationQuestions = conversation_context.clarification_questions || [];
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex justify-start mb-4 w-full"
+      >
+        <div className="w-[70%] bg-amber-50 border-2 border-amber-200 text-text-primary rounded-2xl rounded-bl-sm shadow-sm">
+          <div className="p-4">
+            {systemMessage && (
+              <p className="body-regular font-medium text-amber-900 mb-3">
+                {systemMessage}
+              </p>
+            )}
+            {clarificationQuestions.length > 0 && (
+              <div className="space-y-2">
+                <p className="body-small font-semibold text-amber-800 mb-2">
+                  Please provide the following information:
+                </p>
+                <ul className="space-y-1.5 ml-4">
+                  {clarificationQuestions.map((question: string, idx: number) => (
+                    <li key={idx} className="body-small text-amber-900 list-disc">
+                      {question}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
 
   // If no active tabs at all, render as simple message
   if (!hasAnyActiveTab) {
