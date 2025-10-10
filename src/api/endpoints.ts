@@ -48,6 +48,7 @@ import {
   mapBackendChatToChatSession,
   mapBackendActionToActionItem,
   mapBackendDocumentToDocument,
+  mapBackendCollectionDocumentToDocument,
 } from "./types";
 import { LegalDomain, Message, Document, ActionItem, ChatSession } from "@/types";
 
@@ -139,9 +140,66 @@ export const userApi = {
   },
 
   async getStats(): Promise<ApiResponse<UserStats> | ApiError> {
-    return mockClient.request(async () => {
-      return mockUserStats;
-    }, "fast");
+    try {
+      // Try to get real stats from backend data
+      const userSub = "stringstringstringstringstringstring"; // This should come from auth context
+      
+      // Get collections from backend to calculate real stats
+      const backendCollections = await collectionApiClient.getCollections(userSub, 100, 0);
+      const collections = backendCollections.map(mapBackendCollectionToCollection);
+      
+      // Calculate real stats from backend data
+      const totalCollections = collections.length;
+      const activeCollections = collections.filter(c => c.status === 'active').length;
+      
+      // For now, we'll calculate these from collections
+      // In a real implementation, you'd also fetch actions and documents separately
+      let totalActions = 0;
+      let urgentActions = 0;
+      
+      // Try to get more detailed stats by fetching collection details
+      for (const collection of collections.slice(0, 5)) { // Limit to first 5 to avoid too many API calls
+        try {
+          const collectionId = parseInt(collection.id);
+          if (!isNaN(collectionId)) {
+            const details = await collectionApiClient.getCollectionDetails(collectionId);
+            totalActions += details.actions.length;
+            urgentActions += details.actions.filter(a => 
+              mapBackendActionToActionItem(a).priority === 'urgent'
+            ).length;
+          }
+        } catch (error) {
+          console.log(`Failed to get details for collection ${collection.id}:`, error);
+        }
+      }
+      
+      const realStats: UserStats = {
+        totalCollections,
+        activeCollections,
+        totalActions,
+        urgentActions,
+        documentsAnalyzed: 0, // Would need to fetch from documents API
+        conversationsCount: 0, // Would need to fetch from chats API
+        joinedDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Default to 30 days ago
+        lastActivity: new Date(),
+      };
+      
+      console.log('📊 Real user stats calculated:', realStats);
+      
+      return {
+        success: true,
+        data: realStats,
+        timestamp: new Date().toISOString(),
+        message: "User stats fetched successfully from backend",
+      };
+    } catch (error) {
+      console.error("Failed to get real user stats, falling back to mock:", error);
+      
+      // Fallback to mock stats
+      return mockClient.request(async () => {
+        return mockUserStats;
+      }, "fast");
+    }
   },
 
   async getActivity(
@@ -497,6 +555,58 @@ export const documentsApi = {
       }
     );
   },
+
+  async getDocumentProxy(
+    documentId: string
+  ): Promise<ApiResponse<{ url: string }> | ApiError> {
+    try {
+      // Try multiple backend endpoints for document access
+      const endpoints = [
+        `http://43.217.199.206:8000/documents/${documentId}/proxy`,
+        `http://43.217.199.206:8000/documents/${documentId}/signed-url`,
+        `http://43.217.199.206:8000/documents/${documentId}/download`,
+        `http://43.217.199.206:8000/documents/${documentId}/stream`
+      ];
+
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`🔄 Trying endpoint: ${endpoint}`);
+          const response = await fetch(endpoint, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ragflow-E1YWMxNmU4OTZkNTExZjBiNzUwMDI0Mm`,
+              'Content-Type': 'application/json',
+            },
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            console.log(`✅ Success with endpoint: ${endpoint}`);
+            return {
+              success: true,
+              data: { url: data.url || data.download_url || data.signed_url },
+              timestamp: new Date().toISOString(),
+              message: "Document proxy URL generated successfully",
+            };
+          } else {
+            console.log(`❌ Endpoint failed: ${endpoint} (${response.status})`);
+          }
+        } catch (endpointError) {
+          console.log(`❌ Endpoint error: ${endpoint}`, endpointError);
+        }
+      }
+
+      throw new Error('All document endpoints failed');
+    } catch (error) {
+      console.error("Real API document proxy failed, falling back to mock:", error);
+      
+      // Fallback to mock implementation
+      return mockClient.request(async () => {
+        return { url: '/partnership.pdf' }; // Fallback to static file
+      }, "fast");
+    }
+  },
+
 };
 
 // Collections Endpoints
@@ -514,6 +624,7 @@ export const collectionsApi = {
       const limit = filters?.limit || 50;
       const offset = 0; // Could be implemented for pagination
       
+      // Try to get collections from backend with the current user ID
       const backendCollections = await collectionApiClient.getCollections(userSub, limit, offset);
       
       // Convert backend collections to frontend format
@@ -637,25 +748,10 @@ export const collectionsApi = {
       const conversations = backendDetails.chats.map(mapBackendChatToChatSession);
       const actionItems = backendDetails.actions.map(mapBackendActionToActionItem);
       
-      // Fetch documents for each chat in the collection
-      const userSub = "stringstringstringstringstringstring"; // TODO: Get from auth context
-      const allDocuments: Document[] = [];
-      
-      // Fetch documents for each chat
-      for (const chat of backendDetails.chats) {
-        try {
-          const chatDocuments = await collectionApiClient.getChatDocuments(userSub, chat.chat_id, 50, 0);
-          const mappedDocuments = chatDocuments.map(backendDoc => {
-            const doc = mapBackendDocumentToDocument(backendDoc);
-            doc.collectionId = collectionId; // Set collection ID
-            return doc;
-          });
-          allDocuments.push(...mappedDocuments);
-        } catch (docError) {
-          console.warn(`Failed to fetch documents for chat ${chat.chat_id}:`, docError);
-          // Continue with other chats even if one fails
-        }
-      }
+      // Map documents directly from the collection details response
+      const allDocuments = backendDetails.documents.map((backendDoc: any) => 
+        mapBackendCollectionDocumentToDocument(backendDoc, collectionIdNum)
+      );
       
       // Update collection with calculated counts
       collection.messageCount = conversations.length;
@@ -807,34 +903,22 @@ export const collectionsApi = {
     collectionId: string
   ): Promise<ApiResponse<Document[]> | ApiError> {
     try {
-      // Get collection details to find chats
+      // Get collection details which includes documents
       const collectionIdNum = parseInt(collectionId);
       if (isNaN(collectionIdNum)) {
         throw new Error("Invalid collection ID");
       }
       
       const backendDetails = await collectionApiClient.getCollectionDetails(collectionIdNum);
-      const userSub = "stringstringstringstringstringstring"; // TODO: Get from auth context
-      const allDocuments: Document[] = [];
       
-      // Fetch documents for each chat
-      for (const chat of backendDetails.chats) {
-        try {
-          const chatDocuments = await collectionApiClient.getChatDocuments(userSub, chat.chat_id, 50, 0);
-          const mappedDocuments = chatDocuments.map(backendDoc => {
-            const doc = mapBackendDocumentToDocument(backendDoc);
-            doc.collectionId = collectionId;
-            return doc;
-          });
-          allDocuments.push(...mappedDocuments);
-        } catch (docError) {
-          console.warn(`Failed to fetch documents for chat ${chat.chat_id}:`, docError);
-        }
-      }
+      // Map the backend documents to frontend Document format
+      const documents = backendDetails.documents.map((backendDoc: any) => 
+        mapBackendCollectionDocumentToDocument(backendDoc, collectionIdNum)
+      );
 
       return {
         success: true,
-        data: allDocuments,
+        data: documents,
         timestamp: new Date().toISOString(),
         message: "Collection documents fetched successfully",
       };

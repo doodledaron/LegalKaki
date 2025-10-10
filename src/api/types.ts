@@ -140,6 +140,44 @@ export function mapBackendDocumentToDocument(backend: BackendDocument): Document
   }
 }
 
+// Map collection documents from the collection details endpoint to frontend Document format
+export function mapBackendCollectionDocumentToDocument(backend: BackendCollectionDocument, collectionId: number): Document {
+  // Debug: Log backend collection document data
+  console.log('📄 Mapping Backend Collection Document:', {
+    document_id: backend.document_id,
+    title: backend.title,
+    s3_bucket: backend.s3_bucket,
+    s3_key: backend.s3_key,
+    source_type: backend.source_type,
+    created_at: backend.created_at
+  })
+  
+  // Safely handle filename and extension
+  const filename = backend.title || 'unknown_file'
+  const fileExtension = filename.includes('.') ? filename.split('.').pop() : 'unknown'
+  
+  return {
+    id: backend.document_id.toString(),
+    originalFilename: filename,
+    storedFilename: `${backend.document_id}.${fileExtension}`,
+    fileType: 'application/pdf', // Default to PDF since most legal documents are PDFs
+    fileSize: 0, // Not provided in collection details
+    s3Bucket: backend.s3_bucket,
+    s3Key: backend.s3_key,
+    uploadDate: new Date(backend.created_at),
+    analysisStatus: 'pending' as const, // Default status since not provided
+    contentSummary: undefined, // Not provided by collection details endpoint
+    collectionId: collectionId.toString(),
+    metadata: {
+      pages: undefined, // Not provided by collection details endpoint
+      language: 'en', // Default language
+      wordCount: undefined, // Not provided by collection details endpoint
+      sourceType: backend.source_type,
+      uploadedInChatId: backend.uploaded_in_chat_id
+    }
+  }
+}
+
 // Helper mapping functions
 function mapBackendStatusToStatus(backendStatus: string): 'active' | 'archived' | 'completed' {
   switch (backendStatus.toLowerCase()) {
@@ -245,9 +283,22 @@ export interface BackendAction {
 export interface BackendCollectionDetails {
   collection: BackendCollection
   chats: BackendChat[]
-  documents: unknown[]
+  documents: BackendCollectionDocument[]
   actions: BackendAction[]
 }
+
+// Document structure from collection details endpoint
+export interface BackendCollectionDocument {
+  document_id: number
+  owner_sub: string
+  uploaded_in_chat_id: number
+  title: string
+  s3_bucket: string
+  s3_key: string
+  source_type: string
+  created_at: string
+}
+
 
 export interface BackendDocument {
   document_id: number

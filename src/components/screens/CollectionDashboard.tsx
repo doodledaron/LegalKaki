@@ -664,8 +664,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
       {/* PDF Viewer Modal */}
       {selectedDocument && (
         <PDFViewer
-          documentId={selectedDocument.id}
-          filename={selectedDocument.originalFilename}
+          document={selectedDocument}
           onClose={() => setSelectedDocument(null)}
         />
       )}

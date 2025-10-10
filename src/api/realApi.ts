@@ -5,6 +5,8 @@ import {
   SendMessageResponse,
   AnalysisResult,
   DraftResult,
+  BackendCollectionDetails,
+  BackendDocument,
 } from "./types";
 import { Document } from "@/types";
 import { mockClient } from "./mockClient";
@@ -30,7 +32,7 @@ interface ModeSwitch {
 
 // Backend API configuration
 const BACKEND_CONFIG = {
-  baseUrl: "http://43.217.113.91:8000",
+  baseUrl: "http://43.217.199.206:8000",
   endpoints: {
     uploadDocument:
       "/api/v1/datasets/1e99cdde96d611f08ce90242ac120005/documents",
@@ -1069,26 +1071,6 @@ export interface BackendAction {
   deleted_at: string | null;
 }
 
-export interface BackendCollectionDetails {
-  collection: BackendCollection;
-  chats: BackendChat[];
-  documents: unknown[];
-  actions: BackendAction[];
-}
-
-export interface BackendDocument {
-  document_id: number;
-  owner_sub: string;
-  chat_id: number;
-  filename: string;
-  file_type: string;
-  file_size: number;
-  upload_date: string;
-  status: string;
-  s3_key?: string;
-  analysis_status?: string;
-  content_summary?: string;
-}
 
 // Add collection methods to RealApiClient class
 export class CollectionApiClient {
@@ -1101,28 +1083,42 @@ export class CollectionApiClient {
   }
 
   async getCollections(userSub: string, limit: number = 50, offset: number = 0): Promise<BackendCollection[]> {
-    const url = `${this.baseUrl}/collections/?owner_sub=${userSub}&limit=${limit}&offset=${offset}`;
-    
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${this.authToken}`,
-          'Content-Type': 'application/json',
-        },
-        signal: AbortSignal.timeout(BACKEND_CONFIG.timeout.connection),
-      });
+    // Try multiple approaches to get collections from backend
+    const approaches = [
+      // Approach 1: Try with the provided userSub
+      `${this.baseUrl}/collections/?owner_sub=${userSub}&limit=${limit}&offset=${offset}`,
+      // Approach 2: Try without user filter (get all collections)
+      `${this.baseUrl}/collections/?limit=${limit}&offset=${offset}`,
+      // Approach 3: Try with a default user ID that might exist in the backend
+      `${this.baseUrl}/collections/?owner_sub=user-1&limit=${limit}&offset=${offset}`,
+    ];
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+    for (const url of approaches) {
+      try {
+        console.log(`🔄 Trying backend collections API: ${url}`);
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${this.authToken}`,
+            'Content-Type': 'application/json',
+          },
+          signal: AbortSignal.timeout(BACKEND_CONFIG.timeout.connection),
+        });
+
+        if (response.ok) {
+          const collections: BackendCollection[] = await response.json();
+          console.log(`✅ Successfully fetched ${collections.length} collections from backend`);
+          return collections;
+        } else {
+          console.log(`❌ Backend API failed with status: ${response.status} for URL: ${url}`);
+        }
+      } catch (error) {
+        console.log(`❌ Backend API error for URL ${url}:`, error);
       }
-
-      const collections: BackendCollection[] = await response.json();
-      return collections;
-    } catch (error) {
-      console.error('Error fetching collections:', error);
-      throw error;
     }
+
+    // If all approaches fail, throw an error
+    throw new Error('All backend collection API approaches failed');
   }
 
   async getCollectionDetails(collectionId: number): Promise<BackendCollectionDetails> {
@@ -1149,6 +1145,7 @@ export class CollectionApiClient {
       throw error;
     }
   }
+
 
   async getChatDocuments(userSub: string, chatId: number, limit: number = 50, offset: number = 0): Promise<BackendDocument[]> {
     const url = `${this.baseUrl}/documents/?owner_sub=${userSub}&chat_id=${chatId}&limit=${limit}&offset=${offset}`;

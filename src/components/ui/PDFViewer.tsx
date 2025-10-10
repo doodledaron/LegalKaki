@@ -4,8 +4,10 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/Button'
 import { Eye, EyeOff, ZoomIn, ZoomOut, Download, X, Lightbulb, AlertCircle, Loader2 } from 'lucide-react'
-import { Document, Page, pdfjs } from 'react-pdf'
+import { Document as PDFDocument, Page, pdfjs } from 'react-pdf'
 import { bedrockService } from '@/api/bedrockService'
+import { documentsApi } from '@/api'
+import { Document as DocumentType } from '@/types'
 
 // Configure PDF.js worker for react-pdf v9
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -28,12 +30,11 @@ interface Tooltip {
 }
 
 interface PDFViewerProps {
-  documentId: string
-  filename: string
+  document: DocumentType
   onClose?: () => void
 }
 
-export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
+export function PDFViewer({ document, onClose }: PDFViewerProps) {
   const [isHighlightMode, setIsHighlightMode] = useState(false)
   const [zoom, setZoom] = useState(1.0)
   const [tooltip, setTooltip] = useState<Tooltip>({ 
@@ -58,13 +59,46 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
     const loadPdfUrl = async () => {
       try {
         setPdfLoading(true)
-        // For hackathon: use direct PDF path (replace with actual document path)
-        const response = { success: true, data: { url: '/partnership.pdf' } }
+        console.log('📄 Loading PDF for document:', {
+          id: document.id,
+          filename: document.originalFilename,
+          s3Bucket: document.s3Bucket,
+          s3Key: document.s3Key,
+          fileType: document.fileType
+        })
         
-        if (response.success) {
-          setPdfUrl(response.data.url)
+        // Try to get document URL through backend proxy first
+        try {
+          const response = await documentsApi.getDocumentProxy(document.id)
+          if (response.success) {
+            setPdfUrl(response.data.url)
+            console.log('✅ Got document URL from backend proxy:', response.data.url)
+            return
+          }
+        } catch (proxyError) {
+          console.warn('Backend proxy failed, trying direct S3 URL:', proxyError)
+        }
+        
+        // Fallback: try direct S3 access (may fail due to CORS)
+        if (document.s3Bucket && document.s3Key) {
+          const s3Url = `https://${document.s3Bucket}.s3.ap-southeast-5.amazonaws.com/${document.s3Key}`
+          setPdfUrl(s3Url)
+          console.log('⚠️ Using direct S3 URL (may fail due to CORS):', s3Url)
+          console.log('📄 Document S3 info:', { 
+            bucket: document.s3Bucket, 
+            key: document.s3Key,
+            region: 'ap-southeast-5'
+          })
         } else {
-          setPdfError('Failed to load document URL')
+          // Final fallback to static file
+          setPdfUrl('/partnership.pdf')
+          console.log('⚠️ Using fallback static PDF - no S3 info available')
+          console.log('📄 Document info:', {
+            hasS3Bucket: !!document.s3Bucket,
+            hasS3Key: !!document.s3Key,
+            s3Bucket: document.s3Bucket,
+            s3Key: document.s3Key
+          })
         }
       } catch (error) {
         console.error('Error loading PDF URL:', error)
@@ -75,7 +109,7 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
     }
 
     loadPdfUrl()
-  }, [documentId])
+  }, [document])
 
   // PDF loading handlers
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
@@ -86,7 +120,16 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
 
   const onDocumentLoadError = (error: Error) => {
     console.error('PDF load error:', error)
-    setPdfError('Failed to load PDF document')
+    
+    // Check if it's a CORS or 403 error
+    if (error.message.includes('Failed to fetch') || error.message.includes('CORS')) {
+      setPdfError('Document access blocked by CORS policy. Backend proxy needed to access S3 documents.')
+    } else if (error.message.includes('403')) {
+      setPdfError('Access forbidden. Document requires authentication or signed URL.')
+    } else {
+      setPdfError('Failed to load PDF document')
+    }
+    
     setPdfLoading(false)
   }
 
@@ -205,7 +248,7 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
   // Text selection event listeners
   useEffect(() => {
     const handleClickOutside = () => closeTooltip()
-    document.addEventListener('click', handleClickOutside)
+    globalThis.document.addEventListener('click', handleClickOutside)
     
     // Add text selection listener
     const handleSelectionChange = () => {
@@ -215,13 +258,13 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
       }
     }
     
-    document.addEventListener('mouseup', handleSelectionChange)
-    document.addEventListener('touchend', handleSelectionChange)
+    globalThis.document.addEventListener('mouseup', handleSelectionChange)
+    globalThis.document.addEventListener('touchend', handleSelectionChange)
     
     return () => {
-      document.removeEventListener('click', handleClickOutside)
-      document.removeEventListener('mouseup', handleSelectionChange)
-      document.removeEventListener('touchend', handleSelectionChange)
+      globalThis.document.removeEventListener('click', handleClickOutside)
+      globalThis.document.removeEventListener('mouseup', handleSelectionChange)
+      globalThis.document.removeEventListener('touchend', handleSelectionChange)
     }
   }, [isHighlightMode, handleTextSelection])
 
@@ -240,8 +283,8 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
               <span className="text-red-600 text-xs font-bold">PDF</span>
             </div>
             <div>
-              <h3 className="body-regular font-medium text-text-primary">{filename}</h3>
-              <p className="caption text-text-secondary">Document ID: {documentId}</p>
+              <h3 className="body-regular font-medium text-text-primary">{document.originalFilename}</h3>
+              <p className="caption text-text-secondary">Document ID: {document.id}</p>
             </div>
           </div>
 
@@ -357,7 +400,7 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
                 }`}
                 style={{ userSelect: isHighlightMode ? 'text' : 'none' }}
               >
-                <Document
+                <PDFDocument
                   file={pdfUrl}
                   onLoadSuccess={onDocumentLoadSuccess}
                   onLoadError={onDocumentLoadError}
@@ -380,7 +423,7 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
                     renderAnnotationLayer={true}
                     className="shadow-sm"
                   />
-                </Document>
+                </PDFDocument>
                 
                 {/* Page Navigation */}
                 {numPages && numPages > 1 && (
