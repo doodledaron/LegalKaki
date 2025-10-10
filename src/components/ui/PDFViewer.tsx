@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/Button'
 import { Eye, EyeOff, ZoomIn, ZoomOut, Download, X, Lightbulb, AlertCircle, Loader2 } from 'lucide-react'
 import { Document as PDFDocument, Page, pdfjs } from 'react-pdf'
 import { bedrockService } from '@/api/bedrockService'
-import { documentsApi } from '@/api'
+import { documentsApi, api } from '@/api'
 import { Document as DocumentType } from '@/types'
+import { getDocumentUrlWithProxy } from '@/lib/corsProxy'
 
 // Configure PDF.js worker for react-pdf v9
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -79,16 +80,32 @@ export function PDFViewer({ document, onClose }: PDFViewerProps) {
           console.warn('Backend proxy failed, trying direct S3 URL:', proxyError)
         }
         
-        // Fallback: try direct S3 access (may fail due to CORS)
+        // Fallback: try CORS proxy for S3 access
         if (document.s3Bucket && document.s3Key) {
-          const s3Url = `https://${document.s3Bucket}.s3.ap-southeast-5.amazonaws.com/${document.s3Key}`
-          setPdfUrl(s3Url)
-          console.log('⚠️ Using direct S3 URL (may fail due to CORS):', s3Url)
+          console.log('⚠️ Backend proxy failed, trying CORS proxy solutions')
           console.log('📄 Document S3 info:', { 
             bucket: document.s3Bucket, 
             key: document.s3Key,
             region: 'ap-southeast-5'
           })
+          
+          try {
+            const proxyResult = await getDocumentUrlWithProxy(
+              document.s3Bucket, 
+              document.s3Key, 
+              'ap-southeast-5'
+            )
+            
+            if (proxyResult.success && proxyResult.url) {
+              console.log('✅ CORS proxy successful:', proxyResult.url)
+              setPdfUrl(proxyResult.url)
+              return
+            } else {
+              console.error('❌ CORS proxy failed:', proxyResult.error)
+            }
+          } catch (proxyError) {
+            console.error('❌ CORS proxy error:', proxyError)
+          }
         } else {
           // Final fallback to static file
           setPdfUrl('/partnership.pdf')
@@ -155,27 +172,27 @@ export function PDFViewer({ document, onClose }: PDFViewerProps) {
     if (viewerRect && selectedText) {
       setIsGeneratingExplanation(true)
       
+      // Get surrounding context for better analysis
+      const context = getSelectionContext(selectedText, range)
+      
       try {
-        // Get surrounding context for better analysis
-        const context = getSelectionContext(selectedText, range)
+        // Call backend API for explanation
+        const backendResponse = await api.explain.explainSentence(selectedText)
         
-        // Call Bedrock directly for AI explanation (hackathon direct access)
-        const response = await bedrockService.analyzeText({
-          selectedText,
-          context,
-          pageNumber: currentPage
-        })
+        console.log('Backend Response:', backendResponse.explanation) // Debug log
         
-        // bedrockService returns the response directly, not wrapped in success/error
-        console.log('AI Response:', response.explanation) // Debug log
+        // Convert backend response to tooltip format
+        // The backend returns markdown format, so we need to convert it to HTML
+        const htmlExplanation = convertMarkdownToHtml(backendResponse.explanation)
+        
         setTooltip({
-          content: response.explanation,
+          content: htmlExplanation,
           x: rect.left - viewerRect.left + rect.width / 2,
           y: rect.top - viewerRect.top - 10,
           visible: true,
-          category: response.category,
+          category: 'general', // Backend doesn't provide category, default to general
           selectedText: selectedText,
-          confidence: response.confidence
+          confidence: 85 // Backend provides high-quality explanations
         })
         
         // Add to highlighted terms
@@ -184,21 +201,60 @@ export function PDFViewer({ document, onClose }: PDFViewerProps) {
       } catch (error) {
         console.error('Failed to analyze text:', error)
         
-        // Fallback explanation
-        setTooltip({
-          content: `"${selectedText}" - This text requires professional interpretation. The AI analysis service is currently unavailable.`,
-          x: rect.left - viewerRect.left + rect.width / 2,
-          y: rect.top - viewerRect.top - 10,
-          visible: true,
-          category: 'general',
-          selectedText: selectedText,
-          confidence: 0
-        })
+        // Try fallback to Bedrock service if backend fails
+        try {
+          console.log('Backend failed, trying Bedrock fallback...')
+          const bedrockResponse = await bedrockService.analyzeText({
+            selectedText,
+            context: context,
+            pageNumber: currentPage
+          })
+          
+          setTooltip({
+            content: bedrockResponse.explanation,
+            x: rect.left - viewerRect.left + rect.width / 2,
+            y: rect.top - viewerRect.top - 10,
+            visible: true,
+            category: bedrockResponse.category,
+            selectedText: selectedText,
+            confidence: bedrockResponse.confidence
+          })
+        } catch (fallbackError) {
+          console.error('Bedrock fallback also failed:', fallbackError)
+          
+          // Final fallback explanation
+          setTooltip({
+            content: `"${selectedText}" - This text requires professional interpretation. The AI analysis service is currently unavailable.`,
+            x: rect.left - viewerRect.left + rect.width / 2,
+            y: rect.top - viewerRect.top - 10,
+            visible: true,
+            category: 'general',
+            selectedText: selectedText,
+            confidence: 0
+          })
+        }
       } finally {
         setIsGeneratingExplanation(false)
       }
     }
   }, [isHighlightMode, currentPage])
+
+  // Convert markdown to HTML for display
+  const convertMarkdownToHtml = (markdown: string): string => {
+    return markdown
+      // Convert headers to bold text
+      .replace(/^# (.+)$/gm, '<strong>$1</strong>')
+      .replace(/^## (.+)$/gm, '<strong>$1</strong>')
+      .replace(/^### (.+)$/gm, '<strong>$1</strong>')
+      // Convert bold text
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      // Convert bullet points to HTML list
+      .replace(/^- (.+)$/gm, '• $1')
+      // Convert line breaks
+      .replace(/\n/g, '<br>')
+      // Clean up multiple line breaks
+      .replace(/<br><br>/g, '<br>')
+  }
 
   // Get context around the selected text
   const getSelectionContext = (selectedText: string, range: Range): string => {

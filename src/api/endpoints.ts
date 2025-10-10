@@ -18,6 +18,19 @@ import {
   mockAnalysisResult,
   mockDraftResult,
 } from "./mockData";
+
+// Backend API service for highlight explainer
+const BACKEND_BASE_URL = "http://43.217.199.206:8000";
+
+export interface BackendExplainRequest {
+  sentence: string;
+}
+
+export interface BackendExplainResponse {
+  explanation: string;
+  sentence_provided: string;
+}
+
 import {
   ApiResponse,
   ApiError,
@@ -1424,6 +1437,29 @@ export const pdfApi = {
       };
     }, "fast");
   },
+
+  // Backend API service for highlight explainer
+  async explainSentence(sentence: string): Promise<BackendExplainResponse> {
+    try {
+      const response = await fetch(`${BACKEND_BASE_URL}/explain/sentence`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ sentence }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Backend API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Backend explain API error:', error);
+      throw error;
+    }
+  },
 };
 
 // Combine all APIs
@@ -1438,6 +1474,9 @@ export const api = {
   search: searchApi,
   tools: toolsApi,
   pdf: pdfApi,
+  explain: {
+    explainSentence: pdfApi.explainSentence,
+  },
 };
 
 export default api;
