@@ -562,6 +562,26 @@ export class RealApiClient {
       const supervisorData = supervisorResponse.supervisor_response;
       let displayContent = "";
 
+      // Helper function to extract and parse JSON blocks from content
+      const extractJsonBlock = (content: string): { json: unknown; remainingContent: string } | null => {
+        // Match ```json ... ``` blocks at the start of content
+        const jsonBlockRegex = /^```json\s*\n([\s\S]*?)\n```\s*\n/;
+        const match = content.match(jsonBlockRegex);
+
+        if (match) {
+          try {
+            const jsonStr = match[1];
+            const parsed = JSON.parse(jsonStr);
+            const remainingContent = content.slice(match[0].length);
+            console.log("[RealApiClient] Extracted JSON block from content:", parsed);
+            return { json: parsed, remainingContent };
+          } catch (e) {
+            console.warn("[RealApiClient] Failed to parse JSON block:", e);
+          }
+        }
+        return null;
+      };
+
       // Check if this should be rendered as a simple message
       const isGenericGreeting = (content: string) => {
         const genericPhrases = [
@@ -687,11 +707,54 @@ export class RealApiClient {
         onProgress("Complete", 100);
       }
 
+      // Extract structured JSON from each tab
+      // Note: The backend may return EITHER:
+      // 1. Content with embedded ```json blocks (legacy format)
+      // 2. Plain markdown content (new format - tabs ARE the structure)
+      const extractedData: {
+        explanation?: unknown;
+        analysis?: unknown;
+        action?: unknown;
+        visualization?: unknown;
+        draft?: unknown;
+      } = {};
+
+      if (supervisorData.explanation_tab?.status === "active") {
+        const extracted = extractJsonBlock(supervisorData.explanation_tab.content);
+        if (extracted) {
+          // Legacy format: JSON block found
+          extractedData.explanation = extracted.json;
+        }
+        // For new format: tabs contain plain markdown - no extraction needed
+        // Frontend will render markdown directly
+      }
+
+      if (supervisorData.analysis_tab?.status === "active") {
+        const extracted = extractJsonBlock(supervisorData.analysis_tab.content);
+        if (extracted) {
+          // Legacy format: JSON block found
+          extractedData.analysis = extracted.json;
+        }
+        // For new format: tabs contain plain markdown - no extraction needed
+      }
+
+      if (supervisorData.action_tab?.status === "active") {
+        const extracted = extractJsonBlock(supervisorData.action_tab.content);
+        if (extracted) {
+          // Legacy format: JSON block found
+          extractedData.action = extracted.json;
+        }
+        // For new format: tabs contain plain markdown - no extraction needed
+      }
+
       return {
         message: userMessage,
         aiResponse,
-        // Store the full supervisor response for potential use
-        supervisorData: supervisorData,
+        // Store the full supervisor response AND extracted JSON for structured rendering
+        supervisorData: {
+          ...supervisorData,
+          extractedData, // Add extracted JSON data
+        },
       };
     } catch (error) {
       console.error("Supervisor message failed:", error);
