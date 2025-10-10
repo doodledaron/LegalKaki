@@ -158,3 +158,6 @@ export interface NavItem {
   route: string
   isActive?: boolean
 }
+
+// Re-export sub-agent schemas
+export * from './subAgentSchemas'

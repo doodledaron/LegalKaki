@@ -32,6 +32,14 @@ import {
   BookOpen,
   Target,
 } from "lucide-react";
+import { ExplanationTab, AnalysisTab, ActionTab, SupplementaryTab } from "@/components/chat/tabs";
+import {
+  isEducatorResponse,
+  isAnalystResponse,
+  isAdvisorResponse,
+  isVisualizationResponse,
+  isDraftResponse,
+} from "@/types";
 import {
   LegalDomain,
   Message,
@@ -371,9 +379,9 @@ const CombinedMessageBubble = memo(
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex justify-start mb-4"
+      className="flex justify-start mb-4 w-full"
     >
-      <div className="max-w-[90%] bg-surface-white border-2 border-indigo-200/50 rounded-2xl rounded-bl-sm shadow-md overflow-hidden">
+      <div className="w-[70%] bg-surface-white border-2 border-indigo-200/50 rounded-2xl rounded-bl-sm shadow-md overflow-hidden">
         <Tabs defaultValue={analysis ? "analysis" : "draft"} className="w-full">
           <TabsList className="w-full justify-start border-b border-gray-100 bg-gray-50/50 rounded-none px-4">
             {analysis && (
@@ -424,36 +432,43 @@ const CombinedMessageBubble = memo(
 
 CombinedMessageBubble.displayName = "CombinedMessageBubble";
 
-// Supervisor Message Bubble Component - renders tabs from supervisor response
+// Supervisor Message Bubble Component - renders tabs from supervisor response with structured UI
 const SupervisorMessageBubble = memo(({ supervisorData }: { supervisorData: any }) => {
-  const { explanation_tab, analysis_tab, action_tab } = supervisorData;
-  
+  const { explanation_tab, analysis_tab, action_tab, extractedData } = supervisorData;
+
   // Determine which tabs are active
   const activeTabs = {
     explanation: explanation_tab?.status === "active",
     analysis: analysis_tab?.status === "active",
     action: action_tab?.status === "active",
   };
-  
+
   const hasAnyActiveTab = Object.values(activeTabs).some(Boolean);
-  
+
+  // Check if we have extracted JSON data (legacy format with embedded JSON blocks)
+  const hasExplanationJson = extractedData?.explanation && isEducatorResponse(extractedData.explanation);
+  const hasAnalysisJson = extractedData?.analysis && isAnalystResponse(extractedData.analysis);
+  const hasActionJson = extractedData?.action && isAdvisorResponse(extractedData.action);
+  const hasVisualizationJson = extractedData?.visualization && isVisualizationResponse(extractedData.visualization);
+  const hasDraftJson = extractedData?.draft && isDraftResponse(extractedData.draft);
+
+  // If no active tabs at all, render as simple message
   if (!hasAnyActiveTab) {
-    // Render as regular message if no active tabs
     return (
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex justify-start mb-4"
+        className="flex justify-start mb-4 w-full"
       >
-        <div className="max-w-[85%] bg-surface-white border border-gray-200 text-text-primary rounded-2xl rounded-bl-sm">
-          <p className="body-regular p-4">
-            {explanation_tab?.content || "No response available."}
+        <div className="w-[70%] bg-surface-white border border-gray-200 text-text-primary rounded-2xl rounded-bl-sm">
+          <p className="body-regular p-4 whitespace-pre-wrap">
+            {explanation_tab?.content || action_tab?.content || analysis_tab?.content || "No response available."}
           </p>
         </div>
       </motion.div>
     );
   }
-  
+
   // Get default tab (first active one)
   const getDefaultTab = () => {
     if (activeTabs.explanation) return "explanation";
@@ -461,14 +476,17 @@ const SupervisorMessageBubble = memo(({ supervisorData }: { supervisorData: any 
     if (activeTabs.action) return "action";
     return "explanation";
   };
-  
+
+  // Add supplementary tab if we have visualization or draft data
+  const hasSupplementary = hasVisualizationJson || hasDraftJson;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex justify-start mb-4"
+      className="flex justify-start mb-4 w-full"
     >
-      <div className="max-w-[90%] bg-surface-white border-2 border-indigo-200/50 rounded-2xl rounded-bl-sm shadow-md overflow-hidden">
+      <div className="w-[70%] bg-surface-white border-2 border-indigo-200/50 rounded-2xl rounded-bl-sm shadow-md overflow-hidden">
         <Tabs defaultValue={getDefaultTab()} className="w-full">
           <TabsList className="w-full justify-start border-b border-gray-100 bg-gray-50/50 rounded-none px-4">
             {activeTabs.explanation && (
@@ -489,96 +507,123 @@ const SupervisorMessageBubble = memo(({ supervisorData }: { supervisorData: any 
                 <span>Actions</span>
               </TabsTrigger>
             )}
+            {hasSupplementary && (
+              <TabsTrigger value="supplementary" className="flex items-center space-x-2">
+                <FileText className="w-4 h-4" />
+                <span>Supplementary</span>
+              </TabsTrigger>
+            )}
           </TabsList>
-          
+
           {activeTabs.explanation && (
-            <TabsContent value="explanation" className="p-4 max-h-96 overflow-y-auto">
-              <div className="space-y-3">
-                <ReactMarkdown 
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    p: ({children}) => <p className="body-regular text-text-primary mb-3">{children}</p>,
-                    ul: ({children}) => <ul className="list-disc list-inside space-y-2 mb-3">{children}</ul>,
-                    ol: ({children}) => <ol className="list-decimal list-inside space-y-2 mb-3">{children}</ol>,
-                    li: ({children}) => <li className="body-regular text-text-primary">{children}</li>,
-                    h1: ({children}) => <h1 className="heading-3 text-text-primary mb-3">{children}</h1>,
-                    h2: ({children}) => <h2 className="heading-4 text-text-primary mb-2">{children}</h2>,
-                    h3: ({children}) => <h3 className="body-semibold text-text-primary mb-2">{children}</h3>,
-                    strong: ({children}) => <strong className="body-semibold text-purple-primary">{children}</strong>,
-                    em: ({children}) => <em className="italic">{children}</em>,
-                    code: ({children}) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
-                  }}
-                >
-                  {explanation_tab.content}
-                </ReactMarkdown>
-                {explanation_tab.relevance && (
-                  <p className="caption text-text-secondary italic mt-3 pt-3 border-t border-gray-100">
-                    {explanation_tab.relevance}
-                  </p>
-                )}
-              </div>
+            <TabsContent value="explanation" className="p-0 max-h-96 overflow-y-auto">
+              {hasExplanationJson ? (
+                <ExplanationTab data={extractedData.explanation} />
+              ) : (
+                <div className="p-4 space-y-3">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      p: ({children}) => <p className="body-regular text-text-primary mb-3">{children}</p>,
+                      ul: ({children}) => <ul className="list-disc list-inside space-y-2 mb-3">{children}</ul>,
+                      ol: ({children}) => <ol className="list-decimal list-inside space-y-2 mb-3">{children}</ol>,
+                      li: ({children}) => <li className="body-regular text-text-primary">{children}</li>,
+                      h1: ({children}) => <h1 className="heading-3 text-text-primary mb-3">{children}</h1>,
+                      h2: ({children}) => <h2 className="heading-4 text-text-primary mb-2">{children}</h2>,
+                      h3: ({children}) => <h3 className="body-semibold text-text-primary mb-2">{children}</h3>,
+                      strong: ({children}) => <strong className="body-semibold text-purple-primary">{children}</strong>,
+                      em: ({children}) => <em className="italic">{children}</em>,
+                      code: ({children}) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
+                    }}
+                  >
+                    {explanation_tab.content}
+                  </ReactMarkdown>
+                  {explanation_tab.relevance && (
+                    <p className="caption text-text-secondary italic mt-3 pt-3 border-t border-gray-100">
+                      {explanation_tab.relevance}
+                    </p>
+                  )}
+                </div>
+              )}
             </TabsContent>
           )}
-          
+
           {activeTabs.analysis && (
-            <TabsContent value="analysis" className="p-4 max-h-96 overflow-y-auto">
-              <div className="space-y-3">
-                <ReactMarkdown 
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    p: ({children}) => <p className="body-regular text-text-primary mb-3">{children}</p>,
-                    ul: ({children}) => <ul className="list-disc list-inside space-y-2 mb-3">{children}</ul>,
-                    ol: ({children}) => <ol className="list-decimal list-inside space-y-2 mb-3">{children}</ol>,
-                    li: ({children}) => <li className="body-regular text-text-primary">{children}</li>,
-                    h1: ({children}) => <h1 className="heading-3 text-text-primary mb-3">{children}</h1>,
-                    h2: ({children}) => <h2 className="heading-4 text-text-primary mb-2">{children}</h2>,
-                    h3: ({children}) => <h3 className="body-semibold text-text-primary mb-2">{children}</h3>,
-                    strong: ({children}) => <strong className="body-semibold text-purple-primary">{children}</strong>,
-                    em: ({children}) => <em className="italic">{children}</em>,
-                    code: ({children}) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
-                  }}
-                >
-                  {analysis_tab.content}
-                </ReactMarkdown>
-                {analysis_tab.relevance && (
-                  <p className="caption text-text-secondary italic mt-3 pt-3 border-t border-gray-100">
-                    {analysis_tab.relevance}
-                  </p>
-                )}
-              </div>
+            <TabsContent value="analysis" className="p-0 max-h-96 overflow-y-auto">
+              {hasAnalysisJson ? (
+                <AnalysisTab data={extractedData.analysis} />
+              ) : (
+                <div className="p-4 space-y-3">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      p: ({children}) => <p className="body-regular text-text-primary mb-3">{children}</p>,
+                      ul: ({children}) => <ul className="list-disc list-inside space-y-2 mb-3">{children}</ul>,
+                      ol: ({children}) => <ol className="list-decimal list-inside space-y-2 mb-3">{children}</ol>,
+                      li: ({children}) => <li className="body-regular text-text-primary">{children}</li>,
+                      h1: ({children}) => <h1 className="heading-3 text-text-primary mb-3">{children}</h1>,
+                      h2: ({children}) => <h2 className="heading-4 text-text-primary mb-2">{children}</h2>,
+                      h3: ({children}) => <h3 className="body-semibold text-text-primary mb-2">{children}</h3>,
+                      strong: ({children}) => <strong className="body-semibold text-purple-primary">{children}</strong>,
+                      em: ({children}) => <em className="italic">{children}</em>,
+                      code: ({children}) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
+                    }}
+                  >
+                    {analysis_tab.content}
+                  </ReactMarkdown>
+                  {analysis_tab.relevance && (
+                    <p className="caption text-text-secondary italic mt-3 pt-3 border-t border-gray-100">
+                      {analysis_tab.relevance}
+                    </p>
+                  )}
+                </div>
+              )}
             </TabsContent>
           )}
-          
+
           {activeTabs.action && (
-            <TabsContent value="action" className="p-4 max-h-96 overflow-y-auto">
-              <div className="space-y-3">
-                <ReactMarkdown 
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    p: ({children}) => <p className="body-regular text-text-primary mb-3">{children}</p>,
-                    ul: ({children}) => <ul className="list-disc list-inside space-y-2 mb-3">{children}</ul>,
-                    ol: ({children}) => <ol className="list-decimal list-inside space-y-2 mb-3">{children}</ol>,
-                    li: ({children}) => <li className="body-regular text-text-primary">{children}</li>,
-                    h1: ({children}) => <h1 className="heading-3 text-text-primary mb-3">{children}</h1>,
-                    h2: ({children}) => <h2 className="heading-4 text-text-primary mb-2">{children}</h2>,
-                    h3: ({children}) => <h3 className="body-semibold text-text-primary mb-2">{children}</h3>,
-                    strong: ({children}) => <strong className="body-semibold text-purple-primary">{children}</strong>,
-                    em: ({children}) => <em className="italic">{children}</em>,
-                    code: ({children}) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
-                  }}
-                >
-                  {action_tab.content}
-                </ReactMarkdown>
-                {action_tab.relevance && (
-                  <p className="caption text-text-secondary italic mt-3 pt-3 border-t border-gray-100">
-                    {action_tab.relevance}
-                  </p>
-                )}
-              </div>
+            <TabsContent value="action" className="p-0 max-h-96 overflow-y-auto">
+              {hasActionJson ? (
+                <ActionTab data={extractedData.action} />
+              ) : (
+                <div className="p-4 space-y-3">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      p: ({children}) => <p className="body-regular text-text-primary mb-3">{children}</p>,
+                      ul: ({children}) => <ul className="list-disc list-inside space-y-2 mb-3">{children}</ul>,
+                      ol: ({children}) => <ol className="list-decimal list-inside space-y-2 mb-3">{children}</ol>,
+                      li: ({children}) => <li className="body-regular text-text-primary">{children}</li>,
+                      h1: ({children}) => <h1 className="heading-3 text-text-primary mb-3">{children}</h1>,
+                      h2: ({children}) => <h2 className="heading-4 text-text-primary mb-2">{children}</h2>,
+                      h3: ({children}) => <h3 className="body-semibold text-text-primary mb-2">{children}</h3>,
+                      strong: ({children}) => <strong className="body-semibold text-purple-primary">{children}</strong>,
+                      em: ({children}) => <em className="italic">{children}</em>,
+                      code: ({children}) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
+                    }}
+                  >
+                    {action_tab.content}
+                  </ReactMarkdown>
+                  {action_tab.relevance && (
+                    <p className="caption text-text-secondary italic mt-3 pt-3 border-t border-gray-100">
+                      {action_tab.relevance}
+                    </p>
+                  )}
+                </div>
+              )}
+            </TabsContent>
+          )}
+
+          {hasSupplementary && (
+            <TabsContent value="supplementary" className="p-0 max-h-96 overflow-y-auto">
+              <SupplementaryTab
+                visualizationData={hasVisualizationJson ? extractedData.visualization : undefined}
+                draftData={hasDraftJson ? extractedData.draft : undefined}
+              />
             </TabsContent>
           )}
         </Tabs>
-        
+
         <div className="p-3 bg-gray-50/50 border-t border-gray-100">
           <p className="caption text-text-secondary text-center">
             {new Date().toLocaleTimeString([], {
