@@ -602,22 +602,61 @@ export class RealApiClient {
         // Render with tabs for structured responses
         console.log("[RealApiClient] Rendering with tabs (structured response)");
 
+        // Helper function to extract and parse JSON blocks from content
+        const extractJsonBlock = (content: string): { json: unknown; remainingContent: string } | null => {
+          // Match ```json ... ``` blocks at the start of content
+          const jsonBlockRegex = /^```json\s*\n([\s\S]*?)\n```\s*\n/;
+          const match = content.match(jsonBlockRegex);
+
+          if (match) {
+            try {
+              const jsonStr = match[1];
+              const parsed = JSON.parse(jsonStr);
+              const remainingContent = content.slice(match[0].length);
+              console.log("[RealApiClient] Extracted JSON block from content:", parsed);
+              return { json: parsed, remainingContent };
+            } catch (e) {
+              console.warn("[RealApiClient] Failed to parse JSON block:", e);
+            }
+          }
+          return null;
+        };
+
         if (supervisorData.explanation_tab?.status === "active") {
-          displayContent += `## Explanation\n\n${supervisorData.explanation_tab.content}\n\n`;
+          const extracted = extractJsonBlock(supervisorData.explanation_tab.content);
+          if (extracted) {
+            // TODO: Frontend can use extracted.json for structured rendering
+            displayContent += `## Explanation\n\n${extracted.remainingContent}\n\n`;
+          } else {
+            displayContent += `## Explanation\n\n${supervisorData.explanation_tab.content}\n\n`;
+          }
           if (supervisorData.explanation_tab.relevance) {
             displayContent += `*${supervisorData.explanation_tab.relevance}*\n\n`;
           }
         }
 
         if (supervisorData.analysis_tab?.status === "active") {
-          displayContent += `## Analysis\n\n${supervisorData.analysis_tab.content}\n\n`;
+          const extracted = extractJsonBlock(supervisorData.analysis_tab.content);
+          if (extracted) {
+            // TODO: Frontend can use extracted.json for structured rendering
+            displayContent += `## Analysis\n\n${extracted.remainingContent}\n\n`;
+          } else {
+            displayContent += `## Analysis\n\n${supervisorData.analysis_tab.content}\n\n`;
+          }
           if (supervisorData.analysis_tab.relevance) {
             displayContent += `*${supervisorData.analysis_tab.relevance}*\n\n`;
           }
         }
 
         if (supervisorData.action_tab?.status === "active") {
-          displayContent += `## Actions\n\n${supervisorData.action_tab.content}\n\n`;
+          const extracted = extractJsonBlock(supervisorData.action_tab.content);
+          if (extracted) {
+            // TODO: Frontend can use extracted.json for structured checklist rendering
+            console.log("[RealApiClient] Action tab has structured JSON checklist");
+            displayContent += `## Actions\n\n${extracted.remainingContent}\n\n`;
+          } else {
+            displayContent += `## Actions\n\n${supervisorData.action_tab.content}\n\n`;
+          }
           if (supervisorData.action_tab.relevance) {
             displayContent += `*${supervisorData.action_tab.relevance}*\n\n`;
           }
