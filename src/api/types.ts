@@ -113,11 +113,23 @@ export function mapBackendDocumentToDocument(backend: BackendDocument): Document
     filename: backend.filename,
     filenameType: typeof backend.filename,
     file_type: backend.file_type,
-    file_size: backend.file_size
+    file_size: backend.file_size,
+    s3_key: backend.s3_key
   })
-  
-  // Safely handle filename and extension
-  const filename = backend.filename || 'unknown_file'
+
+  // Safely handle filename and extension - extract from S3 key if filename is missing
+  let filename = backend.filename
+  if (!filename || filename.trim() === '') {
+    // Extract filename from S3 key if available
+    if (backend.s3_key) {
+      const keyParts = backend.s3_key.split('/')
+      const lastPart = keyParts[keyParts.length - 1]
+      // Remove UUID prefix if present (e.g., "uuid_contract.pdf" -> "contract.pdf")
+      filename = lastPart.includes('_') ? lastPart.split('_').slice(1).join('_') : lastPart
+    } else {
+      filename = 'document.pdf' // Final fallback
+    }
+  }
   const fileExtension = filename.includes('.') ? filename.split('.').pop() : 'unknown'
   
   return {
@@ -151,9 +163,16 @@ export function mapBackendCollectionDocumentToDocument(backend: BackendCollectio
     source_type: backend.source_type,
     created_at: backend.created_at
   })
-  
-  // Safely handle filename and extension
-  const filename = backend.title || 'unknown_file'
+
+  // Safely handle filename and extension - extract from S3 key if title is missing
+  let filename = backend.title
+  if (!filename || filename.trim() === '') {
+    // Extract filename from S3 key (e.g., "users/user-123/chats/456/uuid_contract.pdf" -> "contract.pdf")
+    const keyParts = backend.s3_key.split('/')
+    const lastPart = keyParts[keyParts.length - 1]
+    // Remove UUID prefix if present (e.g., "uuid_contract.pdf" -> "contract.pdf")
+    filename = lastPart.includes('_') ? lastPart.split('_').slice(1).join('_') : lastPart
+  }
   const fileExtension = filename.includes('.') ? filename.split('.').pop() : 'unknown'
   
   return {
