@@ -381,6 +381,7 @@ export interface PaginatedResponse<T> {
 // User Types
 export interface User {
   id: string
+  cognito_sub?: string  // AWS Cognito user sub (same as id)
   email?: string
   name: string
   avatar?: string

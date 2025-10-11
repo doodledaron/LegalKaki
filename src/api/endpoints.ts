@@ -123,20 +123,8 @@ export const authApi = {
     } catch (error) {
       console.error("Real API signup failed, falling back to mock:", error);
       
-      // Fallback to mock implementation
-      return mockClient.request(
-        async () => {
-          // Simulate signup logic
-          return {
-            message: "Account created successfully. Please check your email for verification code.",
-            user_id: `user_${Date.now()}`,
-          };
-        },
-        "medium",
-        {
-          successMessage: "Account created successfully",
-        }
-      );
+      // Fallback to mock implementation - signup not available in mock mode
+      throw new Error("Sign up requires backend authentication. Please ensure the backend is running at " + process.env.NEXT_PUBLIC_BACKEND_URL);
     }
   },
 
@@ -259,13 +247,19 @@ export const authApi = {
       }
 
       const data = await response.json();
-      
+
+      // Extract cognito_sub from user_info.attributes.sub or user_info.username
+      const cognitoSub = data.user_info?.attributes?.sub || data.user_info?.username;
+      const userEmail = data.user_info?.attributes?.email || request.email;
+      const userName = data.user_info?.attributes?.name || data.user_info?.username || 'User';
+
       // Map the response to our expected format
       const signInResponse: SignInResponse = {
         user: {
-          id: data.user?.id || `user_${Date.now()}`,
-          email: data.user?.email || request.email,
-          name: data.user?.name || data.user?.full_name || 'User',
+          id: cognitoSub,  // Use actual cognito_sub instead of random ID
+          cognito_sub: cognitoSub,  // Store cognito_sub explicitly
+          email: userEmail,
+          name: userName,
           avatar: data.user?.avatar,
           preferences: {
             theme: 'system',
@@ -279,8 +273,8 @@ export const authApi = {
           createdAt: new Date(data.user?.created_at || Date.now()),
           lastLoginAt: new Date(),
         },
-        token: data.token || data.access_token || `token_${Date.now()}`,
-        expiresAt: new Date(data.expires_at || Date.now() + 24 * 60 * 60 * 1000),
+        token: data.id_token || data.access_token || `token_${Date.now()}`,  // Use id_token for JWT auth
+        expiresAt: new Date(Date.now() + (data.expires_in || 3600) * 1000),  // expires_in is in seconds
       };
       
       return {
