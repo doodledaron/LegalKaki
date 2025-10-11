@@ -10,7 +10,9 @@ export async function GET(
   request: NextRequest,
   context: RouteContext
 ) {
+  console.log('[Proxy] GET request received');
   const params = await context.params;
+  console.log('[Proxy] Params:', params);
   return proxyRequest(request, params.path, 'GET');
 }
 
