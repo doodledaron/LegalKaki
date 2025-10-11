@@ -14,6 +14,7 @@ import {
 import { Document } from "@/types";
 import { mockClient } from "./mockClient";
 import { getEnvConfig } from "@/lib/envConfig";
+import { DEFAULT_USER_ID } from "@/lib/constants";
 
 // Structured response interface for mode detection
 interface StructuredResponse {
@@ -41,8 +42,7 @@ const getBackendConfig = () => {
   return {
     baseUrl: envConfig.backendUrl,
     endpoints: {
-      uploadDocument:
-        "/api/v1/datasets/1e99cdde96d611f08ce90242ac120005/documents",
+      uploadDocument: "/documents/upload",
       chatCompletions:
         "/api/v1/chats_openai/13dfe97696dd11f0a6b70242ac130005/chat/completions",
       // New supervisor endpoint
@@ -53,7 +53,7 @@ const getBackendConfig = () => {
     },
     // Connection timeout settings
     timeout: {
-      upload: 30000, // 30 seconds for uploads
+      upload: 120000, // 120 seconds (2 minutes) for uploads
       chat: 60000, // 60 seconds for chat completion
       connection: 10000, // 10 seconds for initial connection
     },
@@ -218,22 +218,21 @@ export class RealApiClient {
   // Upload document with FormData
   async uploadDocument(
     file: File,
-    onProgress?: (progress: number) => void
+    onProgress?: (progress: number) => void,
+    chatId?: number
   ): Promise<UploadDocumentResponse> {
-    // First test backend connectivity
-    const endpointTests = await this.testEndpoints();
-    console.log("Endpoint test results:", endpointTests);
+    const userSub = DEFAULT_USER_ID; // TODO: Get from auth context
+    const providedChatId = chatId || Date.now();
 
-    if (!endpointTests.upload) {
-      console.warn(
-        "Upload endpoint not available, falling back to mock client"
-      );
-      return this.fallbackToMockUpload(file, onProgress);
-    }
+    // Ensure chat exists in backend before uploading (may return different ID)
+    const actualChatId = await this.ensureChatExists(userSub, providedChatId);
 
     const formData = new FormData();
-    // Use the exact field name from API documentation
     formData.append("file", file);
+    formData.append("owner_sub", userSub);
+    formData.append("uploaded_in_chat_id", actualChatId.toString());
+    formData.append("title", file.name);
+    formData.append("source_type", "upload");
 
     const xhr = new XMLHttpRequest();
 
@@ -258,61 +257,29 @@ export class RealApiClient {
           responseText: xhr.responseText,
         });
 
-        if (xhr.status === 200) {
+        if (xhr.status === 200 || xhr.status === 201) {
           try {
-            const response: BackendUploadResponse = JSON.parse(
-              xhr.responseText
-            );
+            const response = JSON.parse(xhr.responseText);
             console.log("Parsed response:", response);
 
-            if (
-              response.code === 0 &&
-              response.data &&
-              response.data.length > 0
-            ) {
-              const uploadedDoc = response.data[0];
+            // New backend format
+            const document = {
+              id: response.document_id?.toString() || Date.now().toString(),
+              originalFilename: response.title || file.name,
+              storedFilename: response.s3_key,
+              fileType: response.mime_type || file.type,
+              fileSize: response.file_size_bytes || file.size,
+              s3Bucket: response.s3_bucket,
+              s3Key: response.s3_key,
+              uploadDate: new Date(),
+              analysisStatus: "completed" as const,
+            };
 
-              // Transform backend response to our format
-              const document = {
-                id: uploadedDoc.id,
-                originalFilename: uploadedDoc.name,
-                storedFilename: uploadedDoc.location,
-                fileType: `application/${uploadedDoc.suffix}`,
-                fileSize: uploadedDoc.size,
-                s3Bucket: "", // Not provided in backend response
-                s3Key: uploadedDoc.location,
-                uploadDate: new Date(),
-                analysisStatus: (uploadedDoc.run === "UNSTART"
-                  ? "pending"
-                  : "completed") as "pending" | "completed",
-              };
-
-              resolve({
-                document,
-                uploadUrl: `${this.baseUrl}/${uploadedDoc.location}`,
-                analysisJobId: uploadedDoc.id,
-              });
-            } else {
-              // Enhanced error handling with more specific messages
-              const errorMessage = this.getUploadErrorMessage(
-                response.code,
-                response
-              );
-              console.error("Upload failed with response:", response);
-
-              // For certain error codes, try fallback to mock
-              if (response.code >= 100 && response.code <= 115) {
-                console.warn(
-                  `Backend error ${response.code}, falling back to mock client`
-                );
-                this.fallbackToMockUpload(file, onProgress)
-                  .then(resolve)
-                  .catch(reject);
-                return;
-              }
-
-              reject(new Error(errorMessage));
-            }
+            resolve({
+              document,
+              uploadUrl: `${this.baseUrl}/documents/${response.document_id}/presign?owner_sub=${DEFAULT_USER_ID}`,
+              analysisJobId: response.document_id?.toString(),
+            });
           } catch (error) {
             console.error(
               "JSON parse error:",
@@ -347,15 +314,15 @@ export class RealApiClient {
 
       const uploadUrl = `${this.baseUrl}${BACKEND_CONFIG.endpoints.uploadDocument}`;
       console.log("Uploading to:", uploadUrl);
-      console.log("Auth token:", this.authToken);
-      console.log("File details:", {
-        name: file.name,
-        size: file.size,
-        type: file.type,
+      console.log("FormData fields:", {
+        file: file.name,
+        owner_sub: DEFAULT_USER_ID,
+        uploaded_in_chat_id: chatId || "auto-generated",
+        title: file.name,
       });
 
       xhr.open("POST", uploadUrl);
-      xhr.setRequestHeader("Authorization", `Bearer ${this.authToken}`);
+      // Don't set Authorization header - our backend doesn't require it for document upload
 
       try {
         xhr.send(formData);
@@ -1370,6 +1337,129 @@ export class RealApiClient {
 
     return { success: true, data: null };
   }
+
+  async ensureChatExists(userSub: string, chatId: number): Promise<number> {
+    try {
+      // Check if chat exists by querying chat directly (no timeout - let it take as long as needed)
+      const checkResponse = await fetch(
+        `${this.baseUrl}/chats/${chatId}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      // If we get a 200, the chat exists
+      if (checkResponse.ok) {
+        const existingChat = await checkResponse.json();
+        console.log(`✅ Chat ${chatId} already exists for user ${existingChat.user_sub}`);
+        return chatId;
+      }
+
+      // Chat doesn't exist (404), create it
+      console.log(`📝 Creating chat ${chatId} for user ${userSub}`);
+      const createResponse = await fetch(`${this.baseUrl}/chats/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_sub: userSub,
+          chat_id: chatId,
+          chat_name: `Chat Session`,
+        }),
+      });
+
+      if (!createResponse.ok) {
+        const errorText = await createResponse.text();
+        console.warn(`Failed to create chat: ${createResponse.status} ${errorText}`);
+        return chatId; // Use the provided chatId as fallback
+      }
+
+      const createdChat = await createResponse.json();
+      console.log(`✅ Created chat with ID: ${createdChat.chat_id}`);
+      return createdChat.chat_id;
+    } catch (error) {
+      console.error('Error ensuring chat exists:', error);
+      // Return the provided chatId as fallback
+      return chatId;
+    }
+  }
+
+  async getChatDocuments(userSub: string, chatId: number, limit: number = 50, offset: number = 0): Promise<BackendDocument[]> {
+    const url = `${this.baseUrl}/documents/?owner_sub=${userSub}&chat_id=${chatId}&limit=${limit}&offset=${offset}`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json',
+        },
+        signal: AbortSignal.timeout(BACKEND_CONFIG.timeout.connection),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const documents: BackendDocument[] = await response.json();
+      return documents;
+    } catch (error) {
+      console.error('Error fetching chat documents:', error);
+      throw error;
+    }
+  }
+
+  async generateDraft(
+    userSub: string,
+    chatId: number,
+    prompt: string,
+    title?: string
+  ): Promise<{
+    document_id: number;
+    title: string;
+    download_url: string;
+    s3_key: string;
+    s3_bucket: string;
+    file_size_bytes: number;
+  }> {
+    // Ensure chat exists before generating document
+    await this.ensureChatExists(userSub, chatId);
+
+    const url = `${this.baseUrl}/documents/generate-draft`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_sub: userSub,
+          chat_id: chatId,
+          prompt,
+          title,
+        }),
+        signal: AbortSignal.timeout(120000), // 2 minutes for document generation
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.detail || `HTTP error! status: ${response.status}`
+        );
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error generating draft:', error);
+      throw error;
+    }
+  }
 }
 
 // Manual test function for debugging
@@ -1494,7 +1584,7 @@ export class CollectionApiClient {
       // Approach 2: Try without user filter (get all collections)
       `${this.baseUrl}/collections/?limit=${limit}&offset=${offset}`,
       // Approach 3: Try with a default user ID that might exist in the backend
-      `${this.baseUrl}/collections/?owner_sub=user-1&limit=${limit}&offset=${offset}`,
+      `${this.baseUrl}/collections/?owner_sub=${DEFAULT_USER_ID}&limit=${limit}&offset=${offset}`,
     ];
 
     for (const url of approaches) {
@@ -1546,32 +1636,6 @@ export class CollectionApiClient {
       return details;
     } catch (error) {
       console.error('Error fetching collection details:', error);
-      throw error;
-    }
-  }
-
-
-  async getChatDocuments(userSub: string, chatId: number, limit: number = 50, offset: number = 0): Promise<BackendDocument[]> {
-    const url = `${this.baseUrl}/documents/?owner_sub=${userSub}&chat_id=${chatId}&limit=${limit}&offset=${offset}`;
-    
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${this.authToken}`,
-          'Content-Type': 'application/json',
-        },
-        signal: AbortSignal.timeout(BACKEND_CONFIG.timeout.connection),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const documents: BackendDocument[] = await response.json();
-      return documents;
-    } catch (error) {
-      console.error('Error fetching chat documents:', error);
       throw error;
     }
   }

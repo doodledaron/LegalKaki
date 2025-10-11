@@ -19,6 +19,7 @@ import {
   mockDraftResult,
 } from "./mockData";
 import { getBackendUrl, getEnvConfig } from "@/lib/envConfig";
+import { DEFAULT_USER_ID } from "@/lib/constants";
 
 // Backend URL from environment configuration
 const BACKEND_BASE_URL = getBackendUrl();
@@ -759,13 +760,15 @@ export const chatApi = {
 export const documentsApi = {
   async upload(
     request: UploadDocumentRequest,
-    onProgress?: (progress: number) => void
+    onProgress?: (progress: number) => void,
+    chatId?: number
   ): Promise<ApiResponse<UploadDocumentResponse> | ApiError> {
     try {
       // Use real API for document upload
       const uploadResult = await realApiClient.uploadDocument(
         request.file,
-        onProgress
+        onProgress,
+        chatId
       );
 
       return {
@@ -798,7 +801,7 @@ export const documentsApi = {
             fileType: request.file.type,
             fileSize: request.file.size,
             s3Bucket: "legalkaki-documents",
-            s3Key: `documents/user-1/${
+            s3Key: `documents/${DEFAULT_USER_ID}/${
               uploadResult.data.fileId
             }.${request.file.name.split(".").pop()}`,
             uploadDate: new Date(),
@@ -837,6 +840,70 @@ export const documentsApi = {
     return mockClient.request(async () => {
       return mockDocuments.slice(0, limit);
     }, "fast");
+  },
+
+  async getChatDocuments(
+    userSub: string,
+    chatId: number,
+    limit: number = 50
+  ): Promise<ApiResponse<Document[]> | ApiError> {
+    try {
+      const backendDocs = await realApiClient.getChatDocuments(userSub, chatId, limit);
+      // Map backend documents to frontend Document type
+      const documents: Document[] = backendDocs.map((doc) => mapBackendDocumentToDocument(doc));
+      return {
+        success: true,
+        data: documents,
+        timestamp: new Date(),
+      };
+    } catch (error) {
+      console.error('Error fetching chat documents:', error);
+      return {
+        success: false,
+        error: {
+          code: 'FETCH_CHAT_DOCUMENTS_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to fetch chat documents',
+        },
+        timestamp: new Date(),
+      };
+    }
+  },
+
+  async generateDraft(
+    userSub: string,
+    chatId: number,
+    prompt: string,
+    title?: string
+  ): Promise<ApiResponse<Document> | ApiError> {
+    try {
+      const result = await realApiClient.generateDraft(userSub, chatId, prompt, title);
+      // Convert to frontend Document type
+      const document: Document = {
+        id: result.document_id.toString(),
+        title: result.title,
+        type: 'pdf',
+        size: `${(result.file_size_bytes / 1024).toFixed(2)} KB`,
+        date: new Date(),
+        status: 'completed',
+        url: result.download_url,
+        originalFilename: `${result.title}.pdf`,
+      };
+      return {
+        success: true,
+        data: document,
+        timestamp: new Date(),
+      };
+    } catch (error) {
+      console.error('Error generating draft:', error);
+      return {
+        success: false,
+        error: {
+          code: 'GENERATE_DRAFT_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to generate draft document',
+        },
+        timestamp: new Date(),
+      };
+    }
   },
 
   async analyzeDocument(

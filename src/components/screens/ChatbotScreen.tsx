@@ -41,6 +41,7 @@ import {
   isVisualizationResponse,
   isDraftResponse,
 } from "@/types";
+import { DEFAULT_USER_ID } from "@/lib/constants";
 import {
   LegalDomain,
   Message,
@@ -731,13 +732,31 @@ const RegularMessageBubble = memo(({ message }: { message: Message }) => (
         </div>
       )}
 
-      <p
+      <div
         className={`body-regular ${
           message.sender === "user" ? "text-white" : "text-text-primary"
         }`}
       >
-        {message.content}
-      </p>
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            a: ({ node, ...props }) => (
+              <a
+                {...props}
+                className={`underline ${
+                  message.sender === "user"
+                    ? "text-white hover:text-white/80"
+                    : "text-purple-primary hover:text-purple-700"
+                }`}
+                target="_blank"
+                rel="noopener noreferrer"
+              />
+            ),
+          }}
+        >
+          {message.content}
+        </ReactMarkdown>
+      </div>
       <p
         className={`caption mt-1 ${
           message.sender === "user" ? "text-white/80" : "text-text-secondary"
@@ -789,17 +808,43 @@ export function ChatbotScreen({ domain, onBack, initialSession, collectionId, co
   const [sessionDocuments, setSessionDocuments] = useState<Document[]>([]);
   const [uploading, setUploading] = useState(false);
 
-  // API hooks - Use mock data for general documents, real API for session uploads
-  const { data: mockDocuments, loading: documentsLoading } = useApiCall(
-    () => documentsApi.getDocuments(),
-    []
-  );
+  // Fetch real documents for the current chat session
+  const [chatDocuments, setChatDocuments] = useState<Document[]>([]);
+  const [loadingChatDocuments, setLoadingChatDocuments] = useState(false);
 
-  // Combine mock documents with session-uploaded documents for display
+  // Fetch chat documents when currentSession changes
+  useEffect(() => {
+    const fetchChatDocuments = async () => {
+      if (!currentSession) return;
+
+      // Extract numeric chat ID from session ID
+      const chatIdMatch = currentSession.id.match(/session_(\d+)/);
+      const chatId = chatIdMatch ? parseInt(chatIdMatch[1]) : null;
+
+      if (!chatId) return;
+
+      setLoadingChatDocuments(true);
+      try {
+        const result = await documentsApi.getChatDocuments(DEFAULT_USER_ID, chatId);
+        if (result.success) {
+          setChatDocuments(result.data);
+          console.log(`📄 Loaded ${result.data.length} documents for chat ${chatId}`);
+        }
+      } catch (error) {
+        console.error('Error fetching chat documents:', error);
+      } finally {
+        setLoadingChatDocuments(false);
+      }
+    };
+
+    fetchChatDocuments();
+  }, [currentSession]);
+
+  // Combine chat documents with session-uploaded documents for display
   const availableDocuments = useMemo(() => {
-    const combined = [...(mockDocuments || []), ...sessionDocuments];
+    const combined = [...chatDocuments, ...sessionDocuments];
     return combined;
-  }, [mockDocuments, sessionDocuments]);
+  }, [chatDocuments, sessionDocuments]);
 
   // #TODO: Replace chatApi.createSession with real backend endpoint
   // POST /api/chat/sessions - Create new chat session
@@ -848,6 +893,7 @@ export function ChatbotScreen({ domain, onBack, initialSession, collectionId, co
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const chatFileInputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -882,24 +928,213 @@ export function ChatbotScreen({ domain, onBack, initialSession, collectionId, co
     }
   }, [showDocumentDropdown]);
 
+  // Handle draft generation using the document generation endpoint
+  const handleDraftGeneration = async (prompt: string, chatId: number) => {
+    // Add user's message first
+    const userMessage: Message = {
+      id: `user_${Date.now()}`,
+      content: prompt,
+      sender: "user",
+      timestamp: new Date(),
+      domain,
+    };
+
+    // Add "generating" message
+    const generatingMessage: Message = {
+      id: `gen_${Date.now() + 1}`,
+      content: `📄 Generating document...`,
+      sender: "assistant",
+      timestamp: new Date(),
+      domain,
+    };
+
+    setCurrentSession(prev => ({
+      ...prev!,
+      messages: [...prev!.messages, userMessage, generatingMessage],
+    }));
+
+    try {
+      // Extract title from prompt if possible
+      const titleMatch = prompt.match(/(?:draft|create|generate)\s+(?:a|an)?\s+(.+?)(?:\s+for|\s+with|$)/i);
+      const title = titleMatch ? titleMatch[1].trim() : "Generated Document";
+
+      console.log(`🎯 Calling draft generation API: chatId=${chatId}, prompt="${prompt}"`);
+
+      // Call API to generate draft
+      const result = await documentsApi.generateDraft(
+        DEFAULT_USER_ID, // TODO: Get from auth context
+        chatId,
+        prompt,
+        title
+      );
+
+      if (result.success) {
+        const doc = result.data;
+
+        // Add to chat documents so it appears in dropdown
+        setChatDocuments(prev => [...prev, doc]);
+
+        // Add success message with download link
+        const successMessage: Message = {
+          id: `doc_${Date.now()}`,
+          content: `✅ **Document Generated Successfully!**\n\n**${doc.title}**\n\nSize: ${doc.size}\n\n[📥 Download PDF](${doc.url})\n\nThe document has been added to your chat and can be accessed from the Analysis Mode dropdown.`,
+          sender: "assistant",
+          timestamp: new Date(),
+          domain,
+        };
+
+        // Replace generating message with success message
+        setCurrentSession(prev => ({
+          ...prev!,
+          messages: [...prev!.messages.filter(m => m.id !== generatingMessage.id), successMessage],
+        }));
+
+        // Refresh documents list
+        const refreshResult = await documentsApi.getChatDocuments(DEFAULT_USER_ID, chatId);
+        if (refreshResult.success) {
+          setChatDocuments(refreshResult.data);
+        }
+
+        console.log(`✅ Document generated: ${doc.id} - ${doc.title}`);
+      } else {
+        throw new Error(result.error?.message || 'Failed to generate document');
+      }
+    } catch (error) {
+      console.error('❌ Error generating draft:', error);
+
+      // Add error message
+      const errorMessage: Message = {
+        id: `err_${Date.now()}`,
+        content: `❌ Failed to generate document: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or rephrase your request.`,
+        sender: "assistant",
+        timestamp: new Date(),
+        domain,
+      };
+
+      setCurrentSession(prev => ({
+        ...prev!,
+        messages: [...prev!.messages.filter(m => m.id !== generatingMessage.id), errorMessage],
+      }));
+    }
+  };
+
+  // Handle document editing
+  const handleDocumentEdit = async (document: Document, changes: string, chatId: number) => {
+    try {
+      // Fetch the document file content first
+      console.log(`📄 Fetching document content for: ${document.id}`);
+
+      // Get presigned URL for the document
+      const presignResponse = await fetch(
+        `${getEnvConfig().backendUrl}/documents/${document.id}/presign?owner_sub=${DEFAULT_USER_ID}`
+      );
+
+      if (!presignResponse.ok) {
+        throw new Error(`Failed to get document URL: ${presignResponse.statusText}`);
+      }
+
+      const { url: documentUrl } = await presignResponse.json();
+
+      // Download the document content
+      const docResponse = await fetch(documentUrl);
+      if (!docResponse.ok) {
+        throw new Error(`Failed to download document: ${docResponse.statusText}`);
+      }
+
+      const documentBlob = await docResponse.blob();
+      const documentFile = new File([documentBlob], document.originalFilename || 'document.pdf', {
+        type: document.fileType || 'application/pdf'
+      });
+
+      console.log(`✅ Document fetched: ${documentFile.name} (${documentFile.size} bytes)`);
+
+      // Upload the document to the chat context for the draft agent
+      console.log(`📤 Uploading document to chat context...`);
+      const uploadResult = await documentsApi.upload(
+        { file: documentFile },
+        undefined,
+        chatId
+      );
+
+      if (!uploadResult.success) {
+        throw new Error('Failed to upload document to chat context');
+      }
+
+      console.log(`✅ Document uploaded to chat context`);
+
+      // Create edit prompt that references the uploaded document
+      const editPrompt = `I have uploaded the document "${document.title || document.originalFilename}". Please edit this document with the following changes:
+
+${changes}
+
+Generate a complete, updated version of the document incorporating all the requested changes. Maintain the original document structure and format where not affected by the changes.`;
+
+      // Use the draft generation function with edit context
+      await handleDraftGeneration(editPrompt, chatId);
+
+      // Clear edit mode
+      setSelectedDocumentForEdit(null);
+    } catch (error) {
+      console.error("Error in document edit:", error);
+
+      // Show error to user
+      const errorMessage: Message = {
+        id: `err_${Date.now()}`,
+        content: `❌ Failed to edit document: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again.`,
+        sender: "assistant",
+        timestamp: new Date(),
+        domain,
+      };
+
+      setCurrentSession(prev => ({
+        ...prev!,
+        messages: [...prev!.messages, errorMessage],
+      }));
+
+      // Clear edit mode even on error
+      setSelectedDocumentForEdit(null);
+    }
+  };
+
   const handleSendMessage = async () => {
     if (!inputValue.trim() || !currentSession) return;
 
-    const messageType = isDraftMode ? "draft_request" : "analysis_request";
     const messageContent = inputValue.trim();
+
+    // Extract chat ID for document upload/generation
+    const chatIdMatch = currentSession.id.match(/session_(\d+)/);
+    const chatId = chatIdMatch ? parseInt(chatIdMatch[1]) : Date.now();
+
+    // Check if in draft mode - use document generation endpoint
+    if (isDraftMode) {
+      setInputValue("");
+      await handleDraftGeneration(messageContent, chatId);
+      return;
+    }
+
+    // Check if editing a document
+    if (selectedDocumentForEdit) {
+      setInputValue("");
+      await handleDocumentEdit(selectedDocumentForEdit, messageContent, chatId);
+      return;
+    }
+
+    const messageType = "analysis_request";
     setInputValue("");
 
     // Upload any staged files before sending message
     const stagedDocs = sessionDocuments.filter((doc: any) => doc._staged);
+
     setUploading(true);
 
     try {
       for (const stagedDoc of stagedDocs) {
         if (stagedDoc._file) {
-          console.log(`Uploading staged file: ${stagedDoc.originalFilename}`);
+          console.log(`Uploading staged file: ${stagedDoc.originalFilename} to chat ${chatId}`);
           const uploadResponse = await documentsApi.upload(
             { file: stagedDoc._file },
-            (progress) => console.log(`Upload progress: ${progress}%`)
+            (progress) => console.log(`Upload progress: ${progress}%`),
+            chatId
           );
 
           if (uploadResponse.success) {
@@ -910,6 +1145,15 @@ export function ChatbotScreen({ domain, onBack, initialSession, collectionId, co
             delete stagedDoc._file; // Clean up file reference
             console.log(`Uploaded: ${stagedDoc.originalFilename}`);
           }
+        }
+      }
+
+      // Refresh documents list after upload
+      if (stagedDocs.length > 0) {
+        const refreshResult = await documentsApi.getChatDocuments(DEFAULT_USER_ID, chatId);
+        if (refreshResult.success) {
+          setChatDocuments(refreshResult.data);
+          console.log(`Refreshed documents list: ${refreshResult.data.length} documents`);
         }
       }
     } catch (error) {
@@ -1157,7 +1401,7 @@ export function ChatbotScreen({ domain, onBack, initialSession, collectionId, co
       await collectionsApi.saveConversationToCollection({
         collection_id: collectionId || undefined,
         chat_id: chatId,
-        user_sub: "test-user-1", // TODO: Get from auth context
+        user_sub: DEFAULT_USER_ID, // TODO: Get from auth context
         title: title || undefined,
         domain: domain || undefined,
         messages: serializedMessages,
@@ -1673,7 +1917,7 @@ export function ChatbotScreen({ domain, onBack, initialSession, collectionId, co
                             </div>
                           </div>
 
-                          {documentsLoading ? (
+                          {loadingChatDocuments ? (
                             <div className="px-3 py-4 text-center text-text-secondary">
                               <div className="animate-spin w-4 h-4 border-2 border-purple-primary border-t-transparent rounded-full mx-auto mb-2"></div>
                               Loading documents...
@@ -1929,7 +2173,7 @@ export function ChatbotScreen({ domain, onBack, initialSession, collectionId, co
                 </Button>
 
                 <input
-                  ref={fileInputRef}
+                  ref={chatFileInputRef}
                   type="file"
                   accept=".pdf"
                   onChange={(e) => handleFileUpload(e.target.files)}
@@ -1938,7 +2182,7 @@ export function ChatbotScreen({ domain, onBack, initialSession, collectionId, co
                 <Button
                   variant="ghost"
                   size="small"
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => chatFileInputRef.current?.click()}
                   leftIcon={<Paperclip className="w-4 h-4" />}
                   disabled={uploading}
                 >
@@ -2147,7 +2391,7 @@ export function ChatbotScreen({ domain, onBack, initialSession, collectionId, co
           onSave={handleSaveConversation}
           domain={domain}
           defaultTitle={currentSession?.title || ""}
-          userSub="test-user-1"
+          userSub={DEFAULT_USER_ID}
         />
       </div>
     </div>
