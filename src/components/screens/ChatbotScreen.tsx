@@ -67,6 +67,7 @@ interface ChatbotScreenProps {
   domain: LegalDomain;
   onBack: () => void;
   initialSession?: ChatSession; // For resuming from collection
+  conversationId?: string; // Snapshot ID to load from DynamoDB
   collectionId?: string; // To show which collection this belongs to
   collectionName?: string;
 }
@@ -773,8 +774,8 @@ const RegularMessageBubble = memo(({ message }: { message: Message }) => (
 
 RegularMessageBubble.displayName = "RegularMessageBubble";
 
-export function ChatbotScreen({ domain, onBack, initialSession, collectionId, collectionName }: ChatbotScreenProps) {
-  const [showDocumentPrompt, setShowDocumentPrompt] = useState(!initialSession); // Hide prompt if resuming
+export function ChatbotScreen({ domain, onBack, initialSession, conversationId, collectionId, collectionName }: ChatbotScreenProps) {
+  const [showDocumentPrompt, setShowDocumentPrompt] = useState(!initialSession && !conversationId); // Hide prompt if resuming or viewing saved conversation
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(
     initialSession || null
   );
@@ -812,10 +813,68 @@ export function ChatbotScreen({ domain, onBack, initialSession, collectionId, co
   const [chatDocuments, setChatDocuments] = useState<Document[]>([]);
   const [loadingChatDocuments, setLoadingChatDocuments] = useState(false);
 
-  // Fetch chat documents when currentSession changes
+  // Load conversation snapshot if conversationId is provided
+  useEffect(() => {
+    const loadConversationSnapshot = async () => {
+      if (!conversationId) return;
+
+      console.log(`📥 Loading conversation snapshot: ${conversationId}`);
+
+      try {
+        const result = await collectionsApi.getConversationSnapshot(conversationId, DEFAULT_USER_ID);
+
+        if (result.success && result.data) {
+          const snapshot = result.data;
+          console.log(`✅ Loaded snapshot with ${snapshot.snapshot_data.messages.length} messages`);
+
+          // Convert snapshot messages to ChatSession format
+          const messages: Message[] = snapshot.snapshot_data.messages.map(msg => ({
+            id: msg.id,
+            content: msg.content,
+            sender: msg.sender as 'user' | 'assistant',
+            timestamp: new Date(msg.timestamp),
+            attachments: msg.attachments,
+            domain: msg.domain as LegalDomain,
+            type: msg.type,
+          }));
+
+          // Recreate the session
+          const session: ChatSession = {
+            id: `session_${snapshot.chat_id}`,
+            domain: (snapshot.domain as LegalDomain) || domain,
+            title: snapshot.title,
+            messages,
+            createdAt: new Date(snapshot.created_at),
+            updatedAt: new Date(snapshot.updated_at),
+          };
+
+          setCurrentSession(session);
+          setShowDocumentPrompt(false); // Hide prompt for resumed chats
+
+          // Restore message payloads if available
+          if (snapshot.snapshot_data.messagePayloads) {
+            setMessagePayloads(snapshot.snapshot_data.messagePayloads);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Failed to load conversation snapshot:', error);
+      }
+    };
+
+    loadConversationSnapshot();
+  }, [conversationId, domain]);
+
+  // Fetch chat documents ONLY for resumed/saved chats (not new chats)
   useEffect(() => {
     const fetchChatDocuments = async () => {
       if (!currentSession) return;
+
+      // Only fetch documents if this is a saved/resumed chat (has initialSession or conversationId)
+      // New chats shouldn't fetch documents from backend
+      if (!initialSession && !conversationId) {
+        console.log('⏩ Skipping document fetch for new chat session');
+        return;
+      }
 
       // Extract numeric chat ID from session ID
       const chatIdMatch = currentSession.id.match(/session_(\d+)/);
@@ -838,7 +897,7 @@ export function ChatbotScreen({ domain, onBack, initialSession, collectionId, co
     };
 
     fetchChatDocuments();
-  }, [currentSession]);
+  }, [currentSession, initialSession, conversationId]);
 
   // Combine chat documents with session-uploaded documents for display
   const availableDocuments = useMemo(() => {

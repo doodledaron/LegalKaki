@@ -166,7 +166,7 @@ export function mapBackendCollectionDocumentToDocument(backend: BackendCollectio
     s3Key: backend.s3_key,
     uploadDate: new Date(backend.created_at),
     analysisStatus: 'pending' as const, // Default status since not provided
-    contentSummary: undefined, // Not provided by collection details endpoint
+    contentSummary: backend.content_summary || backend.description,
     collectionId: collectionId.toString(),
     metadata: {
       pages: undefined, // Not provided by collection details endpoint
@@ -293,6 +293,8 @@ export interface BackendCollectionDocument {
   owner_sub: string
   uploaded_in_chat_id: number
   title: string
+  description?: string
+  content_summary?: string
   s3_bucket: string
   s3_key: string
   source_type: string
