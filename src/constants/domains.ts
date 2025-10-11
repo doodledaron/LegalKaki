@@ -1,69 +1,68 @@
 import { CardItem, LegalDomain } from "@/types";
-import { Briefcase, User, Home, Handshake, BookOpen } from "lucide-react";
+import { Building2, FileText, Users, TrendingUp } from "lucide-react";
 import { domainsApi } from "@/api";
 
-// Legacy static export for immediate use - components should use API for fresh data
+// SME/Business Owner Focused Domains
 export const LEGAL_DOMAINS: Record<LegalDomain, CardItem> = {
-  business: {
-    id: "business",
-    emoji: "💼", // Will be replaced with icon component
-    icon: Briefcase,
-    title: "Business",
-    description: "Company registration, contracts, compliance",
+  company_setup: {
+    id: "company_setup",
+    emoji: "🏢",
+    icon: Building2,
+    title: "Company Setup & Compliance",
+    description: "Formation, registration, licenses, annual compliance",
     examples: [
       "SSM registration",
-      "Partnership agreements",
-      "Employment contracts",
+      "Business licenses",
+      "Annual filings",
+      "Company secretarial",
+    ],
+  },
+  contracts: {
+    id: "contracts",
+    emoji: "📄",
+    icon: FileText,
+    title: "Contracts & Agreements",
+    description: "Business contracts, NDAs, service agreements",
+    examples: [
+      "Supplier contracts",
+      "Customer agreements",
+      "NDAs",
+      "Service terms",
     ],
   },
   employment: {
     id: "employment",
-    emoji: "👔", // Will be replaced with icon component
-    icon: User,
-    title: "Employment",
-    description: "Work rights, contracts, disputes",
+    emoji: "👥",
+    icon: Users,
+    title: "Employment & HR",
+    description: "Hiring, contracts, policies, employee disputes",
     examples: [
-      "Employment Act queries",
-      "Salary disputes",
+      "Employment contracts",
+      "HR policies",
       "Termination procedures",
+      "Employee disputes",
     ],
   },
-  property: {
-    id: "property",
-    emoji: "🏠", // Will be replaced with icon component
-    icon: Home,
-    title: "Tenancy",
-    description: "Rental agreements, property disputes",
+  business_growth: {
+    id: "business_growth",
+    emoji: "🚀",
+    icon: TrendingUp,
+    title: "Business Growth",
+    description: "Partnerships, expansion, IP, joint ventures",
     examples: [
-      "Tenancy agreements",
-      "Deposit disputes",
-      "Landlord-tenant issues",
+      "Partnership agreements",
+      "Trademark registration",
+      "Franchise agreements",
+      "IP protection",
     ],
-  },
-  marriage: {
-    id: "marriage",
-    emoji: "🤝", // Will be replaced with icon component
-    icon: Handshake,
-    title: "Partnership",
-    description: "Business partnerships, joint ventures",
-    examples: ["Partnership agreements", "Profit sharing", "Partner disputes"],
-  },
-  general: {
-    id: "general",
-    emoji: "📚", // Will be replaced with icon component
-    icon: BookOpen,
-    title: "General Legal",
-    description: "Other legal matters",
-    examples: ["Legal advice", "Document review", "General queries"],
   },
 };
 
 export const DOMAIN_COLORS: Record<LegalDomain, string> = {
-  business: "#7B68EE",
+  company_setup: "#7B68EE",
+  contracts: "#7B68EE",
   employment: "#7B68EE",
-  property: "#7B68EE",
-  marriage: "#7B68EE",
-  general: "#7B68EE",
+  business_growth: "#7B68EE",
 };
 
 // Helper function to convert API domain info to CardItem format
@@ -75,11 +74,10 @@ export function domainInfoToCardItem(domainInfo: {
   icon: string;
 }): CardItem {
   const iconMap = {
-    briefcase: Briefcase,
-    user: User,
-    home: Home,
-    handshake: Handshake,
-    "book-open": BookOpen,
+    "building-2": Building2,
+    "file-text": FileText,
+    users: Users,
+    "trending-up": TrendingUp,
   };
 
   return {

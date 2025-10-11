@@ -583,11 +583,29 @@ export const chatApi = {
       try {
         const chatId = parseInt(sessionId.replace("session_", "")) || Date.now();
 
+        // Prepare uploaded files if any documents are attached
+        let uploadedFiles: Array<{ name: string; type: string; size: number; content: ArrayBuffer }> | undefined;
+
+        if (request.uploadedDocuments && request.uploadedDocuments.length > 0) {
+          uploadedFiles = request.uploadedDocuments
+            .filter(doc => doc._fileContent) // Only include documents with content
+            .map(doc => ({
+              name: doc._fileName || doc.originalFilename,
+              type: doc._fileType || doc.fileType,
+              size: doc._fileSize || doc.fileSize,
+              content: doc._fileContent as ArrayBuffer
+            }));
+
+          console.log(`[ChatAPI] Sending ${uploadedFiles.length} files to supervisor`,
+            uploadedFiles.map(f => ({ name: f.name, size: f.size })));
+        }
+
         const supervisorResponse = await realApiClient.sendSupervisorMessage(
           chatId,
           request.content,
-          undefined, // TODO: Add file upload support
-          onProgress
+          uploadedFiles,
+          onProgress,
+          request.domain
         );
 
         return {
