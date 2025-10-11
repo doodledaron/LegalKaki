@@ -809,9 +809,31 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
   const [sessionDocuments, setSessionDocuments] = useState<Document[]>([]);
   const [uploading, setUploading] = useState(false);
 
+  // State for collection info (when viewing from collection)
+  const [currentCollectionId, setCurrentCollectionId] = useState<string | undefined>(collectionId);
+  const [currentCollectionName, setCurrentCollectionName] = useState<string | undefined>(collectionName);
+
   // Fetch real documents for the current chat session
   const [chatDocuments, setChatDocuments] = useState<Document[]>([]);
   const [loadingChatDocuments, setLoadingChatDocuments] = useState(false);
+
+  // Fetch collection name if collectionId is provided but name is missing
+  useEffect(() => {
+    const fetchCollectionName = async () => {
+      if (!currentCollectionId || currentCollectionName) return;
+
+      try {
+        const result = await collectionsApi.getCollectionDashboard(currentCollectionId);
+        if (result.success && result.data) {
+          setCurrentCollectionName(result.data.collection.title);
+        }
+      } catch (error) {
+        console.error('Failed to fetch collection name:', error);
+      }
+    };
+
+    fetchCollectionName();
+  }, [currentCollectionId, currentCollectionName]);
 
   // Load conversation snapshot if conversationId is provided
   useEffect(() => {
@@ -1416,8 +1438,22 @@ Generate a complete, updated version of the document incorporating all the reque
 
   const [showSaveModal, setShowSaveModal] = useState(false);
 
-  const handleSaveToCollection = () => {
-    setShowSaveModal(true);
+  const handleSaveToCollection = async () => {
+    // If already in a collection, auto-save without showing modal
+    if (currentCollectionId) {
+      try {
+        await handleSaveConversation(parseInt(currentCollectionId), currentSession?.title);
+        // Show success feedback
+        console.log(`✅ Auto-saved to collection: ${currentCollectionName}`);
+        // TODO: Show toast notification
+      } catch (error) {
+        console.error('Failed to auto-save to collection:', error);
+        // TODO: Show error notification
+      }
+    } else {
+      // Show modal to create new collection or select existing
+      setShowSaveModal(true);
+    }
   };
 
   const handleSaveConversation = async (collectionId: number | undefined, title?: string) => {
@@ -1469,6 +1505,14 @@ Generate a complete, updated version of the document incorporating all the reque
       });
 
       console.log("✅ Conversation saved successfully");
+
+      // Update local state to show collection info in button
+      if (collectionId && !currentCollectionId) {
+        setCurrentCollectionId(collectionId.toString());
+      }
+      if (title && !currentCollectionName) {
+        setCurrentCollectionName(title);
+      }
     } catch (error) {
       console.error("Failed to save conversation:", error);
       throw error;
@@ -2220,7 +2264,9 @@ Generate a complete, updated version of the document incorporating all the reque
                   onClick={handleSaveToCollection}
                   leftIcon={<Bookmark className="w-4 h-4" />}
                 >
-                  Save to Collection
+                  {currentCollectionId && currentCollectionName
+                    ? `In: ${currentCollectionName}`
+                    : 'Save to Collection'}
                 </Button>
                 <Button
                   variant="ghost"
