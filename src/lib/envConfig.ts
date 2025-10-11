@@ -14,17 +14,17 @@ export interface EnvConfig {
  * Get environment configuration based on environment variables
  */
 export function getEnvConfig(): EnvConfig {
-  const isDevMode = process.env.NEXT_PUBLIC_DEV_MODE === 'true' || 
-                   process.env.NODE_ENV === 'development';
-  
+  // Use NEXT_PUBLIC_DEV_MODE explicitly, not NODE_ENV
+  // This allows controlling backend URL independently of Next.js build mode
+  const isDevMode = process.env.NEXT_PUBLIC_DEV_MODE === 'true';
   const isProduction = process.env.NODE_ENV === 'production' && !isDevMode;
-  
+
   // Determine backend URL with priority:
   // 1. Manual override (NEXT_PUBLIC_BACKEND_URL)
-  // 2. DEV_MODE setting (localhost:8000)
-  // 3. Production URL from env or default
+  // 2. NEXT_PUBLIC_DEV_MODE=true → localhost:8000
+  // 3. Production URL from NEXT_PUBLIC_API_BASE_URL or default
   let backendUrl: string;
-  
+
   if (process.env.NEXT_PUBLIC_BACKEND_URL) {
     backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
   } else if (isDevMode) {

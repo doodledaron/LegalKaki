@@ -10,6 +10,7 @@ import { api } from '@/api'
 import { Document as DocumentType } from '@/types'
 import { collectionApiClient } from '@/api/realApi'
 import { getUserId } from '@/lib/auth-utils'
+import { getEnvConfig } from '@/lib/envConfig'
 
 // Configure PDF.js worker for react-pdf v9
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -100,7 +101,7 @@ export function PDFViewer({ document, onClose, collectionId }: PDFViewerProps) {
             // Use backend proxy endpoint to avoid CORS issues
             try {
               console.log('🔄 Using backend proxy for document:', document.id)
-              const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+              const backendUrl = getEnvConfig().backendUrl
               const contentUrl = `${backendUrl}/documents/${document.id}/content?owner_sub=${userId}`
 
               console.log('📡 Using proxied content URL:', contentUrl)
@@ -129,7 +130,7 @@ export function PDFViewer({ document, onClose, collectionId }: PDFViewerProps) {
           // Use backend proxy endpoint (fallback)
           try {
             console.log('🔄 Using backend proxy (fallback)...')
-            const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+            const backendUrl = getEnvConfig().backendUrl
             const contentUrl = `${backendUrl}/documents/${document.id}/content?owner_sub=${userId}`
 
             console.log('📡 Using proxied content URL (fallback):', contentUrl)

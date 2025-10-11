@@ -13,6 +13,7 @@ import { generateMindMapCode, createMindMapDataFromCollection, generateEnhancedM
 import { collectionsApi, useApiCall, useApiMutation, toolsApi } from '@/api'
 import { ConfirmDeleteModal } from '@/components/modals/ConfirmDeleteModal'
 import { getUserId } from '@/lib/auth-utils'
+import { getEnvConfig } from '@/lib/envConfig'
 
 interface CollectionDashboardProps {
   collectionId: string
@@ -165,7 +166,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
       console.log('📝 Generating summaries for collection:', collectionId, 'user:', userId)
 
       // Call backend endpoint to generate summaries
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+      const backendUrl = getEnvConfig().backendUrl
       const response = await fetch(`${backendUrl}/collections/${collectionId}/generate-summaries?user_sub=${userId}`, {
         method: 'POST',
       })

@@ -21,10 +21,6 @@ import {
 import { getBackendUrl, getEnvConfig } from "@/lib/envConfig";
 import { getUserId } from "@/lib/auth-utils";
 
-// http://43.217.199.206:8000
-// Backend API service for highlight explainer
-const BACKEND_BASE_URL = "http://43.217.199.206:8000";
-
 export interface BackendExplainRequest {
   sentence: string;
 }
@@ -98,7 +94,8 @@ export const authApi = {
   ): Promise<ApiResponse<SignUpResponse> | ApiError> {
     try {
       // Use real API for signup
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/signup`, {
+      const backendUrl = getEnvConfig().backendUrl;
+      const response = await fetch(`${backendUrl}/auth/signup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -148,7 +145,8 @@ export const authApi = {
   ): Promise<ApiResponse<ConfirmSignupResponse> | ApiError> {
     try {
       // Use real API for confirmation
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/confirm-signup`, {
+      const backendUrl = getEnvConfig().backendUrl;
+      const response = await fetch(`${backendUrl}/auth/confirm-signup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -197,7 +195,8 @@ export const authApi = {
   ): Promise<ApiResponse<ResendCodeResponse> | ApiError> {
     try {
       // Use real API for resending verification code
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/resend-code`, {
+      const backendUrl = getEnvConfig().backendUrl;
+      const response = await fetch(`${backendUrl}/auth/resend-code`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -245,7 +244,8 @@ export const authApi = {
   ): Promise<ApiResponse<SignInResponse> | ApiError> {
     try {
       // Use real API for signin
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/signin`, {
+      const backendUrl = getEnvConfig().backendUrl;
+      const response = await fetch(`${backendUrl}/auth/signin`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -364,12 +364,13 @@ export const userApi = {
     try {
       // Use real API to get user profile
       const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null
-      
+
       if (!token) {
         throw new Error('No authentication token found')
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/me`, {
+      const backendUrl = getEnvConfig().backendUrl;
+      const response = await fetch(`${backendUrl}/auth/me`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -604,7 +605,8 @@ export const chatApi = {
   ): Promise<ApiResponse<SendMessageResponse> | ApiError> {
     // Check if we should use real API or mock based on environment
     const envConfig = getEnvConfig();
-    const shouldUseRealApi = envConfig.isDevMode; // Use real API in dev mode
+    // Use real API when NOT in dev mode (production), or always use real API
+    const shouldUseRealApi = true; // Always use real API
 
     console.log("[ChatAPI] Environment config:", {
       isDevMode: envConfig.isDevMode,
@@ -959,12 +961,13 @@ export const documentsApi = {
     documentId: string
   ): Promise<ApiResponse<{ url: string }> | ApiError> {
     try {
+      const backendUrl = getEnvConfig().backendUrl;
       // Try multiple backend endpoints for document access
       const endpoints = [
-        `${BACKEND_BASE_URL}/documents/${documentId}/proxy`,
-        `${BACKEND_BASE_URL}/documents/${documentId}/signed-url`,
-        `${BACKEND_BASE_URL}/documents/${documentId}/download`,
-        `${BACKEND_BASE_URL}/documents/${documentId}/stream`
+        `${backendUrl}/documents/${documentId}/proxy`,
+        `${backendUrl}/documents/${documentId}/signed-url`,
+        `${backendUrl}/documents/${documentId}/download`,
+        `${backendUrl}/documents/${documentId}/stream`
       ];
 
       for (const endpoint of endpoints) {
@@ -1775,7 +1778,7 @@ export const toolsApi = {
       console.log('📤 Sending form data with collection_id:', formData.get('collection_id'));
       console.log('📤 Sending form data with session_id:', formData.get('session_id'));
 
-      const response = await fetch(`${BACKEND_BASE_URL}/messages/generate-mindmap`, {
+      const response = await fetch(`${getEnvConfig().backendUrl}/messages/generate-mindmap`, {
         method: 'POST',
         body: formData, // Send as form data, not JSON
       });
@@ -2032,7 +2035,7 @@ export const pdfApi = {
   // Backend API service for highlight explainer
   async explainSentence(sentence: string): Promise<BackendExplainResponse> {
     try {
-      const response = await fetch(`${BACKEND_BASE_URL}/explain/sentence`, {
+      const response = await fetch(`${getEnvConfig().backendUrl}/explain/sentence`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

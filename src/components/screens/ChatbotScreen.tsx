@@ -1549,6 +1549,11 @@ Generate a complete, updated version of the document incorporating all the reque
         type: msg.type,
       }));
 
+      // Debug: Log all document sources
+      console.log('📋 Document sources before save:');
+      console.log('  sessionDocuments:', sessionDocuments.length, sessionDocuments);
+      console.log('  chatDocuments:', chatDocuments.length, chatDocuments);
+
       // Extract staged files (files with _staged flag that haven't been uploaded yet)
       const stagedFiles = sessionDocuments
         .filter((doc: StagedDocument) => doc._staged && doc._fileContent)
@@ -1565,6 +1570,8 @@ Generate a complete, updated version of the document incorporating all the reque
         .map(doc => parseInt(doc.id));
 
       console.log(`📤 Saving conversation with ${stagedFiles.length} staged files and ${existingDocumentIds.length} existing documents`);
+      console.log('  Staged files:', stagedFiles);
+      console.log('  Existing document IDs:', existingDocumentIds);
 
       // Extract numeric chat ID from session ID (e.g., "session_1234567_abc" -> 1234567)
       const chatIdMatch = currentSession.id.match(/session_(\d+)/);
