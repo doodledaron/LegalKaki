@@ -2,6 +2,7 @@
 
 import { CollectionList } from '@/components/screens/CollectionList'
 import { useRouter } from 'next/navigation'
+import { AuthGuard } from '@/components/auth/AuthGuard'
 
 export default function CollectionsPage() {
   const router = useRouter()
@@ -19,10 +20,12 @@ export default function CollectionsPage() {
   }
 
   return (
-    <CollectionList 
-      onBack={handleBack}
-      onSelectCollection={handleSelectCollection}
-      onStartNewChat={handleStartNewChat}
-    />
+    <AuthGuard>
+      <CollectionList 
+        onBack={handleBack}
+        onSelectCollection={handleSelectCollection}
+        onStartNewChat={handleStartNewChat}
+      />
+    </AuthGuard>
   )
 }

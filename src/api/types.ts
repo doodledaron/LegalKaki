@@ -387,6 +387,37 @@ export interface SignInResponse {
   expiresAt: Date
 }
 
+// New authentication types for real API endpoints
+export interface SignUpRequest {
+  full_name: string
+  email: string
+  password: string
+}
+
+export interface SignUpResponse {
+  message: string
+  user_id?: string
+}
+
+export interface ConfirmSignupRequest {
+  username: string
+  confirmation_code: string
+}
+
+export interface ConfirmSignupResponse {
+  message: string
+  verified: boolean
+}
+
+export interface ResendCodeRequest {
+  email: string
+}
+
+export interface ResendCodeResponse {
+  message: string
+  sent: boolean
+}
+
 // Domain Types
 export interface DomainInfo {
   id: LegalDomain
