@@ -15,6 +15,7 @@ import { Document } from "@/types";
 import { mockClient } from "./mockClient";
 import { getEnvConfig } from "@/lib/envConfig";
 import { DEFAULT_USER_ID } from "@/lib/constants";
+import { getUserId } from "@/lib/auth-utils";
 
 // Structured response interface for mode detection
 interface StructuredResponse {
@@ -221,7 +222,7 @@ export class RealApiClient {
     onProgress?: (progress: number) => void,
     chatId?: number
   ): Promise<UploadDocumentResponse> {
-    const userSub = DEFAULT_USER_ID; // TODO: Get from auth context
+    const userSub = getUserId();
     const providedChatId = chatId || Date.now();
 
     // Ensure chat exists in backend before uploading (may return different ID)
@@ -277,7 +278,7 @@ export class RealApiClient {
 
             resolve({
               document,
-              uploadUrl: `${this.baseUrl}/documents/${response.document_id}/presign?owner_sub=${DEFAULT_USER_ID}`,
+              uploadUrl: `${this.baseUrl}/documents/${response.document_id}/presign?owner_sub=${getUserId()}`,
               analysisJobId: response.document_id?.toString(),
             });
           } catch (error) {
@@ -316,7 +317,7 @@ export class RealApiClient {
       console.log("Uploading to:", uploadUrl);
       console.log("FormData fields:", {
         file: file.name,
-        owner_sub: DEFAULT_USER_ID,
+        owner_sub: getUserId(),
         uploaded_in_chat_id: chatId || "auto-generated",
         title: file.name,
       });
@@ -1587,8 +1588,8 @@ export class CollectionApiClient {
       `${this.baseUrl}/collections/with-conversations?owner_sub=${userSub}&limit=${limit}&offset=${offset}`,
       // Approach 2: Try without user filter (get all collections)
       `${this.baseUrl}/collections/with-conversations?limit=${limit}&offset=${offset}`,
-      // Approach 3: Try with a default user ID that might exist in the backend
-      `${this.baseUrl}/collections/with-conversations?owner_sub=${DEFAULT_USER_ID}&limit=${limit}&offset=${offset}`,
+      // Approach 3: Try with authenticated user ID as fallback
+      `${this.baseUrl}/collections/with-conversations?owner_sub=${getUserId()}&limit=${limit}&offset=${offset}`,
     ];
 
     for (const url of approaches) {

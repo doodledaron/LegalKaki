@@ -20,6 +20,7 @@ import {
 } from "./mockData";
 import { getBackendUrl, getEnvConfig } from "@/lib/envConfig";
 import { DEFAULT_USER_ID } from "@/lib/constants";
+import { getUserId } from "@/lib/auth-utils";
 
 // Backend URL from environment configuration
 const BACKEND_BASE_URL = getBackendUrl();
@@ -801,7 +802,7 @@ export const documentsApi = {
             fileType: request.file.type,
             fileSize: request.file.size,
             s3Bucket: "legalkaki-documents",
-            s3Key: `documents/${DEFAULT_USER_ID}/${
+            s3Key: `documents/${getUserId()}/${
               uploadResult.data.fileId
             }.${request.file.name.split(".").pop()}`,
             uploadDate: new Date(),
@@ -1299,7 +1300,7 @@ export const collectionsApi = {
         throw new Error("Invalid collection ID");
       }
 
-      const userSub = DEFAULT_USER_ID; // TODO: Get from auth context
+      const userSub = getUserId();
 
       // Call backend DELETE endpoint
       const response = await fetch(`${getBackendUrl()}/collections/${collectionIdNum}?owner_sub=${userSub}`, {

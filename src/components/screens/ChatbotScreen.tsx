@@ -43,7 +43,7 @@ import {
   isVisualizationResponse,
   isDraftResponse,
 } from "@/types";
-import { DEFAULT_USER_ID } from "@/lib/constants";
+import { getUserId } from "@/lib/auth-utils";
 import {
   LegalDomain,
   Message,
@@ -837,7 +837,7 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
       console.log(`📥 Loading conversation snapshot: ${conversationId}`);
 
       try {
-        const result = await collectionsApi.getConversationSnapshot(conversationId, DEFAULT_USER_ID);
+        const result = await collectionsApi.getConversationSnapshot(conversationId, getUserId());
 
         if (result.success && result.data) {
           const snapshot = result.data;
@@ -936,7 +936,7 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
 
       setLoadingChatDocuments(true);
       try {
-        const result = await documentsApi.getChatDocuments(DEFAULT_USER_ID, chatId);
+        const result = await documentsApi.getChatDocuments(getUserId(), chatId);
         if (result.success) {
           setChatDocuments(result.data);
           console.log(`📄 Loaded ${result.data.length} documents for chat ${chatId}`);
@@ -1073,7 +1073,7 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
 
       // Call API to generate draft
       const result = await documentsApi.generateDraft(
-        DEFAULT_USER_ID, // TODO: Get from auth context
+        getUserId(), // TODO: Get from auth context
         chatId,
         prompt,
         title
@@ -1101,7 +1101,7 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
         }));
 
         // Refresh documents list
-        const refreshResult = await documentsApi.getChatDocuments(DEFAULT_USER_ID, chatId);
+        const refreshResult = await documentsApi.getChatDocuments(getUserId(), chatId);
         if (refreshResult.success) {
           setChatDocuments(refreshResult.data);
         }
@@ -1137,7 +1137,7 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
 
       // Get presigned URL for the document
       const presignResponse = await fetch(
-        `${getEnvConfig().backendUrl}/documents/${document.id}/presign?owner_sub=${DEFAULT_USER_ID}`
+        `${getEnvConfig().backendUrl}/documents/${document.id}/presign?owner_sub=${getUserId()}`
       );
 
       if (!presignResponse.ok) {
@@ -1261,7 +1261,7 @@ Generate a complete, updated version of the document incorporating all the reque
 
       // Refresh documents list after upload
       if (stagedDocs.length > 0) {
-        const refreshResult = await documentsApi.getChatDocuments(DEFAULT_USER_ID, chatId);
+        const refreshResult = await documentsApi.getChatDocuments(getUserId(), chatId);
         if (refreshResult.success) {
           setChatDocuments(refreshResult.data);
           console.log(`Refreshed documents list: ${refreshResult.data.length} documents`);
@@ -1531,7 +1531,7 @@ Generate a complete, updated version of the document incorporating all the reque
       await collectionsApi.saveConversationToCollection({
         collection_id: collectionId || undefined,
         chat_id: chatId,
-        user_sub: DEFAULT_USER_ID, // TODO: Get from auth context
+        user_sub: getUserId(), // TODO: Get from auth context
         title: title || undefined,
         domain: domain || undefined,
         messages: serializedMessages,
@@ -2387,7 +2387,7 @@ Generate a complete, updated version of the document incorporating all the reque
           onSave={handleSaveConversation}
           domain={domain}
           defaultTitle={currentSession?.title || ""}
-          userSub={DEFAULT_USER_ID}
+          userSub={getUserId()}
         />
       </div>
     </div>

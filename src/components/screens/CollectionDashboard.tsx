@@ -12,6 +12,7 @@ import { ActionItem, Document } from '@/types'
 import { generateMindMapCode, createMindMapDataFromCollection, generateEnhancedMindMap, EnhancedMindMapData, InteractiveMindMapNode } from '@/lib/mindMapGenerator'
 import { collectionsApi, useApiCall, useApiMutation } from '@/api'
 import { ConfirmDeleteModal } from '@/components/modals/ConfirmDeleteModal'
+import { getUserId } from '@/lib/auth-utils'
 
 interface CollectionDashboardProps {
   collectionId: string
@@ -162,7 +163,8 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
 
       // Call backend endpoint to generate summaries
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
-      const response = await fetch(`${backendUrl}/collections/${collectionId}/generate-summaries?user_sub=test-user-1`, {
+      const userSub = getUserId()
+      const response = await fetch(`${backendUrl}/collections/${collectionId}/generate-summaries?user_sub=${userSub}`, {
         method: 'POST',
       })
 
