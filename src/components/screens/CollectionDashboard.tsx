@@ -5,12 +5,13 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
-import { ArrowLeft, Grid, List, CheckCircle, Clock, AlertTriangle, Eye, MoreVertical, ExternalLink, ClipboardList, FileText, Settings, Calendar, MessageCircle, Brain, Music, FileIcon, FileSpreadsheet, ImageIcon, Loader2, Sparkles } from 'lucide-react'
+import { ArrowLeft, Grid, List, CheckCircle, Clock, AlertTriangle, Eye, MoreVertical, ExternalLink, ClipboardList, FileText, Settings, Calendar, MessageCircle, Brain, Music, FileIcon, FileSpreadsheet, ImageIcon, Loader2, Sparkles, Trash2 } from 'lucide-react'
 import { PDFViewer } from '@/components/ui/PDFViewer'
 import { MindMapViewer } from '@/components/ui/MindMapViewer'
 import { ActionItem, Document } from '@/types'
 import { generateMindMapCode, createMindMapDataFromCollection, generateEnhancedMindMap, EnhancedMindMapData, InteractiveMindMapNode } from '@/lib/mindMapGenerator'
-import { collectionsApi, useApiCall } from '@/api'
+import { collectionsApi, useApiCall, useApiMutation } from '@/api'
+import { ConfirmDeleteModal } from '@/components/modals/ConfirmDeleteModal'
 
 interface CollectionDashboardProps {
   collectionId: string
@@ -29,12 +30,17 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
   const [enhancedMindMapData, setEnhancedMindMapData] = useState<EnhancedMindMapData | null>(null)
   const [isGeneratingMindMap, setIsGeneratingMindMap] = useState(false)
   const [generatingSummaries, setGeneratingSummaries] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
 
   const { 
     data: dashboardData, 
     loading: dashboardLoading, 
     error: dashboardError 
   } = useApiCall(() => collectionsApi.getCollectionDashboard(collectionId), [collectionId])
+
+  const { mutate: deleteCollection, loading: isDeleting } = useApiMutation(
+    collectionsApi.deleteCollection
+  )
 
   // Use API data or fallback to empty data
   const collectionData = dashboardData?.collection || {
@@ -275,6 +281,17 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
     }
   }
 
+  const handleDeleteCollection = async () => {
+    try {
+      await deleteCollection(collectionId)
+      console.log('✅ Collection deleted successfully')
+      onBack() // Navigate back to collection list after successful deletion
+    } catch (error) {
+      console.error('❌ Failed to delete collection:', error)
+      // Error handling is done by the useApiMutation hook
+    }
+  }
+
   // Loading state
   if (dashboardLoading) {
     return (
@@ -345,6 +362,15 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
               leftIcon={<ArrowLeft className="w-4 h-4" />}
             >
               Back
+            </Button>
+            <Button
+              variant="ghost"
+              size="small"
+              onClick={() => setShowDeleteModal(true)}
+              leftIcon={<Trash2 className="w-4 h-4 text-red-500" />}
+              className="text-red-500 hover:bg-red-50 hover:text-red-600"
+            >
+              Delete Collection
             </Button>
           </div>
           
