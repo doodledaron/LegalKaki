@@ -8,9 +8,11 @@ import { ChevronRight } from 'lucide-react'
 interface WelcomeScreenProps {
   onGetStarted: () => void
   onViewCollection?: () => void
+  onLogin?: () => void
+  onSignUp?: () => void
 }
 
-export function WelcomeScreen({ onGetStarted, onViewCollection }: WelcomeScreenProps) {
+export function WelcomeScreen({ onGetStarted, onViewCollection, onLogin, onSignUp }: WelcomeScreenProps) {
   const [isLoading, setIsLoading] = useState(false)
 
   const handleGetStarted = () => {
@@ -287,21 +289,44 @@ export function WelcomeScreen({ onGetStarted, onViewCollection }: WelcomeScreenP
           </motion.button>
         </motion.div>
 
-        {/* Secondary Action */}
-        {onViewCollection && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 1.0 }}
-          >
+        {/* Secondary Actions */}
+        <motion.div
+          className="flex flex-col items-center space-y-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.6, delay: 1.0 }}
+        >
+          {onViewCollection && (
             <button
               onClick={onViewCollection}
               className="text-text-secondary hover:text-purple-primary transition-colors duration-300 text-base underline underline-offset-4"
             >
               View existing collections
             </button>
-          </motion.div>
-        )}
+          )}
+          
+          {/* Auth Options */}
+          {(onLogin || onSignUp) && (
+            <div className="flex items-center space-x-6 mt-4">
+              {onLogin && (
+                <button
+                  onClick={onLogin}
+                  className="text-text-secondary hover:text-purple-primary transition-colors duration-300 text-sm"
+                >
+                  Sign In
+                </button>
+              )}
+              {onSignUp && (
+                <button
+                  onClick={onSignUp}
+                  className="text-purple-primary hover:text-purple-dark font-medium transition-colors duration-300 text-sm"
+                >
+                  Sign Up
+                </button>
+              )}
+            </div>
+          )}
+        </motion.div>
       </motion.div>
 
       {/* Bottom Brand */}

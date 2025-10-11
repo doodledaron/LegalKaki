@@ -14,10 +14,20 @@ export default function Home() {
     router.push('/collections')
   }
 
+  const handleLogin = () => {
+    router.push('/login')
+  }
+
+  const handleSignUp = () => {
+    router.push('/signup')
+  }
+
   return (
     <WelcomeScreen 
       onGetStarted={handleGetStarted} 
-      onViewCollection={handleViewCollection} 
+      onViewCollection={handleViewCollection}
+      onLogin={handleLogin}
+      onSignUp={handleSignUp}
     />
   )
 }

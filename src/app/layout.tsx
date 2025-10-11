@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { SideNavigation } from '@/components/layout/SideNavigation'
+import { ConditionalLayout } from '@/components/layout/ConditionalLayout'
 
 // Polyfill for Promise.withResolvers (for PDF.js compatibility)
 if (!Promise.withResolvers) {
@@ -36,12 +36,9 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full">
       <body className="h-full font-sans text-text-primary bg-background antialiased">
-        <div className="flex h-full">
-          <SideNavigation />
-          <main className="flex-1 overflow-auto">
-            {children}
-          </main>
-        </div>
+        <ConditionalLayout>
+          {children}
+        </ConditionalLayout>
       </body>
     </html>
   );
