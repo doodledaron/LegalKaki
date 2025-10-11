@@ -21,8 +21,9 @@ import {
 import { getBackendUrl, getEnvConfig } from "@/lib/envConfig";
 import { DEFAULT_USER_ID } from "@/lib/constants";
 
-// Backend URL from environment configuration
-const BACKEND_BASE_URL = getBackendUrl();
+// http://43.217.199.206:8000
+// Backend API service for highlight explainer
+const BACKEND_BASE_URL = "http://43.217.199.206:8000";
 
 export interface BackendExplainRequest {
   sentence: string;
@@ -70,9 +71,8 @@ import {
   mapBackendActionToActionItem,
   mapBackendDocumentToDocument,
   mapBackendCollectionDocumentToDocument,
-  SaveConversationRequest,
-  ConversationSnapshot,
-  ConversationListItem,
+  MindMapGenerationResponse,
+  MindMapBackendResponse,
 } from "./types";
 import { LegalDomain, Message, Document, ActionItem, ChatSession } from "@/types";
 
@@ -1745,19 +1745,115 @@ export const toolsApi = {
   },
 
   async generateMindmap(
-    collectionId: string
-  ): Promise<ApiResponse<{ mindmapUrl: string }> | ApiError> {
-    return mockClient.request(
-      async () => {
-        return {
-          mindmapUrl: `#/mindmap/${collectionId}`,
-        };
-      },
-      "slow",
-      {
-        successMessage: "Mind map generated successfully",
+    collectionId: string,
+    sessionId?: string | null
+  ): Promise<ApiResponse<MindMapGenerationResponse> | ApiError> {
+    try {
+      console.log('🚀 Calling backend mind map API for collection:', collectionId);
+      console.log('🔍 Collection ID type:', typeof collectionId);
+      console.log('🔍 Collection ID value:', collectionId);
+
+      const parsedCollectionId = parseInt(collectionId);
+      console.log('🔍 Parsed collection ID:', parsedCollectionId);
+      console.log('🔍 Is valid number:', !isNaN(parsedCollectionId));
+
+      // Backend expects form data, not JSON
+      const formData = new FormData();
+      formData.append('collection_id', (!isNaN(parsedCollectionId) ? parsedCollectionId : 1).toString());
+      if (sessionId) {
+        formData.append('session_id', sessionId);
       }
-    );
+
+      console.log('📤 Sending form data with collection_id:', formData.get('collection_id'));
+      console.log('📤 Sending form data with session_id:', formData.get('session_id'));
+
+      const response = await fetch(`${BACKEND_BASE_URL}/messages/generate-mindmap`, {
+        method: 'POST',
+        body: formData, // Send as form data, not JSON
+      });
+
+      console.log('📥 Response status:', response.status, response.statusText);
+
+      if (!response.ok) {
+        // Try to get error details from response
+        let errorDetails = '';
+        try {
+          const errorData = await response.json();
+          errorDetails = JSON.stringify(errorData);
+          console.error('❌ Error response data:', errorData);
+        } catch (e) {
+          const errorText = await response.text();
+          errorDetails = errorText;
+          console.error('❌ Error response text:', errorText);
+        }
+        throw new Error(`Backend API error: ${response.status} ${response.statusText}. Details: ${errorDetails}`);
+      }
+
+      const data: MindMapBackendResponse = await response.json();
+      console.log('✅ Backend mind map API response:', data);
+
+      // Parse agent_response if it's a string
+      let parsedAgentResponse: {
+        version: string
+        generatedAt: string
+        type: string
+        title: string
+        summary: string
+        data: Record<string, unknown>
+      };
+
+      if (typeof data.agent_response === 'string') {
+        console.log('📝 Parsing agent_response string...');
+
+        // Strip markdown code blocks (```json ... ``` or ``` ... ```)
+        let cleanedResponse = data.agent_response.trim();
+
+        // Remove ```json and ``` markers
+        if (cleanedResponse.startsWith('```')) {
+          console.log('🧹 Removing markdown code block markers...');
+          // Remove opening ```json or ```
+          cleanedResponse = cleanedResponse.replace(/^```(?:json)?\s*\n?/, '');
+          // Remove closing ```
+          cleanedResponse = cleanedResponse.replace(/\n?```\s*$/, '');
+          console.log('✅ Cleaned response (first 200 chars):', cleanedResponse.substring(0, 200));
+        }
+
+        try {
+          parsedAgentResponse = JSON.parse(cleanedResponse);
+          console.log('✅ Parsed agent_response:', parsedAgentResponse);
+        } catch (parseError) {
+          console.error('❌ Failed to parse agent_response as JSON:', parseError);
+          console.log('📄 Raw agent_response:', data.agent_response);
+          console.log('📄 Cleaned agent_response:', cleanedResponse);
+          throw new Error('Agent response is not valid JSON');
+        }
+      } else {
+        parsedAgentResponse = data.agent_response;
+      }
+
+      return {
+        success: true,
+        data: {
+          collectionId: data.collection_id.toString(),
+          collectionName: data.collection_name,
+          agentResponse: parsedAgentResponse,
+          sessionId: data.session_id,
+          tracesCount: data.traces_count
+        },
+        timestamp: new Date().toISOString(),
+        message: "Mind map generated successfully",
+      };
+    } catch (error) {
+      console.error('❌ Backend mind map API failed:', error);
+
+      // Return error instead of falling back
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to generate mind map',
+        code: 'MINDMAP_GENERATION_ERROR',
+        timestamp: new Date().toISOString(),
+      };
+    }
   },
 
   async generateMindMapInsights(request: {

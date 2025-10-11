@@ -26,7 +26,7 @@ interface Tooltip {
   x: number
   y: number
   visible: boolean
-  category: string
+  category?: string
   selectedText?: string
   confidence?: number
 }
@@ -221,9 +221,7 @@ export function PDFViewer({ document, onClose, collectionId }: PDFViewerProps) {
           x: rect.left - viewerRect.left + rect.width / 2,
           y: rect.top - viewerRect.top - 10,
           visible: true,
-          category: 'general', // Backend doesn't provide category, default to general
-          selectedText: selectedText,
-          confidence: 85 // Backend provides high-quality explanations
+          selectedText: selectedText
         })
         
         // Add to highlighted terms
@@ -566,7 +564,7 @@ export function PDFViewer({ document, onClose, collectionId }: PDFViewerProps) {
                 initial={{ opacity: 0, y: 10, scale: 0.9 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 10, scale: 0.9 }}
-                className={`absolute z-50 max-w-sm p-3 rounded-lg shadow-xl border-2 ${getTooltipStyle(tooltip.category)}`}
+                className={`absolute z-50 max-w-sm max-h-96 overflow-y-auto p-3 rounded-lg shadow-xl border-2 ${getTooltipStyle(tooltip.category || 'general')}`}
                 style={{
                   left: tooltip.x,
                   top: tooltip.y,
@@ -575,17 +573,19 @@ export function PDFViewer({ document, onClose, collectionId }: PDFViewerProps) {
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-start space-x-2">
-                  <div className={`w-3 h-3 rounded-full ${getCategoryColor(tooltip.category)} flex-shrink-0 mt-1`}></div>
-                  <div>
-                    <div 
+                  <div className={`w-3 h-3 rounded-full ${getCategoryColor(tooltip.category || 'general')} flex-shrink-0 mt-1`}></div>
+                  <div className="flex-1 min-w-0">
+                    <div
                       className="body-small text-text-primary leading-relaxed [&_strong]:font-bold [&_strong]:text-gray-900"
                       dangerouslySetInnerHTML={{ __html: tooltip.content }}
                     />
                     <div className="flex items-center justify-between mt-2">
                       <div className="flex items-center space-x-2">
-                        <span className="caption text-text-secondary capitalize">
-                          {tooltip.category.replace('-', ' ')}
-                        </span>
+                        {tooltip.category && (
+                          <span className="caption text-text-secondary capitalize">
+                            {tooltip.category.replace('-', ' ')}
+                          </span>
+                        )}
                         {tooltip.confidence !== undefined && tooltip.confidence > 0 && (
                           <span className="caption text-text-secondary">
                             • {tooltip.confidence}% confidence

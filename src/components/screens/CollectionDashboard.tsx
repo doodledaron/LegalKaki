@@ -5,13 +5,12 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
-import { ArrowLeft, Grid, List, CheckCircle, Clock, AlertTriangle, Eye, MoreVertical, ExternalLink, ClipboardList, FileText, Settings, Calendar, MessageCircle, Brain, Music, FileIcon, FileSpreadsheet, ImageIcon, Loader2, Sparkles, Trash2 } from 'lucide-react'
+import { ArrowLeft, Grid, List, CheckCircle, Clock, AlertTriangle, Eye, MoreVertical, ExternalLink, ClipboardList, FileText, Calendar, MessageCircle, Brain, FileIcon, FileSpreadsheet, ImageIcon, Loader2 } from 'lucide-react'
 import { PDFViewer } from '@/components/ui/PDFViewer'
 import { MindMapViewer } from '@/components/ui/MindMapViewer'
 import { ActionItem, Document } from '@/types'
-import { generateMindMapCode, createMindMapDataFromCollection, generateEnhancedMindMap, EnhancedMindMapData, InteractiveMindMapNode } from '@/lib/mindMapGenerator'
-import { collectionsApi, useApiCall, useApiMutation } from '@/api'
-import { ConfirmDeleteModal } from '@/components/modals/ConfirmDeleteModal'
+import { generateMindMapCode, createMindMapDataFromCollection, generateEnhancedMindMap, generateMindMapFromBackendResponse, EnhancedMindMapData, InteractiveMindMapNode } from '@/lib/mindMapGenerator'
+import { collectionsApi, useApiCall, toolsApi } from '@/api'
 
 interface CollectionDashboardProps {
   collectionId: string
@@ -29,8 +28,8 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
   const [mindMapCode, setMindMapCode] = useState('')
   const [enhancedMindMapData, setEnhancedMindMapData] = useState<EnhancedMindMapData | null>(null)
   const [isGeneratingMindMap, setIsGeneratingMindMap] = useState(false)
-  const [generatingSummaries, setGeneratingSummaries] = useState(false)
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [mindMapTitle, setMindMapTitle] = useState<string | undefined>(undefined)
+  const [mindMapSummary, setMindMapSummary] = useState<string | undefined>(undefined)
 
   const { 
     data: dashboardData, 
@@ -186,43 +185,39 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
   const handleGenerateMindMap = async () => {
     try {
       setIsGeneratingMindMap(true)
-      console.log('🚀 Starting enhanced AI mind map generation...')
-      console.log('📊 Collection data:', collectionData)
-      console.log('💬 Conversations:', conversations.length)
-      console.log('📄 Documents:', documents.length)
-      console.log('✅ Action items:', actionItems.length)
-      
-      // Create mind map data from current collection data
-      const mindMapData = createMindMapDataFromCollection(
-        collectionData,
-        conversations.map(conv => ({
-          ...conv,
-          title: conv.title || 'Untitled Chat'
-        })),
-        documents,
-        actionItems
-      )
-      
-      console.log('🧩 Mind map data created:', mindMapData)
-      
-      // Generate enhanced mind map with AI insights
+      console.log('🚀 Starting backend API mind map generation...')
+      console.log('📊 Collection ID:', collectionId)
+
+      // Call the backend API to generate mindmap
       const startTime = performance.now()
-      const enhancedData = await generateEnhancedMindMap(mindMapData)
+      const apiResponse = await toolsApi.generateMindmap(collectionId, null)
       const endTime = performance.now()
-      
-      console.log(`⚡ Enhanced mind map generation took ${(endTime - startTime).toFixed(2)}ms`)
-      console.log('🧠 AI insights generated:', enhancedData.insights)
-      console.log('📝 Generated code length:', enhancedData.mermaidCode.length)
-      console.log('🔍 Generated code preview:', enhancedData.mermaidCode.substring(0, 300) + '...')
-      
-      setMindMapCode(enhancedData.mermaidCode)
-      setEnhancedMindMapData(enhancedData)
-      setShowMindMap(true)
-      
-      console.log('✨ Enhanced mind map modal should now open')
+
+      console.log(`⚡ Backend API call took ${(endTime - startTime).toFixed(2)}ms`)
+      console.log('📦 API Response:', apiResponse)
+
+      if (apiResponse.success && apiResponse.data) {
+        // Generate hierarchical mermaid code from backend response
+        const mermaidCode = generateMindMapFromBackendResponse(apiResponse.data)
+
+        console.log('📝 Generated mindmap code length:', mermaidCode.length)
+        console.log('🔍 Generated code preview:', mermaidCode.substring(0, 300) + '...')
+
+        // Store title and summary from agent response
+        setMindMapTitle(apiResponse.data.agentResponse.title)
+        setMindMapSummary(apiResponse.data.agentResponse.summary)
+        setMindMapCode(mermaidCode)
+        setEnhancedMindMapData(null) // No enhanced data from backend
+        setShowMindMap(true)
+
+        console.log('✨ Backend-generated mind map modal should now open')
+      } else {
+        const errorMessage = !apiResponse.success ? (apiResponse as { error: string }).error : 'Unknown error'
+        throw new Error('Backend API returned error: ' + errorMessage)
+      }
     } catch (error) {
-      console.error('❌ Error generating enhanced mind map:', error)
-      
+      console.error('❌ Error generating backend mind map:', error)
+
       // Fallback to basic mind map
       try {
         console.log('🔄 Falling back to basic mind map...')
@@ -237,6 +232,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
         )
         const basicCode = generateMindMapCode(mindMapData)
         setMindMapCode(basicCode)
+        setEnhancedMindMapData(null)
         setShowMindMap(true)
         console.log('✅ Basic mind map fallback successful')
       } catch (fallbackError) {
@@ -745,68 +741,187 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
           )}
         </motion.div>
 
-        {/* Analysis Tools Section */}
-        <motion.div 
+        {/* Mind Map Generator Section */}
+        <motion.div
           className="mb-8"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.3 }}
         >
           <div className="flex items-center space-x-2 mb-4">
-            <Settings className="w-6 h-6 text-purple-primary" />
-            <h2 className="heading-3">Analysis Tools</h2>
+            <Brain className="w-6 h-6 text-purple-primary" />
+            <h2 className="heading-3">AI-Powered Visualization</h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Mind Map Generator */}
-            <motion.div
-              whileHover={{ scale: 1.02 }}
-              transition={{ duration: 0.2 }}
-            >
-              <Card className="bg-gradient-to-br from-purple-primary to-purple-light text-white cursor-pointer">
-                <CardContent className="p-6">
-                  <div className="mb-3">
-                    <Brain className="w-8 h-8 text-white" />
-                  </div>
-                  <h3 className="heading-3 text-white mb-2">Generate Mind Map</h3>
-                  <p className="body-regular text-purple-subtle mb-4">
-                    Create a visual overview of all your conversations, documents, and action items
-                  </p>
-                  <Button 
-                    variant="secondary" 
-                    className="bg-white text-purple-primary hover:bg-purple-subtle"
-                    onClick={handleGenerateMindMap}
-                    disabled={isGeneratingMindMap}
-                    leftIcon={isGeneratingMindMap ? <Loader2 className="w-4 h-4 animate-spin" /> : <Brain className="w-4 h-4" />}
-                  >
-                    {isGeneratingMindMap ? 'Generating AI Mind Map...' : 'Generate AI Mind Map'}
-                  </Button>
-                </CardContent>
-              </Card>
-            </motion.div>
+          <motion.div
+            whileHover={!isGeneratingMindMap ? { scale: 1.01 } : {}}
+            animate={isGeneratingMindMap ? {
+              boxShadow: [
+                "0 10px 40px rgba(147, 51, 234, 0.3)",
+                "0 10px 60px rgba(147, 51, 234, 0.6)",
+                "0 10px 40px rgba(147, 51, 234, 0.3)",
+              ]
+            } : {}}
+            transition={isGeneratingMindMap ? {
+              duration: 2,
+              repeat: Infinity,
+              ease: "easeInOut"
+            } : { duration: 0.2 }}
+          >
+            <Card className={`bg-gradient-to-br from-purple-primary via-purple-600 to-purple-light text-white border-0 shadow-lg hover:shadow-2xl hover:shadow-purple-primary/40 transition-all duration-300 overflow-hidden relative ${
+              isGeneratingMindMap ? 'ring-4 ring-purple-300 ring-opacity-50' : ''
+            }`}>
+              {/* Animated background gradient when generating */}
+              {isGeneratingMindMap && (
+                <motion.div
+                  className="absolute inset-0 bg-gradient-to-r from-purple-400/20 via-pink-400/20 to-purple-400/20"
+                  animate={{
+                    x: ['-100%', '100%'],
+                  }}
+                  transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: "linear"
+                  }}
+                />
+              )}
 
-            {/* Audio Transcripts */}
-            <motion.div
-              whileHover={{ scale: 1.02 }}
-              transition={{ duration: 0.2 }}
-            >
-              <Card className="bg-gradient-to-br from-success to-green-600 text-white cursor-pointer">
-                <CardContent className="p-6">
-                  <div className="mb-3">
-                    <Music className="w-8 h-8 text-white" />
-                  </div>
-                  <h3 className="heading-3 text-white mb-2">Audio Transcripts</h3>
-                  <p className="body-regular text-green-100 mb-4">
-                    Access transcripts from voice consultations and audio uploads
-                  </p>
-                  <Button variant="secondary" className="bg-white text-success hover:bg-green-50">
-                    View Transcripts
-                  </Button>
-                </CardContent>
-              </Card>
-            </motion.div>
+              <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300"></div>
 
-          </div>
+              <CardContent className="p-8 relative z-10">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-3 mb-4">
+                      <motion.div
+                        className="p-3 bg-white/20 rounded-lg backdrop-blur-sm"
+                        animate={isGeneratingMindMap ? {
+                          scale: [1, 1.1, 1],
+                          rotate: [0, 5, -5, 0],
+                        } : {}}
+                        transition={isGeneratingMindMap ? {
+                          duration: 2,
+                          repeat: Infinity,
+                          ease: "easeInOut"
+                        } : {}}
+                      >
+                        <Brain className={`w-10 h-10 text-white ${isGeneratingMindMap ? 'animate-pulse' : ''}`} />
+                      </motion.div>
+                      <div>
+                        <h3 className="text-2xl font-bold text-white mb-1">Generate Mind Map</h3>
+                        <motion.p
+                          className="text-sm text-purple-100"
+                          animate={isGeneratingMindMap ? {
+                            opacity: [0.5, 1, 0.5]
+                          } : {}}
+                          transition={isGeneratingMindMap ? {
+                            duration: 1.5,
+                            repeat: Infinity,
+                            ease: "easeInOut"
+                          } : {}}
+                        >
+                          {isGeneratingMindMap ? 'AI is analyzing your data...' : 'AI-powered visualization'}
+                        </motion.p>
+                      </div>
+                    </div>
+                    <p className="body-regular text-white/90 leading-relaxed max-w-2xl">
+                      Create an intelligent visual representation of your collection data. Our AI analyzes your documents, actions, and conversations to generate a comprehensive hierarchical mind map that helps you understand relationships and key insights at a glance.
+                    </p>
+
+                    {/* Progress indicators when generating */}
+                    {isGeneratingMindMap && (
+                      <motion.div
+                        className="mt-4 space-y-2"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        <div className="flex items-center space-x-2">
+                          <motion.div
+                            className="w-2 h-2 bg-white rounded-full"
+                            animate={{
+                              scale: [1, 1.5, 1],
+                              opacity: [0.5, 1, 0.5]
+                            }}
+                            transition={{
+                              duration: 1,
+                              repeat: Infinity,
+                              ease: "easeInOut"
+                            }}
+                          />
+                          <motion.div
+                            className="w-2 h-2 bg-white rounded-full"
+                            animate={{
+                              scale: [1, 1.5, 1],
+                              opacity: [0.5, 1, 0.5]
+                            }}
+                            transition={{
+                              duration: 1,
+                              repeat: Infinity,
+                              ease: "easeInOut",
+                              delay: 0.2
+                            }}
+                          />
+                          <motion.div
+                            className="w-2 h-2 bg-white rounded-full"
+                            animate={{
+                              scale: [1, 1.5, 1],
+                              opacity: [0.5, 1, 0.5]
+                            }}
+                            transition={{
+                              duration: 1,
+                              repeat: Infinity,
+                              ease: "easeInOut",
+                              delay: 0.4
+                            }}
+                          />
+                          <span className="text-sm text-white/80 ml-2">Processing your collection data</span>
+                        </div>
+
+                        {/* Progress bar */}
+                        <div className="w-full bg-white/20 rounded-full h-2 overflow-hidden">
+                          <motion.div
+                            className="h-full bg-gradient-to-r from-white via-purple-200 to-white"
+                            animate={{
+                              x: ['-100%', '100%']
+                            }}
+                            transition={{
+                              duration: 1.5,
+                              repeat: Infinity,
+                              ease: "linear"
+                            }}
+                          />
+                        </div>
+                      </motion.div>
+                    )}
+                  </div>
+
+                  <div className="flex-shrink-0">
+                    <motion.div
+                      animate={isGeneratingMindMap ? {
+                        scale: [1, 1.05, 1],
+                      } : {}}
+                      transition={isGeneratingMindMap ? {
+                        duration: 1.5,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                      } : {}}
+                    >
+                      <Button
+                        variant="secondary"
+                        size="large"
+                        className="bg-white text-purple-primary hover:bg-purple-50 shadow-xl hover:shadow-2xl hover:scale-105 transition-all duration-300 border-0 font-semibold px-8 py-6 text-lg"
+                        onClick={handleGenerateMindMap}
+                        disabled={isGeneratingMindMap}
+                        leftIcon={isGeneratingMindMap ? <Loader2 className="w-6 h-6 animate-spin" /> : <Brain className="w-6 h-6" />}
+                      >
+                        {isGeneratingMindMap ? 'Generating Mind Map...' : 'Generate Mind Map'}
+                      </Button>
+                    </motion.div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
         </motion.div>
       </div>
 
@@ -826,6 +941,8 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
           onClose={() => setShowMindMap(false)}
           mermaidCode={mindMapCode}
           title={collectionData.title}
+          mindMapTitle={mindMapTitle}
+          mindMapSummary={mindMapSummary}
           enhancedData={enhancedMindMapData || undefined}
           onNodeClick={handleNodeClick}
         />

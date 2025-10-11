@@ -814,3 +814,36 @@ export interface AnalysisUpdatePayload {
   progress?: number
   results?: AnalysisResult
 }
+
+// Mind Map Generation Types
+export interface MindMapBackendResponse {
+  success: boolean
+  collection_id: number
+  collection_name: string
+  agent_response: string | {
+    version: string
+    generatedAt: string
+    type: string
+    title: string
+    summary: string
+    data: Record<string, unknown>
+  }
+  session_id: string
+  traces_count: number
+  traces: unknown | null
+}
+
+export interface MindMapGenerationResponse {
+  collectionId: string
+  collectionName: string
+  agentResponse: {
+    version: string
+    generatedAt: string
+    type: string
+    title: string
+    summary: string
+    data: Record<string, unknown>
+  }
+  sessionId: string
+  tracesCount: number
+}
