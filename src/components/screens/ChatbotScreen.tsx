@@ -7,6 +7,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/Tabs";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   ArrowLeft,
   Send,
@@ -27,7 +29,21 @@ import {
   ChevronDown,
   Edit,
   Mail,
+  BookOpen,
+  Target,
 } from "lucide-react";
+import { ExplanationTab, AnalysisTab, ActionTab, SupplementaryTab } from "@/components/chat/tabs";
+import { SaveToCollectionModal } from "@/components/modals/SaveToCollectionModal";
+import { EmailModal, EmailData } from "@/components/modals/EmailModal";
+import { emailService } from "@/api/emailService";
+import {
+  isEducatorResponse,
+  isAnalystResponse,
+  isAdvisorResponse,
+  isVisualizationResponse,
+  isDraftResponse,
+} from "@/types";
+import { DEFAULT_USER_ID } from "@/lib/constants";
 import {
   LegalDomain,
   Message,
@@ -46,128 +62,19 @@ import type {
   ApiError,
 } from "@/api/types";
 import { LEGAL_DOMAINS } from "@/constants/domains";
-import { documentsApi, chatApi, useApiCall, useApiMutation } from "@/api";
+import { documentsApi, chatApi, collectionsApi, useApiCall, useApiMutation } from "@/api";
 import { mockAnalysisResult, mockDraftResult } from "@/api/mockData";
 
 interface ChatbotScreenProps {
   domain: LegalDomain;
   onBack: () => void;
+  initialSession?: ChatSession; // For resuming from collection
+  conversationId?: string; // Snapshot ID to load from DynamoDB
+  collectionId?: string; // To show which collection this belongs to
+  collectionName?: string;
 }
 
 // Removed unused mock data
-
-// Memoized Draft Message Bubble Component
-const DraftMessageBubble = memo(
-  ({ draftResult }: { draftResult: ApiDraftResult }) => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="flex justify-start mb-4"
-    >
-      <div className="max-w-[90%] bg-gradient-to-br from-purple-subtle/50 to-white border-2 border-purple-primary/30 rounded-2xl rounded-bl-sm shadow-md overflow-hidden">
-        <div className="p-4 border-b border-purple-primary/10 bg-purple-subtle/20">
-          <div className="flex items-center space-x-2 mb-2">
-            <FileText className="w-5 h-5 text-purple-primary" />
-            <p className="body-regular font-medium text-purple-primary">
-              Document Draft Ready
-            </p>
-          </div>
-        </div>
-
-        <div className="p-4">
-          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 mb-4">
-            <pre className="whitespace-pre-wrap text-sm text-text-primary font-mono leading-relaxed">
-              {draftResult.content}
-            </pre>
-          </div>
-
-          <div className="space-y-3">
-            <h4 className="body-regular font-medium text-text-primary flex items-center space-x-2">
-              <CheckCircle className="w-4 h-4 text-purple-primary" />
-              <span>Editing Suggestions</span>
-            </h4>
-
-            {(draftResult.suggestions || []).map(
-              (
-                suggestion: ApiDraftResult["suggestions"][number],
-                index: number
-              ) => (
-                <div
-                  key={index}
-                  className="flex items-start space-x-3 p-3 bg-purple-subtle/20 rounded-lg border border-purple-primary/10"
-                >
-                  <div
-                    className={`w-2 h-2 rounded-full mt-2 ${
-                      suggestion.priority === "high"
-                        ? "bg-red-500"
-                        : suggestion.priority === "medium"
-                        ? "bg-yellow-500"
-                        : "bg-green-500"
-                    }`}
-                  />
-                  <div className="flex-1">
-                    <p className="body-small font-medium text-text-primary mb-1">
-                      {suggestion.section}
-                    </p>
-                    <p className="caption text-text-secondary">
-                      {suggestion.suggestion}
-                    </p>
-                  </div>
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      suggestion.priority === "high"
-                        ? "bg-red-100 text-red-700"
-                        : suggestion.priority === "medium"
-                        ? "bg-yellow-100 text-yellow-700"
-                        : "bg-green-100 text-green-700"
-                    }`}
-                  >
-                    {suggestion.priority.toUpperCase()}
-                  </span>
-                </div>
-              )
-            )}
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button
-              variant="primary"
-              size="small"
-              leftIcon={<FileText className="w-3 h-3" />}
-            >
-              Download Draft
-            </Button>
-            <Button
-              variant="secondary"
-              size="small"
-              leftIcon={<Send className="w-3 h-3" />}
-            >
-              Request Revisions
-            </Button>
-            <Button
-              variant="ghost"
-              size="small"
-              leftIcon={<Bookmark className="w-3 h-3" />}
-            >
-              Save to Collection
-            </Button>
-          </div>
-        </div>
-
-        <div className="p-3 bg-gray-50/50 border-t border-gray-100">
-          <p className="caption text-text-secondary text-center">
-            {new Date().toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </p>
-        </div>
-      </div>
-    </motion.div>
-  )
-);
-
-DraftMessageBubble.displayName = "DraftMessageBubble";
 
 // Memoized Analysis Message Bubble Component
 const AnalysisMessageBubble = memo(
@@ -177,180 +84,141 @@ const AnalysisMessageBubble = memo(
       animate={{ opacity: 1, y: 0 }}
       className="flex justify-start mb-4"
     >
-      <div className="max-w-[90%] bg-surface-white border-2 border-indigo-200/50 rounded-2xl rounded-bl-sm shadow-md overflow-hidden">
-        <div className="p-4 border-b border-gray-100">
-          <p className="body-regular text-text-primary mb-2">
-            Here&apos;s my detailed analysis:
-          </p>
-        </div>
-
+      <div className="w-[70%] bg-surface-white border-2 border-indigo-200/50 rounded-2xl rounded-bl-sm shadow-md overflow-hidden">
         <Tabs defaultValue="explanation" className="w-full">
           <TabsList className="w-full justify-start border-b border-gray-100 bg-gray-50/50 rounded-none px-4">
-            <TabsTrigger
-              value="explanation"
-              className="flex items-center space-x-2"
-            >
-              <Lightbulb className="w-4 h-4" />
+            <TabsTrigger value="explanation" className="flex items-center space-x-2">
+              <BookOpen className="w-4 h-4" />
               <span>Explanation</span>
             </TabsTrigger>
-            <TabsTrigger
-              value="analysis"
-              className="flex items-center space-x-2"
-            >
+            <TabsTrigger value="analysis" className="flex items-center space-x-2">
               <Search className="w-4 h-4" />
               <span>Analysis</span>
             </TabsTrigger>
-            <TabsTrigger
-              value="actions"
-              className="flex items-center space-x-2"
-            >
-              <ClipboardList className="w-4 h-4" />
+            <TabsTrigger value="action" className="flex items-center space-x-2">
+              <Target className="w-4 h-4" />
               <span>Actions</span>
             </TabsTrigger>
           </TabsList>
-
-          <TabsContent value="explanation" className="p-4 space-y-4">
-            <div className="bg-purple-subtle/30 rounded-lg p-4 border border-purple-primary/20">
-              <div className="flex items-center space-x-2 mb-2">
-                <Lightbulb className="w-4 h-4 text-purple-primary" />
-                <span className="body-small font-medium text-purple-primary">
-                  Legal Explanation
-                </span>
+          
+          <TabsContent value="explanation" className="p-4 max-h-96 overflow-y-auto">
+            <div className="space-y-3">
+              <div className="bg-purple-subtle/30 rounded-lg p-4 border border-purple-primary/20">
+                <div className="flex items-center space-x-2 mb-2">
+                  <Lightbulb className="w-4 h-4 text-purple-primary" />
+                  <span className="body-small font-medium text-purple-primary">
+                    Legal Explanation
+                  </span>
+                </div>
+                <p className="body-regular text-text-primary">
+                  {analysisResult.explanation}
+                </p>
               </div>
-              <p className="body-regular text-text-primary">
-                {analysisResult.explanation}
-              </p>
             </div>
           </TabsContent>
+          
+          <TabsContent value="analysis" className="p-4 max-h-96 overflow-y-auto">
+            <div className="space-y-3">
+              <div>
+                <h4 className="body-regular font-medium mb-3 flex items-center space-x-2">
+                  <AlertTriangle className="w-4 h-4 text-purple-primary" />
+                  <span>Risk Assessment</span>
+                </h4>
+                <div className="space-y-2">
+                  {analysisResult.risks.map(
+                    (risk: ApiAnalysisResult["risks"][number], index: number) => (
+                      <div
+                        key={index}
+                        className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg border border-gray-100"
+                      >
+                        <AlertTriangle
+                          className={`w-4 h-4 mt-0.5 ${
+                            risk.severity === "high"
+                              ? "text-red-500"
+                              : risk.severity === "medium"
+                              ? "text-yellow-500"
+                              : "text-green-500"
+                          }`}
+                        />
+                        <div className="flex-1">
+                          <p className="body-small text-text-primary">
+                            {risk.description}
+                          </p>
+                          {risk.recommendation && (
+                            <p className="caption text-text-secondary mt-1">
+                              {risk.recommendation}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
 
-          <TabsContent value="analysis" className="p-4 space-y-4">
-            <div>
-              <h4 className="body-regular font-medium mb-3 flex items-center space-x-2">
-                <AlertTriangle className="w-4 h-4 text-purple-primary" />
-                <span>Risk Assessment</span>
-              </h4>
-              <div className="space-y-2">
-                {analysisResult.risks.map(
-                  (risk: ApiAnalysisResult["risks"][number], index: number) => (
-                    <div
-                      key={index}
-                      className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg border border-gray-100"
-                    >
-                      <AlertTriangle
-                        className={`w-4 h-4 mt-0.5 ${
-                          risk.level === "high"
-                            ? "text-red-500"
-                            : risk.level === "medium"
-                            ? "text-yellow-500"
-                            : "text-green-500"
-                        }`}
-                      />
-                      <div className="flex-1">
+              <div>
+                <h4 className="body-regular font-medium mb-3 flex items-center space-x-2">
+                  <CheckCircle className="w-4 h-4 text-purple-primary" />
+                  <span>Key Points</span>
+                </h4>
+                <div className="space-y-2">
+                  {analysisResult.keyPoints.map(
+                    (point: string, index: number) => (
+                      <div key={index} className="flex items-start space-x-3 p-2">
+                        <span className="text-purple-primary mt-1 text-sm">
+                          •
+                        </span>
+                        <span className="body-small text-text-primary">
+                          {point}
+                        </span>
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="action" className="p-4 max-h-96 overflow-y-auto">
+            <div className="space-y-3">
+              {analysisResult.actionItems.map((action: ActionItem) => (
+                <div
+                  key={action.id}
+                  className="border border-purple-primary/20 bg-purple-subtle/20 rounded-lg p-4"
+                >
+                  <div className="flex items-start space-x-3">
+                    <input
+                      type="checkbox"
+                      className="mt-1 rounded border-gray-300 text-purple-primary focus:ring-purple-primary"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2 mb-2">
                         <span
-                          className={`inline-block px-2 py-1 rounded-full text-xs font-medium mb-1 ${
-                            risk.level === "high"
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            action.priority === "urgent"
                               ? "bg-red-100 text-red-700"
-                              : risk.level === "medium"
+                              : action.priority === "important"
                               ? "bg-yellow-100 text-yellow-700"
                               : "bg-green-100 text-green-700"
                           }`}
                         >
-                          {risk.level.toUpperCase()}
+                          {action.priority}
                         </span>
-                        <p className="body-small text-text-primary">
-                          {risk.description}
-                        </p>
-                        {risk.recommendation && (
-                          <p className="caption text-text-secondary mt-1">
-                            {risk.recommendation}
-                          </p>
-                        )}
+                        <span className="body-small font-medium text-text-primary">
+                          {action.title}
+                        </span>
                       </div>
+                      <p className="caption text-text-secondary">
+                        {action.description}
+                      </p>
                     </div>
-                  )
-                )}
-              </div>
-            </div>
-
-            <div>
-              <h4 className="body-regular font-medium mb-3 flex items-center space-x-2">
-                <CheckCircle className="w-4 h-4 text-purple-primary" />
-                <span>Key Points</span>
-              </h4>
-              <div className="space-y-2">
-                {analysisResult.keyPoints.map(
-                  (point: string, index: number) => (
-                    <div key={index} className="flex items-start space-x-3 p-2">
-                      <span className="text-purple-primary mt-1 text-sm">
-                        •
-                      </span>
-                      <span className="body-small text-text-primary">
-                        {point}
-                      </span>
-                    </div>
-                  )
-                )}
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="actions" className="p-4 space-y-3">
-            {analysisResult.actionItems.map((action: ActionItem) => (
-              <div
-                key={action.id}
-                className="border border-purple-primary/20 bg-purple-subtle/20 rounded-lg p-4"
-              >
-                <div className="flex items-start space-x-3">
-                  <input
-                    type="checkbox"
-                    className="mt-1 rounded border-gray-300 text-purple-primary focus:ring-purple-primary"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <h5 className="body-regular font-medium text-text-primary">
-                        {action.title}
-                      </h5>
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          action.priority === "urgent"
-                            ? "bg-red-100 text-red-700"
-                            : action.priority === "important"
-                            ? "bg-yellow-100 text-yellow-700"
-                            : "bg-green-100 text-green-700"
-                        }`}
-                      >
-                        {action.priority.toUpperCase()}
-                      </span>
-                    </div>
-                    <p className="body-small text-text-secondary mb-3">
-                      {action.description}
-                    </p>
-                    {action.externalLinks && (
-                      <div className="flex flex-wrap gap-2">
-                        {action.externalLinks?.map(
-                          (link: ExternalLink, index: number) => (
-                            <Button
-                              key={index}
-                              variant="secondary"
-                              size="small"
-                              leftIcon={
-                                <ExternalLinkIcon className="w-3 h-3" />
-                              }
-                              className="text-xs"
-                            >
-                              {link.text}
-                            </Button>
-                          )
-                        )}
-                      </div>
-                    )}
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </TabsContent>
         </Tabs>
-
+        
         <div className="p-3 bg-gray-50/50 border-t border-gray-100">
           <p className="caption text-text-secondary text-center">
             {new Date().toLocaleTimeString([], {
@@ -366,6 +234,147 @@ const AnalysisMessageBubble = memo(
 
 AnalysisMessageBubble.displayName = "AnalysisMessageBubble";
 
+// Memoized Draft Message Bubble Component
+const DraftMessageBubble = memo(
+  ({ draftResult }: { draftResult: ApiDraftResult }) => (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex justify-start mb-4"
+    >
+      <div className="w-[70%] bg-surface-white border-2 border-indigo-200/50 rounded-2xl rounded-bl-sm shadow-md overflow-hidden">
+        <Tabs defaultValue="explanation" className="w-full">
+          <TabsList className="w-full justify-start border-b border-gray-100 bg-gray-50/50 rounded-none px-4">
+            <TabsTrigger value="explanation" className="flex items-center space-x-2">
+              <BookOpen className="w-4 h-4" />
+              <span>Explanation</span>
+            </TabsTrigger>
+            <TabsTrigger value="analysis" className="flex items-center space-x-2">
+              <Search className="w-4 h-4" />
+              <span>Analysis</span>
+            </TabsTrigger>
+            <TabsTrigger value="action" className="flex items-center space-x-2">
+              <Target className="w-4 h-4" />
+              <span>Actions</span>
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="explanation" className="p-4 max-h-96 overflow-y-auto">
+            <div className="space-y-3">
+              <div className="bg-purple-subtle/30 rounded-lg p-4 border border-purple-primary/20">
+                <div className="flex items-center space-x-2 mb-2">
+                  <FileText className="w-4 h-4 text-purple-primary" />
+                  <span className="body-small font-medium text-purple-primary">
+                    Document Draft
+                  </span>
+                </div>
+                <p className="body-regular text-text-primary">
+                  {draftResult.explanation}
+                </p>
+              </div>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="analysis" className="p-4 max-h-96 overflow-y-auto">
+            <div className="space-y-3">
+              <div>
+                <h4 className="body-regular font-medium mb-3 flex items-center space-x-2">
+                  <AlertTriangle className="w-4 h-4 text-purple-primary" />
+                  <span>Editing Suggestions</span>
+                </h4>
+                <div className="space-y-2">
+                  {(draftResult.suggestions || []).map(
+                    (
+                      suggestion: ApiDraftResult["suggestions"][number],
+                      index: number
+                    ) => (
+                      <div
+                        key={index}
+                        className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg border border-gray-100"
+                      >
+                        <div
+                          className={`w-2 h-2 rounded-full mt-2 ${
+                            suggestion.priority === "urgent"
+                              ? "bg-red-500"
+                              : suggestion.priority === "important"
+                              ? "bg-yellow-500"
+                              : "bg-green-500"
+                          }`}
+                        />
+                        <div className="flex-1">
+                          <p className="body-small font-medium text-text-primary mb-1">
+                            {suggestion.section}
+                          </p>
+                          <p className="caption text-text-secondary">
+                            {suggestion.suggestion}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="action" className="p-4 max-h-96 overflow-y-auto">
+            <div className="space-y-3">
+              <div className="border border-purple-primary/20 bg-purple-subtle/20 rounded-lg p-4">
+                <div className="flex items-start space-x-3">
+                  <FileText className="w-4 h-4 text-purple-primary mt-1" />
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                        Draft Document
+                      </span>
+                      <span className="body-small font-medium text-text-primary">
+                        {draftResult.title}
+                      </span>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 border border-gray-200">
+                      <pre className="whitespace-pre-wrap text-sm text-text-primary font-mono">
+                        {draftResult.content}
+                      </pre>
+                    </div>
+                    <div className="mt-3 flex space-x-2">
+                      <Button
+                        size="sm"
+                        className="bg-purple-primary text-white hover:bg-purple-primary/90"
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Download
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-purple-primary text-purple-primary hover:bg-purple-subtle/20"
+                      >
+                        <Edit className="w-4 h-4 mr-2" />
+                        Edit
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
+        
+        <div className="p-3 bg-gray-50/50 border-t border-gray-100">
+          <p className="caption text-text-secondary text-center">
+            {new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </p>
+        </div>
+      </div>
+    </motion.div>
+  )
+);
+
+DraftMessageBubble.displayName = "DraftMessageBubble";
+
 // Combined bubble: shows tabs for Analysis and Draft when both exist for a single AI message
 const CombinedMessageBubble = memo(
   ({
@@ -378,9 +387,9 @@ const CombinedMessageBubble = memo(
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex justify-start mb-4"
+      className="flex justify-start mb-4 w-full"
     >
-      <div className="max-w-[90%] bg-surface-white border-2 border-indigo-200/50 rounded-2xl rounded-bl-sm shadow-md overflow-hidden">
+      <div className="w-[70%] bg-surface-white border-2 border-indigo-200/50 rounded-2xl rounded-bl-sm shadow-md overflow-hidden">
         <Tabs defaultValue={analysis ? "analysis" : "draft"} className="w-full">
           <TabsList className="w-full justify-start border-b border-gray-100 bg-gray-50/50 rounded-none px-4">
             {analysis && (
@@ -431,6 +440,259 @@ const CombinedMessageBubble = memo(
 
 CombinedMessageBubble.displayName = "CombinedMessageBubble";
 
+// Supervisor Message Bubble Component - renders tabs from supervisor response with structured UI
+const SupervisorMessageBubble = memo(({ supervisorData }: { supervisorData: any }) => {
+  const { explanation_tab, analysis_tab, action_tab, extractedData, response_type, conversation_context } = supervisorData;
+
+  // Determine which tabs are active
+  const activeTabs = {
+    explanation: explanation_tab?.status === "active",
+    analysis: analysis_tab?.status === "active",
+    action: action_tab?.status === "active",
+  };
+
+  const hasAnyActiveTab = Object.values(activeTabs).some(Boolean);
+
+  // Check if we have extracted JSON data (legacy format with embedded JSON blocks)
+  const hasExplanationJson = extractedData?.explanation && isEducatorResponse(extractedData.explanation);
+  const hasAnalysisJson = extractedData?.analysis && isAnalystResponse(extractedData.analysis);
+  const hasActionJson = extractedData?.action && isAdvisorResponse(extractedData.action);
+  const hasVisualizationJson = extractedData?.visualization && isVisualizationResponse(extractedData.visualization);
+  const hasDraftJson = extractedData?.draft && isDraftResponse(extractedData.draft);
+
+  // Handle clarification_needed response type
+  if (response_type === "clarification_needed" && conversation_context) {
+    const systemMessage = conversation_context.system_message || "";
+    const clarificationQuestions = conversation_context.clarification_questions || [];
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex justify-start mb-4 w-full"
+      >
+        <div className="w-[70%] bg-amber-50 border-2 border-amber-200 text-text-primary rounded-2xl rounded-bl-sm shadow-sm">
+          <div className="p-4">
+            {systemMessage && (
+              <p className="body-regular font-medium text-amber-900 mb-3">
+                {systemMessage}
+              </p>
+            )}
+            {clarificationQuestions.length > 0 && (
+              <div className="space-y-2">
+                <p className="body-small font-semibold text-amber-800 mb-2">
+                  Please provide the following information:
+                </p>
+                <ul className="space-y-1.5 ml-4">
+                  {clarificationQuestions.map((question: string, idx: number) => (
+                    <li key={idx} className="body-small text-amber-900 list-disc">
+                      {question}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // If no active tabs at all, render as simple message
+  if (!hasAnyActiveTab) {
+    // Try to get content from conversation_context.system_message (for plain text responses)
+    // or fallback to tab contents
+    const messageContent = conversation_context?.system_message ||
+                          explanation_tab?.content ||
+                          action_tab?.content ||
+                          analysis_tab?.content ||
+                          "No response available.";
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex justify-start mb-4 w-full"
+      >
+        <div className="w-[70%] bg-surface-white border border-gray-200 text-text-primary rounded-2xl rounded-bl-sm">
+          <p className="body-regular p-4 whitespace-pre-wrap">
+            {messageContent}
+          </p>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // Get default tab (first active one)
+  const getDefaultTab = () => {
+    if (activeTabs.explanation) return "explanation";
+    if (activeTabs.analysis) return "analysis";
+    if (activeTabs.action) return "action";
+    return "explanation";
+  };
+
+  // Add supplementary tab if we have visualization or draft data
+  const hasSupplementary = hasVisualizationJson || hasDraftJson;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex justify-start mb-4 w-full"
+    >
+      <div className="w-[70%] bg-surface-white border-2 border-indigo-200/50 rounded-2xl rounded-bl-sm shadow-md overflow-hidden">
+        <Tabs defaultValue={getDefaultTab()} className="w-full">
+          <TabsList className="w-full justify-start border-b border-gray-100 bg-gray-50/50 rounded-none px-4">
+            {activeTabs.explanation && (
+              <TabsTrigger value="explanation" className="flex items-center space-x-2">
+                <BookOpen className="w-4 h-4" />
+                <span>Explanation</span>
+              </TabsTrigger>
+            )}
+            {activeTabs.analysis && (
+              <TabsTrigger value="analysis" className="flex items-center space-x-2">
+                <Search className="w-4 h-4" />
+                <span>Analysis</span>
+              </TabsTrigger>
+            )}
+            {activeTabs.action && (
+              <TabsTrigger value="action" className="flex items-center space-x-2">
+                <Target className="w-4 h-4" />
+                <span>Actions</span>
+              </TabsTrigger>
+            )}
+            {hasSupplementary && (
+              <TabsTrigger value="supplementary" className="flex items-center space-x-2">
+                <FileText className="w-4 h-4" />
+                <span>Supplementary</span>
+              </TabsTrigger>
+            )}
+          </TabsList>
+
+          {activeTabs.explanation && (
+            <TabsContent value="explanation" className="p-0 max-h-96 overflow-y-auto">
+              {hasExplanationJson ? (
+                <ExplanationTab data={extractedData.explanation} />
+              ) : (
+                <div className="p-4 space-y-3">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      p: ({children}) => <p className="body-regular text-text-primary mb-3">{children}</p>,
+                      ul: ({children}) => <ul className="list-disc list-inside space-y-2 mb-3">{children}</ul>,
+                      ol: ({children}) => <ol className="list-decimal list-inside space-y-2 mb-3">{children}</ol>,
+                      li: ({children}) => <li className="body-regular text-text-primary">{children}</li>,
+                      h1: ({children}) => <h1 className="heading-3 text-text-primary mb-3">{children}</h1>,
+                      h2: ({children}) => <h2 className="heading-4 text-text-primary mb-2">{children}</h2>,
+                      h3: ({children}) => <h3 className="body-semibold text-text-primary mb-2">{children}</h3>,
+                      strong: ({children}) => <strong className="body-semibold text-purple-primary">{children}</strong>,
+                      em: ({children}) => <em className="italic">{children}</em>,
+                      code: ({children}) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
+                    }}
+                  >
+                    {explanation_tab.content}
+                  </ReactMarkdown>
+                  {explanation_tab.relevance && (
+                    <p className="caption text-text-secondary italic mt-3 pt-3 border-t border-gray-100">
+                      {explanation_tab.relevance}
+                    </p>
+                  )}
+                </div>
+              )}
+            </TabsContent>
+          )}
+
+          {activeTabs.analysis && (
+            <TabsContent value="analysis" className="p-0 max-h-96 overflow-y-auto">
+              {hasAnalysisJson ? (
+                <AnalysisTab data={extractedData.analysis} />
+              ) : (
+                <div className="p-4 space-y-3">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      p: ({children}) => <p className="body-regular text-text-primary mb-3">{children}</p>,
+                      ul: ({children}) => <ul className="list-disc list-inside space-y-2 mb-3">{children}</ul>,
+                      ol: ({children}) => <ol className="list-decimal list-inside space-y-2 mb-3">{children}</ol>,
+                      li: ({children}) => <li className="body-regular text-text-primary">{children}</li>,
+                      h1: ({children}) => <h1 className="heading-3 text-text-primary mb-3">{children}</h1>,
+                      h2: ({children}) => <h2 className="heading-4 text-text-primary mb-2">{children}</h2>,
+                      h3: ({children}) => <h3 className="body-semibold text-text-primary mb-2">{children}</h3>,
+                      strong: ({children}) => <strong className="body-semibold text-purple-primary">{children}</strong>,
+                      em: ({children}) => <em className="italic">{children}</em>,
+                      code: ({children}) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
+                    }}
+                  >
+                    {analysis_tab.content}
+                  </ReactMarkdown>
+                  {analysis_tab.relevance && (
+                    <p className="caption text-text-secondary italic mt-3 pt-3 border-t border-gray-100">
+                      {analysis_tab.relevance}
+                    </p>
+                  )}
+                </div>
+              )}
+            </TabsContent>
+          )}
+
+          {activeTabs.action && (
+            <TabsContent value="action" className="p-0 max-h-96 overflow-y-auto">
+              {hasActionJson ? (
+                <ActionTab data={extractedData.action} />
+              ) : (
+                <div className="p-4 space-y-3">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      p: ({children}) => <p className="body-regular text-text-primary mb-3">{children}</p>,
+                      ul: ({children}) => <ul className="list-disc list-inside space-y-2 mb-3">{children}</ul>,
+                      ol: ({children}) => <ol className="list-decimal list-inside space-y-2 mb-3">{children}</ol>,
+                      li: ({children}) => <li className="body-regular text-text-primary">{children}</li>,
+                      h1: ({children}) => <h1 className="heading-3 text-text-primary mb-3">{children}</h1>,
+                      h2: ({children}) => <h2 className="heading-4 text-text-primary mb-2">{children}</h2>,
+                      h3: ({children}) => <h3 className="body-semibold text-text-primary mb-2">{children}</h3>,
+                      strong: ({children}) => <strong className="body-semibold text-purple-primary">{children}</strong>,
+                      em: ({children}) => <em className="italic">{children}</em>,
+                      code: ({children}) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
+                    }}
+                  >
+                    {action_tab.content}
+                  </ReactMarkdown>
+                  {action_tab.relevance && (
+                    <p className="caption text-text-secondary italic mt-3 pt-3 border-t border-gray-100">
+                      {action_tab.relevance}
+                    </p>
+                  )}
+                </div>
+              )}
+            </TabsContent>
+          )}
+
+          {hasSupplementary && (
+            <TabsContent value="supplementary" className="p-0 max-h-96 overflow-y-auto">
+              <SupplementaryTab
+                visualizationData={hasVisualizationJson ? extractedData.visualization : undefined}
+                draftData={hasDraftJson ? extractedData.draft : undefined}
+              />
+            </TabsContent>
+          )}
+        </Tabs>
+
+        <div className="p-3 bg-gray-50/50 border-t border-gray-100">
+          <p className="caption text-text-secondary text-center">
+            {new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </p>
+        </div>
+      </div>
+    </motion.div>
+  );
+});
+
+SupervisorMessageBubble.displayName = "SupervisorMessageBubble";
+
 // Memoized Regular Message Bubble Component
 const RegularMessageBubble = memo(({ message }: { message: Message }) => (
   <motion.div
@@ -449,13 +711,55 @@ const RegularMessageBubble = memo(({ message }: { message: Message }) => (
           : "bg-surface-white border border-gray-200 text-text-primary rounded-bl-sm"
       }`}
     >
-      <p
+      {/* Show file attachments if present */}
+      {message.attachments && message.attachments.length > 0 && (
+        <div className="mb-2 space-y-1">
+          {message.attachments.map((attachment) => (
+            <div
+              key={attachment.id}
+              className={`flex items-center gap-2 text-xs ${
+                message.sender === "user"
+                  ? "text-white/90"
+                  : "text-purple-700"
+              }`}
+            >
+              <FileText className="w-3 h-3 flex-shrink-0" />
+              <span className="truncate">{attachment.filename}</span>
+              {attachment.fileSize && (
+                <span className="text-xs opacity-75">
+                  ({(attachment.fileSize / 1024).toFixed(1)} KB)
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div
         className={`body-regular ${
           message.sender === "user" ? "text-white" : "text-text-primary"
         }`}
       >
-        {message.content}
-      </p>
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            a: ({ node, ...props }) => (
+              <a
+                {...props}
+                className={`underline ${
+                  message.sender === "user"
+                    ? "text-white hover:text-white/80"
+                    : "text-purple-primary hover:text-purple-700"
+                }`}
+                target="_blank"
+                rel="noopener noreferrer"
+              />
+            ),
+          }}
+        >
+          {message.content}
+        </ReactMarkdown>
+      </div>
       <p
         className={`caption mt-1 ${
           message.sender === "user" ? "text-white/80" : "text-text-secondary"
@@ -472,10 +776,10 @@ const RegularMessageBubble = memo(({ message }: { message: Message }) => (
 
 RegularMessageBubble.displayName = "RegularMessageBubble";
 
-export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
-  const [showDocumentPrompt, setShowDocumentPrompt] = useState(true);
+export function ChatbotScreen({ domain, onBack, initialSession, conversationId, collectionId, collectionName }: ChatbotScreenProps) {
+  const [showDocumentPrompt, setShowDocumentPrompt] = useState(!initialSession && !conversationId); // Hide prompt if resuming or viewing saved conversation
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(
-    null
+    initialSession || null
   );
   const [inputValue, setInputValue] = useState("");
   const [isDraftMode, setIsDraftMode] = useState(false);
@@ -485,35 +789,173 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isSidePanelOpen, setIsSidePanelOpen] = useState(false);
   const [messagePayloads, setMessagePayloads] = useState<
-    Record<string, { analysis?: ApiAnalysisResult; draft?: ApiDraftResult }>
+    Record<string, { 
+      analysis?: ApiAnalysisResult; 
+      draft?: ApiDraftResult; 
+      supervisor?: any; // TODO: Add proper type for supervisor response
+    }>
   >({});
   // Email modal state
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
-  const [emailTo, setEmailTo] = useState("");
-  const [emailSubject, setEmailSubject] = useState(
-    "Shared legal documents from LegalKaki"
-  );
-  const [emailMessage, setEmailMessage] = useState(
-    "Hi,\n\nPlease find the selected documents attached.\n\nBest regards,"
-  );
-  const [selectedEmailDocs, setSelectedEmailDocs] = useState<string[]>([]);
-  const [sendingEmail, setSendingEmail] = useState(false);
 
   // State for temporarily storing uploaded documents (memory-based, no persistence)
   const [sessionDocuments, setSessionDocuments] = useState<Document[]>([]);
   const [uploading, setUploading] = useState(false);
 
-  // API hooks - Use mock data for general documents, real API for session uploads
-  const { data: mockDocuments, loading: documentsLoading } = useApiCall(
-    () => documentsApi.getDocuments(),
-    []
-  );
+  // State for collection info (when viewing from collection)
+  const [currentCollectionId, setCurrentCollectionId] = useState<string | undefined>(collectionId);
+  const [currentCollectionName, setCurrentCollectionName] = useState<string | undefined>(collectionName);
+  const [initialMessageCount, setInitialMessageCount] = useState<number>(0);
 
-  // Combine mock documents with session-uploaded documents for display
+  // Fetch real documents for the current chat session
+  const [chatDocuments, setChatDocuments] = useState<Document[]>([]);
+  const [loadingChatDocuments, setLoadingChatDocuments] = useState(false);
+
+  // Fetch collection name if collectionId is provided but name is missing
+  useEffect(() => {
+    const fetchCollectionName = async () => {
+      if (!currentCollectionId || currentCollectionName) return;
+
+      try {
+        const result = await collectionsApi.getCollectionDashboard(currentCollectionId);
+        if (result.success && result.data) {
+          setCurrentCollectionName(result.data.collection.title);
+        }
+      } catch (error) {
+        console.error('Failed to fetch collection name:', error);
+      }
+    };
+
+    fetchCollectionName();
+  }, [currentCollectionId, currentCollectionName]);
+
+  // Load conversation snapshot if conversationId is provided
+  useEffect(() => {
+    const loadConversationSnapshot = async () => {
+      if (!conversationId) return;
+
+      console.log(`📥 Loading conversation snapshot: ${conversationId}`);
+
+      try {
+        const result = await collectionsApi.getConversationSnapshot(conversationId, DEFAULT_USER_ID);
+
+        if (result.success && result.data) {
+          const snapshot = result.data;
+          console.log(`✅ Loaded snapshot with ${snapshot.snapshot_data.messages.length} messages`);
+
+          // Convert snapshot messages to ChatSession format
+          const messages: Message[] = snapshot.snapshot_data.messages.map(msg => ({
+            id: msg.id,
+            content: msg.content,
+            sender: msg.sender as 'user' | 'assistant',
+            timestamp: new Date(msg.timestamp),
+            attachments: msg.attachments,
+            domain: msg.domain as LegalDomain,
+            type: msg.type,
+          }));
+
+          // Recreate the session
+          const session: ChatSession = {
+            id: `session_${snapshot.chat_id}`,
+            domain: (snapshot.domain as LegalDomain) || domain,
+            title: snapshot.title,
+            messages,
+            createdAt: new Date(snapshot.created_at),
+            updatedAt: new Date(snapshot.updated_at),
+          };
+
+          setCurrentSession(session);
+          setShowDocumentPrompt(false); // Hide prompt for resumed chats
+
+          // Track initial message count to detect new messages
+          setInitialMessageCount(messages.length);
+
+          // Restore message payloads if available
+          if (snapshot.snapshot_data.messagePayloads) {
+            setMessagePayloads(snapshot.snapshot_data.messagePayloads);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Failed to load conversation snapshot:', error);
+      }
+    };
+
+    loadConversationSnapshot();
+  }, [conversationId, domain]);
+
+  // Auto-save to collection after NEW messages are added (when already in a collection)
+  useEffect(() => {
+    // Only auto-save if:
+    // 1. We're in a collection (currentCollectionId exists)
+    // 2. We have a session with messages
+    // 3. Message count has increased beyond the initial load
+    if (!currentCollectionId || !currentSession || !currentSession.messages.length) {
+      return;
+    }
+
+    // Only trigger auto-save if we have NEW messages (beyond what was initially loaded)
+    const messageCount = currentSession.messages.length;
+    const hasNewMessages = messageCount > initialMessageCount && initialMessageCount > 0;
+    if (!hasNewMessages) {
+      return;
+    }
+
+    // Auto-save with debounce to avoid too many saves
+    const timeoutId = setTimeout(async () => {
+      try {
+        console.log(`🔄 Auto-saving conversation to collection: ${currentCollectionName}`);
+        console.log(`   Initial: ${initialMessageCount}, Current: ${messageCount}`);
+        await handleSaveConversation(parseInt(currentCollectionId), currentSession?.title);
+        console.log(`✅ Auto-saved ${messageCount} messages`);
+      } catch (error) {
+        console.error('Auto-save failed:', error);
+      }
+    }, 2000); // 2 second debounce
+
+    return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSession?.messages?.length, currentCollectionId]); // Don't include initialMessageCount to avoid array size change warning
+
+  // Fetch chat documents ONLY for resumed/saved chats (not new chats)
+  useEffect(() => {
+    const fetchChatDocuments = async () => {
+      if (!currentSession) return;
+
+      // Only fetch documents if this is a saved/resumed chat (has initialSession or conversationId)
+      // New chats shouldn't fetch documents from backend
+      if (!initialSession && !conversationId) {
+        console.log('⏩ Skipping document fetch for new chat session');
+        return;
+      }
+
+      // Extract numeric chat ID from session ID
+      const chatIdMatch = currentSession.id.match(/session_(\d+)/);
+      const chatId = chatIdMatch ? parseInt(chatIdMatch[1]) : null;
+
+      if (!chatId) return;
+
+      setLoadingChatDocuments(true);
+      try {
+        const result = await documentsApi.getChatDocuments(DEFAULT_USER_ID, chatId);
+        if (result.success) {
+          setChatDocuments(result.data);
+          console.log(`📄 Loaded ${result.data.length} documents for chat ${chatId}`);
+        }
+      } catch (error) {
+        console.error('Error fetching chat documents:', error);
+      } finally {
+        setLoadingChatDocuments(false);
+      }
+    };
+
+    fetchChatDocuments();
+  }, [currentSession, initialSession, conversationId]);
+
+  // Combine chat documents with session-uploaded documents for display
   const availableDocuments = useMemo(() => {
-    const combined = [...(mockDocuments || []), ...sessionDocuments];
+    const combined = [...chatDocuments, ...sessionDocuments];
     return combined;
-  }, [mockDocuments, sessionDocuments]);
+  }, [chatDocuments, sessionDocuments]);
 
   // #TODO: Replace chatApi.createSession with real backend endpoint
   // POST /api/chat/sessions - Create new chat session
@@ -562,6 +1004,7 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const chatFileInputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -596,20 +1039,256 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
     }
   }, [showDocumentDropdown]);
 
+  // Handle draft generation using the document generation endpoint
+  const handleDraftGeneration = async (prompt: string, chatId: number) => {
+    // Add user's message first
+    const userMessage: Message = {
+      id: `user_${Date.now()}`,
+      content: prompt,
+      sender: "user",
+      timestamp: new Date(),
+      domain,
+    };
+
+    // Add "generating" message
+    const generatingMessage: Message = {
+      id: `gen_${Date.now() + 1}`,
+      content: `📄 Generating document...`,
+      sender: "assistant",
+      timestamp: new Date(),
+      domain,
+    };
+
+    setCurrentSession(prev => ({
+      ...prev!,
+      messages: [...prev!.messages, userMessage, generatingMessage],
+    }));
+
+    try {
+      // Extract title from prompt if possible
+      const titleMatch = prompt.match(/(?:draft|create|generate)\s+(?:a|an)?\s+(.+?)(?:\s+for|\s+with|$)/i);
+      const title = titleMatch ? titleMatch[1].trim() : "Generated Document";
+
+      console.log(`🎯 Calling draft generation API: chatId=${chatId}, prompt="${prompt}"`);
+
+      // Call API to generate draft
+      const result = await documentsApi.generateDraft(
+        DEFAULT_USER_ID, // TODO: Get from auth context
+        chatId,
+        prompt,
+        title
+      );
+
+      if (result.success) {
+        const doc = result.data;
+
+        // Add to chat documents so it appears in dropdown
+        setChatDocuments(prev => [...prev, doc]);
+
+        // Add success message with download link
+        const successMessage: Message = {
+          id: `doc_${Date.now()}`,
+          content: `✅ **Document Generated Successfully!**\n\n**${doc.title}**\n\nSize: ${doc.size}\n\n[📥 Download PDF](${doc.url})\n\nThe document has been added to your chat and can be accessed from the Analysis Mode dropdown.`,
+          sender: "assistant",
+          timestamp: new Date(),
+          domain,
+        };
+
+        // Replace generating message with success message
+        setCurrentSession(prev => ({
+          ...prev!,
+          messages: [...prev!.messages.filter(m => m.id !== generatingMessage.id), successMessage],
+        }));
+
+        // Refresh documents list
+        const refreshResult = await documentsApi.getChatDocuments(DEFAULT_USER_ID, chatId);
+        if (refreshResult.success) {
+          setChatDocuments(refreshResult.data);
+        }
+
+        console.log(`✅ Document generated: ${doc.id} - ${doc.title}`);
+      } else {
+        throw new Error(result.error?.message || 'Failed to generate document');
+      }
+    } catch (error) {
+      console.error('❌ Error generating draft:', error);
+
+      // Add error message
+      const errorMessage: Message = {
+        id: `err_${Date.now()}`,
+        content: `❌ Failed to generate document: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or rephrase your request.`,
+        sender: "assistant",
+        timestamp: new Date(),
+        domain,
+      };
+
+      setCurrentSession(prev => ({
+        ...prev!,
+        messages: [...prev!.messages.filter(m => m.id !== generatingMessage.id), errorMessage],
+      }));
+    }
+  };
+
+  // Handle document editing
+  const handleDocumentEdit = async (document: Document, changes: string, chatId: number) => {
+    try {
+      // Fetch the document file content first
+      console.log(`📄 Fetching document content for: ${document.id}`);
+
+      // Get presigned URL for the document
+      const presignResponse = await fetch(
+        `${getEnvConfig().backendUrl}/documents/${document.id}/presign?owner_sub=${DEFAULT_USER_ID}`
+      );
+
+      if (!presignResponse.ok) {
+        throw new Error(`Failed to get document URL: ${presignResponse.statusText}`);
+      }
+
+      const { url: documentUrl } = await presignResponse.json();
+
+      // Download the document content
+      const docResponse = await fetch(documentUrl);
+      if (!docResponse.ok) {
+        throw new Error(`Failed to download document: ${docResponse.statusText}`);
+      }
+
+      const documentBlob = await docResponse.blob();
+      const documentFile = new File([documentBlob], document.originalFilename || 'document.pdf', {
+        type: document.fileType || 'application/pdf'
+      });
+
+      console.log(`✅ Document fetched: ${documentFile.name} (${documentFile.size} bytes)`);
+
+      // Upload the document to the chat context for the draft agent
+      console.log(`📤 Uploading document to chat context...`);
+      const uploadResult = await documentsApi.upload(
+        { file: documentFile },
+        undefined,
+        chatId
+      );
+
+      if (!uploadResult.success) {
+        throw new Error('Failed to upload document to chat context');
+      }
+
+      console.log(`✅ Document uploaded to chat context`);
+
+      // Create edit prompt that references the uploaded document
+      const editPrompt = `I have uploaded the document "${document.title || document.originalFilename}". Please edit this document with the following changes:
+
+${changes}
+
+Generate a complete, updated version of the document incorporating all the requested changes. Maintain the original document structure and format where not affected by the changes.`;
+
+      // Use the draft generation function with edit context
+      await handleDraftGeneration(editPrompt, chatId);
+
+      // Clear edit mode
+      setSelectedDocumentForEdit(null);
+    } catch (error) {
+      console.error("Error in document edit:", error);
+
+      // Show error to user
+      const errorMessage: Message = {
+        id: `err_${Date.now()}`,
+        content: `❌ Failed to edit document: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again.`,
+        sender: "assistant",
+        timestamp: new Date(),
+        domain,
+      };
+
+      setCurrentSession(prev => ({
+        ...prev!,
+        messages: [...prev!.messages, errorMessage],
+      }));
+
+      // Clear edit mode even on error
+      setSelectedDocumentForEdit(null);
+    }
+  };
+
   const handleSendMessage = async () => {
     if (!inputValue.trim() || !currentSession) return;
 
-    const messageType = isDraftMode ? "draft_request" : "analysis_request";
     const messageContent = inputValue.trim();
+
+    // Extract chat ID for document upload/generation
+    const chatIdMatch = currentSession.id.match(/session_(\d+)/);
+    const chatId = chatIdMatch ? parseInt(chatIdMatch[1]) : Date.now();
+
+    // Check if in draft mode - use document generation endpoint
+    if (isDraftMode) {
+      setInputValue("");
+      await handleDraftGeneration(messageContent, chatId);
+      return;
+    }
+
+    // Check if editing a document
+    if (selectedDocumentForEdit) {
+      setInputValue("");
+      await handleDocumentEdit(selectedDocumentForEdit, messageContent, chatId);
+      return;
+    }
+
+    const messageType = "analysis_request";
     setInputValue("");
 
-    // Create user message immediately
+    // Upload any staged files before sending message
+    const stagedDocs = sessionDocuments.filter((doc: any) => doc._staged);
+
+    setUploading(true);
+
+    try {
+      for (const stagedDoc of stagedDocs) {
+        if (stagedDoc._file) {
+          console.log(`Uploading staged file: ${stagedDoc.originalFilename} to chat ${chatId}`);
+          const uploadResponse = await documentsApi.upload(
+            { file: stagedDoc._file },
+            (progress) => console.log(`Upload progress: ${progress}%`),
+            chatId
+          );
+
+          if (uploadResponse.success) {
+            // Update the staged doc with S3 info
+            stagedDoc.s3Bucket = uploadResponse.data.document.s3Bucket;
+            stagedDoc.s3Key = uploadResponse.data.document.s3Key;
+            stagedDoc._staged = false;
+            delete stagedDoc._file; // Clean up file reference
+            console.log(`Uploaded: ${stagedDoc.originalFilename}`);
+          }
+        }
+      }
+
+      // Refresh documents list after upload
+      if (stagedDocs.length > 0) {
+        const refreshResult = await documentsApi.getChatDocuments(DEFAULT_USER_ID, chatId);
+        if (refreshResult.success) {
+          setChatDocuments(refreshResult.data);
+          console.log(`Refreshed documents list: ${refreshResult.data.length} documents`);
+        }
+      }
+    } catch (error) {
+      console.error("File upload error:", error);
+    } finally {
+      setUploading(false);
+    }
+
+    // Create user message with file attachments if any
     const userMessage: Message = {
       id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       content: messageContent,
       sender: "user",
       timestamp: new Date(),
       domain,
+      attachments: stagedDocs.length > 0
+        ? stagedDocs.map((doc: any) => ({
+            id: doc.id,
+            filename: doc.originalFilename,
+            fileType: doc.fileType,
+            fileSize: doc.fileSize,
+            url: `#document-${doc.id}`,
+          }))
+        : undefined,
     };
 
     // Add user message to session immediately
@@ -620,12 +1299,22 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
     });
 
     try {
+      // Log file information being sent
+      if (sessionDocuments.length > 0) {
+        console.log(`[Chat] Sending message with ${sessionDocuments.length} documents:`);
+        sessionDocuments.forEach((doc: any) => {
+          console.log(`  - ${doc.originalFilename} (${doc.fileSize} bytes, has content: ${!!doc._fileContent})`);
+        });
+      }
+
       const response = await sendMessage(currentSession.id, {
         content: messageContent,
         messageType: messageType,
+        domain: domain, // Pass domain for specialized context
         attachments: selectedDocumentForEdit
           ? [selectedDocumentForEdit.id]
           : undefined,
+        uploadedDocuments: sessionDocuments.length > 0 ? sessionDocuments as any[] : undefined,
       });
 
       if (response && response.success) {
@@ -644,19 +1333,30 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
           const aiMsg = responseData.aiResponse as Message;
           const updatedMessages = [...newMessages, aiMsg];
 
-          // Attach mock payloads for rendering (force clean tabs)
-          setMessagePayloads((prev) => ({
-            ...prev,
-            [aiMsg.id]: {
-              analysis: { ...mockAnalysisResult, id: `analysis_${Date.now()}` },
-              draft: { ...mockDraftResult, id: `draft_${Date.now()}` },
-            },
-          }));
-          console.log("[Chat] stored payloads for message", aiMsg.id, {
-            type: aiMsg.type,
-            hasAnalysis: Boolean(responseData.analysisResult),
-            hasDraft: Boolean(responseData.draftResult),
-          });
+          // Use real supervisor data if available, store it for rendering
+          if (responseData.supervisorData) {
+            console.log("[Chat] Using real supervisor data for message", aiMsg.id, responseData.supervisorData);
+            setMessagePayloads((prev) => ({
+              ...prev,
+              [aiMsg.id]: {
+                supervisor: responseData.supervisorData,
+              },
+            }));
+          } else {
+            // Only attach mock payloads if no supervisor data (legacy fallback)
+            setMessagePayloads((prev) => ({
+              ...prev,
+              [aiMsg.id]: {
+                analysis: { ...mockAnalysisResult, id: `analysis_${Date.now()}` },
+                draft: { ...mockDraftResult, id: `draft_${Date.now()}` },
+              },
+            }));
+            console.log("[Chat] stored mock payloads for message", aiMsg.id, {
+              type: aiMsg.type,
+              hasAnalysis: Boolean(responseData.analysisResult),
+              hasDraft: Boolean(responseData.draftResult),
+            });
+          }
 
           // If backend indicates a mode switch, toggle UI mode and append a small system message
           if (responseData.modeSwitch?.detected) {
@@ -705,127 +1405,43 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
       return;
     }
 
-    setUploading(true);
-
     try {
-      // Upload files using real API with progress tracking
+      // Stage files (don't upload to S3 yet - wait for user to send message with prompt)
       for (const file of pdfFiles) {
-        const uploadProgress = (progress: number) => {
-          console.log(`Upload progress: ${progress}%`);
-          // Could add progress UI here if needed
+        const fileContent = await file.arrayBuffer();
+
+        // Store in sessionDocuments for immediate display, but mark as not yet uploaded
+        const stagedDoc = {
+          id: `staged_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          originalFilename: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+          s3Bucket: '', // Will be filled after upload
+          s3Key: '', // Will be filled after upload
+          uploadDate: new Date(),
+          analysisStatus: 'pending' as const,
+          _staged: true, // Mark as staged (not uploaded yet)
+          _file: file, // Store original file for upload later
+          _fileContent: fileContent, // Store content for Bedrock
         };
 
-        const uploadResponse = await documentsApi.upload(
-          { file },
-          uploadProgress
-        );
+        setSessionDocuments((prev) => [...prev, stagedDoc as any]);
+        console.log(`Staged file: ${file.name} (will upload when you send a message)`);
+      }
 
-        if (uploadResponse.success) {
-          const newDocument = uploadResponse.data.document;
-
-          // Add to session documents (temporary memory)
-          setSessionDocuments((prev) => [...prev, newDocument]);
-
-          console.log(`Successfully uploaded: ${newDocument.originalFilename}`);
-        } else {
-          console.error("Upload failed:", uploadResponse);
-          alert(`Failed to upload ${file.name}. Please try again.`);
-        }
+      // If showing document prompt, start the chat session so user can enter their prompt
+      if (showDocumentPrompt) {
+        handleUploadFirst();
       }
     } catch (error) {
-      console.error("Upload error:", error);
-      alert("Upload failed. Please check your connection and try again.");
-    } finally {
-      setUploading(false);
+      console.error("File staging error:", error);
+      alert("Failed to prepare files. Please try again.");
     }
 
-    // If this is the first upload (document prompt is showing), start the chat
-    if (showDocumentPrompt) {
-      handleUploadFirst();
-      return;
-    }
-
-    // Handle uploads during chat - trigger AI analysis
-    if (currentSession && pdfFiles.length > 0) {
-      const file = pdfFiles[0];
-      const messageType = isDraftMode ? "draft_request" : "analysis_request";
-
-      try {
-        const response = await sendMessage(currentSession.id, {
-          content: `I've uploaded "${file.name}" for ${
-            isDraftMode ? "editing" : "analysis"
-          }. Please help me with this document.`,
-          messageType: messageType,
-        });
-
-        if (response && response.success) {
-          const responseData = response.data;
-          console.log("[Chat] upload-triggered sendMessage response:", {
-            success: response.success,
-            aiType: responseData.aiResponse?.type,
-            modeSwitch: responseData.modeSwitch || null,
-            hasAnalysis: Boolean(responseData.analysisResult),
-            hasDraft: Boolean(responseData.draftResult),
-          });
-          // Update session with new messages
-          const newMessages = [
-            ...currentSession.messages,
-            responseData.message,
-          ];
-
-          if (responseData.aiResponse) {
-            const aiMsg = responseData.aiResponse as Message;
-            newMessages.push(aiMsg);
-
-            // Attach mock payloads for rendering (force clean tabs)
-            setMessagePayloads((prev) => ({
-              ...prev,
-              [aiMsg.id]: {
-                analysis: {
-                  ...mockAnalysisResult,
-                  id: `analysis_${Date.now()}`,
-                },
-                draft: { ...mockDraftResult, id: `draft_${Date.now()}` },
-              },
-            }));
-            console.log("[Chat] stored payloads for upload message", aiMsg.id, {
-              type: aiMsg.type,
-              hasAnalysis: Boolean(responseData.analysisResult),
-              hasDraft: Boolean(responseData.draftResult),
-            });
-          }
-
-          // Handle mode switch
-          if (responseData.modeSwitch?.detected) {
-            const switchingToDraft = responseData.modeSwitch.toDraftMode;
-            setIsDraftMode(switchingToDraft);
-            console.log(
-              "[Chat] mode switch detected (upload):",
-              responseData.modeSwitch
-            );
-
-            const modeMessage: Message = {
-              id: `mode_${Date.now()}`,
-              content: switchingToDraft
-                ? "🔁 Switched to Draft Mode based on AI response (Mode C)"
-                : "🔁 Staying in Analysis Mode based on AI response (Mode A/B)",
-              sender: "assistant",
-              timestamp: new Date(),
-              domain,
-            };
-            newMessages.push(modeMessage);
-          }
-
-          setCurrentSession({
-            ...currentSession,
-            messages: newMessages,
-          });
-        }
-      } catch (error) {
-        console.error("Failed to analyze uploaded file:", error);
-      }
-    }
+    // Files are now staged - wait for user to enter prompt and click send
+    // (Removed auto-send logic to match ChatGPT/Claude behavior)
   };
+
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -850,50 +1466,109 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
     }
   };
 
-  const handleSaveToCollection = () => {
-    // #TODO: Implement save to collection with collectionsApi.createCollection()
-    // POST /api/collections - Save current chat session to a collection
-    console.log("Save to collection clicked");
+  const [showSaveModal, setShowSaveModal] = useState(false);
+
+  const handleSaveToCollection = async () => {
+    // If already in a collection, auto-save without showing modal
+    if (currentCollectionId) {
+      try {
+        await handleSaveConversation(parseInt(currentCollectionId), currentSession?.title);
+        // Show success feedback
+        console.log(`✅ Auto-saved to collection: ${currentCollectionName}`);
+        // TODO: Show toast notification
+      } catch (error) {
+        console.error('Failed to auto-save to collection:', error);
+        // TODO: Show error notification
+      }
+    } else {
+      // Show modal to create new collection or select existing
+      setShowSaveModal(true);
+    }
   };
 
-  const handleToggleEmailDoc = (docId: string) => {
-    setSelectedEmailDocs((prev) =>
-      prev.includes(docId)
-        ? prev.filter((id) => id !== docId)
-        : [...prev, docId]
-    );
+  const handleSaveConversation = async (collectionId: number | undefined, title?: string) => {
+    if (!currentSession) {
+      console.error("No active session to save");
+      return;
+    }
+
+    try {
+      // Serialize current state
+      const serializedMessages = currentSession.messages.map(msg => ({
+        id: msg.id,
+        content: msg.content,
+        sender: msg.sender,
+        timestamp: msg.timestamp.toISOString(),
+        attachments: msg.attachments,
+        domain: msg.domain,
+        type: msg.type,
+      }));
+
+      // Extract staged files (files with _staged flag that haven't been uploaded yet)
+      const stagedFiles = sessionDocuments
+        .filter((doc: any) => doc._staged && doc._fileContent)
+        .map((doc: any) => ({
+          filename: doc.originalFilename,
+          fileContent: Array.from(new Uint8Array(doc._fileContent)), // Convert ArrayBuffer to number array
+          fileType: doc.fileType,
+          fileSize: doc.fileSize,
+        }));
+
+      // Get already-uploaded document IDs from the chat
+      const existingDocumentIds = chatDocuments
+        .filter(doc => doc.id && !doc.id.startsWith('staged_'))
+        .map(doc => parseInt(doc.id));
+
+      console.log(`📤 Saving conversation with ${stagedFiles.length} staged files and ${existingDocumentIds.length} existing documents`);
+
+      // Extract numeric chat ID from session ID (e.g., "session_1234567_abc" -> 1234567)
+      const chatIdMatch = currentSession.id.match(/session_(\d+)/);
+      const chatId = chatIdMatch ? parseInt(chatIdMatch[1]) : Date.now();
+
+      console.log(`📝 Session ID: ${currentSession.id}, Numeric Chat ID: ${chatId}`);
+
+      // Call API to save (collectionId is optional - will create new collection if undefined)
+      await collectionsApi.saveConversationToCollection({
+        collection_id: collectionId || undefined,
+        chat_id: chatId,
+        user_sub: DEFAULT_USER_ID, // TODO: Get from auth context
+        title: title || undefined,
+        domain: domain || undefined,
+        messages: serializedMessages,
+        messagePayloads,
+        stagedFiles: stagedFiles.length > 0 ? stagedFiles : undefined,
+        existingDocumentIds: existingDocumentIds.length > 0 ? existingDocumentIds : undefined,
+      });
+
+      console.log("✅ Conversation saved successfully");
+
+      // Update local state to show collection info in button
+      if (collectionId && !currentCollectionId) {
+        setCurrentCollectionId(collectionId.toString());
+      }
+      if (title && !currentCollectionName) {
+        setCurrentCollectionName(title);
+      }
+    } catch (error) {
+      console.error("Failed to save conversation:", error);
+      throw error;
+    }
   };
+
+
 
   const handleOpenEmailModal = () => {
-    if (selectedDocumentForEdit) {
-      setSelectedEmailDocs([selectedDocumentForEdit.id]);
-    }
     setIsEmailModalOpen(true);
   };
 
-  const handleSendEmail = async () => {
-    if (!emailTo.trim()) {
-      alert("Please enter at least one recipient email.");
-      return;
-    }
-    if (selectedEmailDocs.length === 0) {
-      alert("Please select at least one document to send.");
-      return;
-    }
+  const handleSendEmail = async (emailData: EmailData) => {
     try {
-      setSendingEmail(true);
-      await new Promise((r) => setTimeout(r, 1000));
-      console.log("[Email demo] send", {
-        to: emailTo,
-        subject: emailSubject,
-        message: emailMessage,
-        attachments: selectedEmailDocs,
-      });
-      alert("Email sent successfully (demo)");
-      setIsEmailModalOpen(false);
-      setSelectedEmailDocs([]);
-    } finally {
-      setSendingEmail(false);
+      // Try to use the real email service first
+      await emailService.sendEmail(emailData);
+    } catch (error) {
+      // Fallback to demo mode if email service is not available
+      console.log('Email service not available, using demo mode:', error);
+      await emailService.sendEmailDemo(emailData);
     }
   };
 
@@ -1259,6 +1934,16 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
                     {LEGAL_DOMAINS[domain]?.title || "General"}
                   </span>
                 </div>
+
+                {/* Collection Badge */}
+                {collectionId && collectionName && (
+                  <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full flex items-center space-x-2">
+                    <Bookmark className="w-3 h-3" />
+                    <span className="body-small font-medium">
+                      {collectionName}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Document Edit Mode Dropdown */}
@@ -1347,7 +2032,7 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
                             </div>
                           </div>
 
-                          {documentsLoading ? (
+                          {loadingChatDocuments ? (
                             <div className="px-3 py-4 text-center text-text-secondary">
                               <div className="animate-spin w-4 h-4 border-2 border-purple-primary border-t-transparent rounded-full mx-auto mb-2"></div>
                               Loading documents...
@@ -1459,14 +2144,40 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
           </AnimatePresence>
 
           {/* Messages Container or Document Upload Prompt */}
-          {showDocumentPrompt ? (
-            <DocumentUploadPrompt />
-          ) : (
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-4">
-              <AnimatePresence>
-                {currentSession?.messages.map((message: Message) => {
+          <AnimatePresence mode="wait">
+            {showDocumentPrompt ? (
+              <motion.div
+                key="document-prompt"
+                initial={{ opacity: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.2 }}
+                className="flex-1"
+              >
+                <DocumentUploadPrompt />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="chat-messages"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3, delay: 0.1 }}
+                className="flex-1 overflow-y-auto p-4 space-y-4 pb-4"
+              >
+                <AnimatePresence>
+                  {currentSession?.messages.map((message: Message) => {
                   const analysis = messagePayloads[message.id]?.analysis;
                   const draft = messagePayloads[message.id]?.draft;
+                  const supervisor = messagePayloads[message.id]?.supervisor;
+
+                  // Handle supervisor response (highest priority)
+                  if (supervisor && message.sender === "assistant") {
+                    return (
+                      <SupervisorMessageBubble
+                        key={message.id}
+                        supervisorData={supervisor}
+                      />
+                    );
+                  }
 
                   if (analysis && draft) {
                     return (
@@ -1551,12 +2262,13 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
               )}
 
               <div ref={messagesEndRef} />
-            </div>
-          )}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Input Section - Only show when session exists */}
           {currentSession && (
-            <div className="bg-surface-white border-t border-gray-200 p-4 pb-nav">
+            <div className="bg-surface-white border-t border-gray-200 p-4">
               <div className="flex items-center space-x-2 mb-3">
                 <Button
                   variant="ghost"
@@ -1564,7 +2276,9 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
                   onClick={handleSaveToCollection}
                   leftIcon={<Bookmark className="w-4 h-4" />}
                 >
-                  Save to Collection
+                  {currentCollectionId && currentCollectionName
+                    ? `In: ${currentCollectionName}`
+                    : 'Save to Collection'}
                 </Button>
                 <Button
                   variant="ghost"
@@ -1576,7 +2290,7 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
                 </Button>
 
                 <input
-                  ref={fileInputRef}
+                  ref={chatFileInputRef}
                   type="file"
                   accept=".pdf"
                   onChange={(e) => handleFileUpload(e.target.files)}
@@ -1585,7 +2299,7 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
                 <Button
                   variant="ghost"
                   size="small"
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => chatFileInputRef.current?.click()}
                   leftIcon={<Paperclip className="w-4 h-4" />}
                   disabled={uploading}
                 >
@@ -1594,6 +2308,33 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
               </div>
 
               <div className="relative">
+                {/* Show staged files indicator */}
+                {sessionDocuments.filter((doc: any) => doc._staged).length > 0 && (
+                  <div className="mb-2 p-2 bg-purple-50 border border-purple-200 rounded-lg">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <FileText className="w-4 h-4 text-purple-600 flex-shrink-0" />
+                      <span className="text-xs font-medium text-purple-900">
+                        {sessionDocuments.filter((doc: any) => doc._staged).length} file(s) ready to send:
+                      </span>
+                      {sessionDocuments.filter((doc: any) => doc._staged).map((doc: any) => (
+                        <span key={doc.id} className="flex items-center gap-1 text-xs text-purple-700 bg-purple-100 px-2 py-0.5 rounded">
+                          <span>{doc.originalFilename}</span>
+                          <button
+                            onClick={() => {
+                              // Remove the staged file
+                              setSessionDocuments(prev => prev.filter(d => d.id !== doc.id));
+                            }}
+                            className="hover:bg-purple-200 rounded p-0.5 transition-colors"
+                            title="Remove file"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <Textarea
                   ref={textareaRef}
                   value={inputValue}
@@ -1602,6 +2343,8 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
                   placeholder={
                     isDraftMode
                       ? "Describe the legal document you need or ask for editing help..."
+                      : sessionDocuments.filter((doc: any) => doc._staged).length > 0
+                      ? "Add your question about the file(s)..."
                       : "Ask your legal question or drag & drop a PDF..."
                   }
                   className="pr-12 min-h-[44px] max-h-[120px] resize-none bg-gray-50 focus:bg-surface-white border-purple-primary/20 focus:border-purple-primary"
@@ -1630,133 +2373,22 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
         {/* Side Panel */}
         <SidePanel />
         {/* Email Modal */}
-        <AnimatePresence>
-          {isEmailModalOpen && (
-            <motion.div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
-              <motion.div
-                className="bg-surface-white w-full max-w-2xl rounded-xl shadow-2xl border border-gray-200 overflow-hidden"
-                initial={{ scale: 0.95, y: 10, opacity: 0 }}
-                animate={{ scale: 1, y: 0, opacity: 1 }}
-                exit={{ scale: 0.95, y: 10, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50/50">
-                  <div className="flex items-center space-x-2">
-                    <Mail className="w-4 h-4 text-purple-primary" />
-                    <h3 className="body-regular font-medium">
-                      Send Documents via Email
-                    </h3>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="small"
-                    onClick={() => setIsEmailModalOpen(false)}
-                    className="p-1"
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
+        <EmailModal
+          isOpen={isEmailModalOpen}
+          onClose={() => setIsEmailModalOpen(false)}
+          documents={availableDocuments || []}
+          onSendEmail={handleSendEmail}
+        />
 
-                <div className="p-4 space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="caption text-text-secondary">To</label>
-                      <input
-                        type="text"
-                        value={emailTo}
-                        onChange={(e) => setEmailTo(e.target.value)}
-                        placeholder="name@example.com, second@example.com"
-                        className="w-full mt-1 px-3 py-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-primary/30 focus:border-purple-primary"
-                      />
-                    </div>
-                    <div>
-                      <label className="caption text-text-secondary">
-                        Subject
-                      </label>
-                      <input
-                        type="text"
-                        value={emailSubject}
-                        onChange={(e) => setEmailSubject(e.target.value)}
-                        className="w-full mt-1 px-3 py-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-primary/30 focus:border-purple-primary"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="caption text-text-secondary">
-                      Message
-                    </label>
-                    <Textarea
-                      value={emailMessage}
-                      onChange={(e) => setEmailMessage(e.target.value)}
-                      rows={5}
-                      className="mt-1 bg-gray-50 focus:bg-surface-white border-purple-primary/20 focus:border-purple-primary"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="caption text-text-secondary">
-                      Select documents
-                    </label>
-                    <div className="mt-2 max-h-56 overflow-y-auto border border-gray-200 rounded-md p-2">
-                      {(availableDocuments || []).map((doc) => (
-                        <label
-                          key={doc.id}
-                          className="flex items-center justify-between px-3 py-2 rounded hover:bg-gray-50 cursor-pointer"
-                        >
-                          <div className="flex items-center space-x-3">
-                            <input
-                              type="checkbox"
-                              checked={selectedEmailDocs.includes(doc.id)}
-                              onChange={() => handleToggleEmailDoc(doc.id)}
-                              className="rounded border-gray-300 text-purple-primary focus:ring-purple-primary"
-                            />
-                            <span className="body-small text-text-primary truncate max-w-[260px]">
-                              {doc.originalFilename}
-                            </span>
-                          </div>
-                          <span className="caption text-text-secondary">
-                            {doc.analysisStatus}
-                          </span>
-                        </label>
-                      ))}
-                      {(!availableDocuments ||
-                        availableDocuments.length === 0) && (
-                        <div className="text-center text-text-secondary py-6">
-                          No documents available
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="px-4 py-3 border-t border-gray-200 bg-gray-50/50 flex items-center justify-end space-x-2">
-                  <Button
-                    variant="ghost"
-                    size="small"
-                    onClick={() => setIsEmailModalOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="small"
-                    onClick={handleSendEmail}
-                    disabled={sendingEmail}
-                    leftIcon={<Mail className="w-3 h-3" />}
-                  >
-                    {sendingEmail ? "Sending…" : "Send Email"}
-                  </Button>
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Save to Collection Modal */}
+        <SaveToCollectionModal
+          isOpen={showSaveModal}
+          onClose={() => setShowSaveModal(false)}
+          onSave={handleSaveConversation}
+          domain={domain}
+          defaultTitle={currentSession?.title || ""}
+          userSub={DEFAULT_USER_ID}
+        />
       </div>
     </div>
   );

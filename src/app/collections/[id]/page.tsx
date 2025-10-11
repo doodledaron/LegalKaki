@@ -2,6 +2,7 @@
 
 import { CollectionDashboard } from '@/components/screens/CollectionDashboard'
 import { useRouter, useParams } from 'next/navigation'
+import { AuthGuard } from '@/components/auth/AuthGuard'
 
 export default function CollectionPage() {
   const router = useRouter()
@@ -14,6 +15,11 @@ export default function CollectionPage() {
 
   const handleStartNewChat = () => {
     router.push('/domains')
+  }
+
+  const handleViewConversation = (conversationId: string, domain: string) => {
+    // Navigate to chat page with conversation context
+    router.push(`/chat?domain=${domain}&conversationId=${conversationId}&collectionId=${collectionId}`)
   }
 
   if (!collectionId) {
@@ -35,10 +41,13 @@ export default function CollectionPage() {
   }
 
   return (
-    <CollectionDashboard 
-      collectionId={collectionId}
-      onBack={handleBack}
-      onStartNewChat={handleStartNewChat}
+    <AuthGuard>
+      <CollectionDashboard
+        collectionId={collectionId}
+        onBack={handleBack}
+        onStartNewChat={handleStartNewChat}
+        onViewConversation={handleViewConversation}
     />
+    </AuthGuard>
   )
 }

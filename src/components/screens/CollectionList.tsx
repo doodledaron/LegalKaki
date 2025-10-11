@@ -4,8 +4,10 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
-import { ArrowLeft, MessageCircle, FileText, AlertTriangle, CheckCircle, ChevronRight, Search, Grid, List, Loader2 } from 'lucide-react'
-import { collectionsApi, userApi, useApiCall } from '@/api'
+import { ArrowLeft, MessageCircle, FileText, AlertTriangle, CheckCircle, ChevronRight, Search, Grid, List, Loader2, Trash2 } from 'lucide-react'
+import { collectionsApi, userApi, useApiCall, useApiMutation } from '@/api'
+import { ConfirmDeleteModal } from '@/components/modals/ConfirmDeleteModal'
+import { Collection } from '@/api/types'
 
 interface CollectionListProps {
   onBack: () => void
@@ -17,6 +19,8 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'archived' | 'completed'>('all')
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [collectionToDelete, setCollectionToDelete] = useState<Collection | null>(null)
 
   // Load collections from API with filters
   const { 
@@ -37,6 +41,9 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
     error: statsError 
   } = useApiCall(() => userApi.getStats(), [])
 
+  // Delete collection mutation
+  const deleteCollectionMutation = useApiMutation(collectionsApi.deleteCollection)
+
   const stats = userStats ? {
     totalCollections: userStats.totalCollections,
     activeCollections: userStats.activeCollections,
@@ -51,6 +58,25 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
 
   // Collections are already filtered by API, no need for client-side filtering
   const filteredCollections = collections || []
+
+  const handleDeleteClick = (collection: Collection, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setCollectionToDelete(collection)
+    setShowDeleteModal(true)
+  }
+
+  const handleDeleteCollection = async () => {
+    if (!collectionToDelete) return
+
+    try {
+      await deleteCollectionMutation.mutate(collectionToDelete.id)
+      setShowDeleteModal(false)
+      setCollectionToDelete(null)
+      // The collections will automatically refetch due to the useApiCall hook
+    } catch (err) {
+      console.error('Failed to delete collection:', err)
+    }
+  }
 
 
   return (
@@ -275,18 +301,27 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
                     onClick={() => onSelectCollection(collection.id)}
                   >
                     <CardContent className="p-4">
-                      {/* Header */}
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1">
-                          <h3 className="body-regular font-semibold text-text-primary mb-2">
-                            {collection.title}
-                          </h3>
-                          <p className="body-small text-text-secondary leading-relaxed line-clamp-2">
-                            {collection.summary}
-                          </p>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-text-secondary ml-2 flex-shrink-0" />
-                      </div>
+                       {/* Header */}
+                       <div className="flex items-start justify-between mb-3">
+                         <div className="flex-1">
+                           <h3 className="body-regular font-semibold text-text-primary mb-2">
+                             {collection.title}
+                           </h3>
+                           <p className="body-small text-text-secondary leading-relaxed line-clamp-2">
+                             {collection.summary}
+                           </p>
+                         </div>
+                         <div className="flex items-center space-x-1">
+                           <Button
+                             variant="ghost"
+                             size="small"
+                             onClick={(e) => handleDeleteClick(collection, e)}
+                             leftIcon={<Trash2 className="w-4 h-4 text-red-500" />}
+                             className="p-1 hover:bg-red-50"
+                           />
+                           <ChevronRight className="w-4 h-4 text-text-secondary flex-shrink-0" />
+                         </div>
+                       </div>
 
                       {/* Footer */}
                       <div className="flex items-center justify-between pt-3 border-t border-gray-100">
@@ -315,6 +350,20 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
           )}
         </motion.div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmDeleteModal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false)
+          setCollectionToDelete(null)
+        }}
+        onConfirm={handleDeleteCollection}
+        title="Delete Collection"
+        message={`Are you sure you want to delete "${collectionToDelete?.title || 'this collection'}"? This action cannot be undone and will remove all associated chats, documents, and action items.`}
+        confirmText="Delete Collection"
+        cancelText="Cancel"
+      />
     </div>
   )
 }

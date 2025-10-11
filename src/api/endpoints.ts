@@ -18,6 +18,8 @@ import {
   mockAnalysisResult,
   mockDraftResult,
 } from "./mockData";
+import { getBackendUrl, getEnvConfig } from "@/lib/envConfig";
+import { DEFAULT_USER_ID } from "@/lib/constants";
 
 // http://43.217.199.206:8000
 // Backend API service for highlight explainer
@@ -38,6 +40,12 @@ import {
   User,
   SignInRequest,
   SignInResponse,
+  SignUpRequest,
+  SignUpResponse,
+  ConfirmSignupRequest,
+  ConfirmSignupResponse,
+  ResendCodeRequest,
+  ResendCodeResponse,
   DomainInfo,
   Collection,
   CreateCollectionRequest,
@@ -81,30 +89,231 @@ const toChatSessionResponse = (s: ChatSession): ChatSessionResponse => ({
 
 // Authentication Endpoints
 export const authApi = {
+  async signUp(
+    request: SignUpRequest
+  ): Promise<ApiResponse<SignUpResponse> | ApiError> {
+    try {
+      // Use real API for signup
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/signup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          full_name: request.full_name,
+          email: request.email,
+          password: request.password,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Sign up failed');
+      }
+
+      const data = await response.json();
+      
+      return {
+        success: true,
+        data: data,
+        timestamp: new Date().toISOString(),
+        message: "Account created successfully. Please check your email for verification code.",
+      };
+    } catch (error) {
+      console.error("Real API signup failed, falling back to mock:", error);
+      
+      // Fallback to mock implementation
+      return mockClient.request(
+        async () => {
+          // Simulate signup logic
+          return {
+            message: "Account created successfully. Please check your email for verification code.",
+            user_id: `user_${Date.now()}`,
+          };
+        },
+        "medium",
+        {
+          successMessage: "Account created successfully",
+        }
+      );
+    }
+  },
+
+  async confirmSignup(
+    request: ConfirmSignupRequest
+  ): Promise<ApiResponse<ConfirmSignupResponse> | ApiError> {
+    try {
+      // Use real API for confirmation
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/confirm-signup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: request.username,
+          confirmation_code: request.confirmation_code,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Confirmation failed');
+      }
+
+      const data = await response.json();
+      
+      return {
+        success: true,
+        data: data,
+        timestamp: new Date().toISOString(),
+        message: "Email verified successfully!",
+      };
+    } catch (error) {
+      console.error("Real API confirmation failed, falling back to mock:", error);
+      
+      // Fallback to mock implementation
+      return mockClient.request(
+        async () => {
+          // Simulate confirmation logic
+          return {
+            message: "Email verified successfully!",
+            verified: true,
+          };
+        },
+        "medium",
+        {
+          successMessage: "Email verified successfully",
+        }
+      );
+    }
+  },
+
+  async resendCode(
+    request: ResendCodeRequest
+  ): Promise<ApiResponse<ResendCodeResponse> | ApiError> {
+    try {
+      // Use real API for resending verification code
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/resend-code`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: request.email,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to resend verification code');
+      }
+
+      const data = await response.json();
+      
+      return {
+        success: true,
+        data: data,
+        timestamp: new Date().toISOString(),
+        message: "Verification code resent successfully!",
+      };
+    } catch (error) {
+      console.error("Real API resend code failed, falling back to mock:", error);
+      
+      // Fallback to mock implementation
+      return mockClient.request(
+        async () => {
+          // Simulate resend logic
+          return {
+            message: "Verification code resent successfully!",
+            sent: true,
+          };
+        },
+        "medium",
+        {
+          successMessage: "Verification code resent successfully",
+        }
+      );
+    }
+  },
+
   async signIn(
     request: SignInRequest
   ): Promise<ApiResponse<SignInResponse> | ApiError> {
-    return mockClient.request(
-      async () => {
-        // Simulate authentication logic
-        if (
-          request.email === "demo@legalkaki.app" &&
-          request.password === "demo123"
-        ) {
-          return {
-            user: mockUser,
-            token: `mock_token_${Date.now()}`,
-            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
-          };
-        } else {
-          throw new Error("Invalid credentials");
-        }
-      },
-      "medium",
-      {
-        successMessage: "Successfully signed in",
+    try {
+      // Use real API for signin
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/signin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: request.email,
+          password: request.password,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Sign in failed');
       }
-    );
+
+      const data = await response.json();
+      
+      // Map the response to our expected format
+      const signInResponse: SignInResponse = {
+        user: {
+          id: data.user?.id || `user_${Date.now()}`,
+          email: data.user?.email || request.email,
+          name: data.user?.name || data.user?.full_name || 'User',
+          avatar: data.user?.avatar,
+          preferences: {
+            theme: 'system',
+            language: 'en',
+            notifications: {
+              email: true,
+              push: true,
+              urgentActions: true,
+            },
+          },
+          createdAt: new Date(data.user?.created_at || Date.now()),
+          lastLoginAt: new Date(),
+        },
+        token: data.token || data.access_token || `token_${Date.now()}`,
+        expiresAt: new Date(data.expires_at || Date.now() + 24 * 60 * 60 * 1000),
+      };
+      
+      return {
+        success: true,
+        data: signInResponse,
+        timestamp: new Date().toISOString(),
+        message: "Successfully signed in",
+      };
+    } catch (error) {
+      console.error("Real API signin failed, falling back to mock:", error);
+      
+      // Fallback to mock implementation
+      return mockClient.request(
+        async () => {
+          // Simulate authentication logic
+          if (
+            request.email === "demo@legalkaki.app" &&
+            request.password === "demo123"
+          ) {
+            return {
+              user: mockUser,
+              token: `mock_token_${Date.now()}`,
+              expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+            };
+          } else {
+            throw new Error("Invalid credentials");
+          }
+        },
+        "medium",
+        {
+          successMessage: "Successfully signed in",
+        }
+      );
+    }
   },
 
   async signOut(): Promise<ApiResponse<{ success: boolean }> | ApiError> {
@@ -135,9 +344,62 @@ export const authApi = {
 // User Endpoints
 export const userApi = {
   async getProfile(): Promise<ApiResponse<User> | ApiError> {
-    return mockClient.request(async () => {
-      return mockUser;
-    }, "fast");
+    try {
+      // Use real API to get user profile
+      const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null
+      
+      if (!token) {
+        throw new Error('No authentication token found')
+      }
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/me`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to fetch user profile')
+      }
+
+      const data = await response.json()
+      
+      // Map the response to our User interface
+      const userData: User = {
+        id: data.id || data.user_id || `user_${Date.now()}`,
+        email: data.email || data.email_address,
+        name: data.name || data.full_name || data.username || 'User',
+        avatar: data.avatar || data.profile_picture,
+        preferences: {
+          theme: 'system',
+          language: 'en',
+          notifications: {
+            email: true,
+            push: true,
+            urgentActions: true,
+          },
+        },
+        createdAt: new Date(data.created_at || data.createdAt || Date.now()),
+        lastLoginAt: new Date(data.last_login_at || data.lastLoginAt || Date.now()),
+      }
+      
+      return {
+        success: true,
+        data: userData,
+        timestamp: new Date().toISOString(),
+        message: "User profile fetched successfully",
+      }
+    } catch (error) {
+      console.error("Real API profile failed, falling back to mock:", error)
+      
+      // Fallback to mock implementation
+      return mockClient.request(async () => {
+        return mockUser;
+      }, "fast");
+    }
   },
 
   async updateProfile(
@@ -158,7 +420,7 @@ export const userApi = {
   async getStats(): Promise<ApiResponse<UserStats> | ApiError> {
     try {
       // Try to get real stats from backend data
-      const userSub = "stringstringstringstringstringstring"; // This should come from auth context
+      const userSub = getCurrentUserId(); // Get authenticated user ID
       
       // Get collections from backend to calculate real stats
       const backendCollections = await collectionApiClient.getCollections(userSub, 100, 0);
@@ -289,7 +551,7 @@ export const chatApi = {
         return {
           id: sessionId,
           domain: request.domain,
-          title: `${mockDomains[request.domain]?.title} Consultation`,
+          title: `${mockDomains[request.domain]?.title || "Legal"} Consultation`,
           messages,
           createdAt: now,
           updatedAt: now,
@@ -321,130 +583,168 @@ export const chatApi = {
     request: SendMessageRequest,
     onProgress?: (stage: string, progress: number) => void
   ): Promise<ApiResponse<SendMessageResponse> | ApiError> {
-    try {
-      // Use real API for streaming chat
-      let streamingContent = "";
+    // Check if we should use real API or mock based on environment
+    const envConfig = getEnvConfig();
+    const shouldUseRealApi = envConfig.isDevMode; // Use real API in dev mode
 
-      const realResponse = await realApiClient.sendMessage(
-        request.content,
-        request.messageType || "text",
-        (content) => {
-          streamingContent = content;
-          if (onProgress) {
-            const progress = Math.min(95, content.length / 10); // Rough progress estimate
-            onProgress("Receiving response...", progress);
-          }
-        }
-      );
+    console.log("[ChatAPI] Environment config:", {
+      isDevMode: envConfig.isDevMode,
+      backendUrl: envConfig.backendUrl,
+      shouldUseRealApi
+    });
 
-      if (onProgress) {
-        onProgress("Processing complete", 100);
-      }
-
-      return {
-        success: true,
-        data: realResponse,
-        timestamp: new Date().toISOString(),
-        message: "Message sent successfully",
-      };
-    } catch (error) {
-      console.error("Real API chat failed, falling back to mock:", error);
-
-      // Fallback to mock implementation
-      return mockClient.request(
-        async () => {
-          const messageId = `msg_${Date.now()}_${Math.random()
-            .toString(36)
-            .substr(2, 9)}`;
-          const now = new Date();
-
-          // Create user message
-          const userMessage: Message = {
-            id: messageId,
-            content: request.content,
-            sender: "user",
-            timestamp: now,
-            attachments: request.attachments?.map((id) => ({
-              id,
-              filename: "attached_file.pdf",
-              fileType: "application/pdf",
-              fileSize: 245760,
-              url: "#",
+    if (shouldUseRealApi) {
+      console.log("[ChatAPI] 🚀 Using real API - connecting to backend at", envConfig.backendUrl);
+      
+      try {
+        // Use the supervisor endpoint for structured responses
+        const chatIdNum = parseInt(sessionId.replace('session_', ''));
+        if (isNaN(chatIdNum)) {
+          // If session ID is not a number, use current timestamp as chat ID
+          const fallbackChatId = Date.now();
+          const response = await realApiClient.sendSupervisorMessage(
+            fallbackChatId,
+            request.content,
+            request.attachments?.map(att => ({
+              name: att.filename || "file.pdf",
+              type: att.fileType || "application/pdf",
+              size: att.fileSize || 0,
+              content: new ArrayBuffer(0) // Empty content for now
             })),
-          };
-
-          let aiResponse: Message | undefined;
-          let analysisResult: AnalysisResult | undefined;
-          let draftResult: DraftResult | undefined;
-
-          // Simulate AI processing
-          if (onProgress) {
-            onProgress("Processing your message...", 25);
-            await new Promise((resolve) => setTimeout(resolve, 500));
-            onProgress("Analyzing content...", 50);
-            await new Promise((resolve) => setTimeout(resolve, 500));
-            onProgress("Generating response...", 75);
-            await new Promise((resolve) => setTimeout(resolve, 500));
-            onProgress("Finalizing...", 100);
-          }
-
-          // Generate AI response based on message type
-          if (request.messageType === "analysis_request") {
-            analysisResult = {
-              ...mockAnalysisResult,
-              id: `analysis_${Date.now()}`,
-            };
-
-            aiResponse = {
-              id: `msg_${Date.now() + 1}`,
-              content: "Here's my detailed analysis:",
-              sender: "assistant",
-              timestamp: new Date(now.getTime() + 2000),
-              type: "analysis",
-            };
-          } else if (request.messageType === "draft_request") {
-            draftResult = {
-              ...mockDraftResult,
-              id: `draft_${Date.now()}`,
-            };
-
-            aiResponse = {
-              id: `msg_${Date.now() + 1}`,
-              content: "Here's your document draft:",
-              sender: "assistant",
-              timestamp: new Date(now.getTime() + 2000),
-              type: "draft",
-            };
-          } else {
-            // Regular text response
-            aiResponse = {
-              id: `msg_${Date.now() + 1}`,
-              content: `I understand you're asking about "${request.content}". Let me help you with that.`,
-              sender: "assistant",
-              timestamp: new Date(now.getTime() + 1500),
-              type: "text",
-            };
-          }
-
+            onProgress,
+            request.domain
+          );
+          
           return {
-            message: userMessage,
-            aiResponse,
-            analysisResult,
-            draftResult,
+            success: true,
+            data: response,
+            timestamp: new Date().toISOString(),
+            message: "Message sent successfully via real API",
           };
-        },
-        "ai",
-        {
-          progressId: "send_message",
-          progressSteps: [
-            "Processing message...",
-            "Analyzing content...",
-            "Generating response...",
-            "Finalizing...",
-          ],
+        } else {
+          const response = await realApiClient.sendSupervisorMessage(
+            chatIdNum,
+            request.content,
+            request.attachments?.map(att => ({
+              name: att.filename || "file.pdf",
+              type: att.fileType || "application/pdf",
+              size: att.fileSize || 0,
+              content: new ArrayBuffer(0) // Empty content for now
+            })),
+            onProgress,
+            request.domain
+          );
+          
+          return {
+            success: true,
+            data: response,
+            timestamp: new Date().toISOString(),
+            message: "Message sent successfully via real API",
+          };
         }
-      );
+      } catch (error) {
+        console.error("[ChatAPI] Real API failed, falling back to mock:", error);
+        // Fall back to mock implementation
+      }
     }
+
+    // Mock implementation (fallback or when not in dev mode)
+    console.log("[ChatAPI] Using mock mode - messages are in-memory only until saved to collection");
+
+    // Mock implementation
+    return mockClient.request(
+      async () => {
+        const messageId = `msg_${Date.now()}_${Math.random()
+          .toString(36)
+          .substr(2, 9)}`;
+        const now = new Date();
+
+        // Create user message
+        const userMessage: Message = {
+          id: messageId,
+          content: request.content,
+          sender: "user",
+          timestamp: now,
+          attachments: request.attachments?.map((id) => ({
+            id,
+            filename: "attached_file.pdf",
+            fileType: "application/pdf",
+            fileSize: 245760,
+            url: "#",
+          })),
+        };
+
+        let aiResponse: Message | undefined;
+        let analysisResult: AnalysisResult | undefined;
+        let draftResult: DraftResult | undefined;
+
+        // Simulate AI processing
+        if (onProgress) {
+          onProgress("Processing your message...", 25);
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          onProgress("Analyzing content...", 50);
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          onProgress("Generating response...", 75);
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          onProgress("Finalizing...", 100);
+        }
+
+        // Generate AI response based on message type
+        if (request.messageType === "analysis_request") {
+          analysisResult = {
+            ...mockAnalysisResult,
+            id: `analysis_${Date.now()}`,
+          };
+
+          aiResponse = {
+            id: `msg_${Date.now() + 1}`,
+            content: "Here's my detailed analysis:",
+            sender: "assistant",
+            timestamp: new Date(now.getTime() + 2000),
+            type: "analysis",
+          };
+        } else if (request.messageType === "draft_request") {
+          draftResult = {
+            ...mockDraftResult,
+            id: `draft_${Date.now()}`,
+          };
+
+          aiResponse = {
+            id: `msg_${Date.now() + 1}`,
+            content: "Here's your document draft:",
+            sender: "assistant",
+            timestamp: new Date(now.getTime() + 2000),
+            type: "draft",
+          };
+        } else {
+          // Regular text response
+          aiResponse = {
+            id: `msg_${Date.now() + 1}`,
+            content: `I understand you're asking about "${request.content}". Let me help you with that.`,
+            sender: "assistant",
+            timestamp: new Date(now.getTime() + 1500),
+            type: "text",
+          };
+        }
+
+        return {
+          message: userMessage,
+          aiResponse,
+          analysisResult,
+          draftResult,
+        };
+      },
+      "ai",
+      {
+        progressId: "send_message",
+        progressSteps: [
+          "Processing message...",
+          "Analyzing content...",
+          "Generating response...",
+          "Finalizing...",
+        ],
+      }
+    );
   },
 
   async getSessions(
@@ -460,13 +760,15 @@ export const chatApi = {
 export const documentsApi = {
   async upload(
     request: UploadDocumentRequest,
-    onProgress?: (progress: number) => void
+    onProgress?: (progress: number) => void,
+    chatId?: number
   ): Promise<ApiResponse<UploadDocumentResponse> | ApiError> {
     try {
       // Use real API for document upload
       const uploadResult = await realApiClient.uploadDocument(
         request.file,
-        onProgress
+        onProgress,
+        chatId
       );
 
       return {
@@ -499,7 +801,7 @@ export const documentsApi = {
             fileType: request.file.type,
             fileSize: request.file.size,
             s3Bucket: "legalkaki-documents",
-            s3Key: `documents/user-1/${
+            s3Key: `documents/${DEFAULT_USER_ID}/${
               uploadResult.data.fileId
             }.${request.file.name.split(".").pop()}`,
             uploadDate: new Date(),
@@ -540,6 +842,70 @@ export const documentsApi = {
     }, "fast");
   },
 
+  async getChatDocuments(
+    userSub: string,
+    chatId: number,
+    limit: number = 50
+  ): Promise<ApiResponse<Document[]> | ApiError> {
+    try {
+      const backendDocs = await realApiClient.getChatDocuments(userSub, chatId, limit);
+      // Map backend documents to frontend Document type
+      const documents: Document[] = backendDocs.map((doc) => mapBackendDocumentToDocument(doc));
+      return {
+        success: true,
+        data: documents,
+        timestamp: new Date(),
+      };
+    } catch (error) {
+      console.error('Error fetching chat documents:', error);
+      return {
+        success: false,
+        error: {
+          code: 'FETCH_CHAT_DOCUMENTS_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to fetch chat documents',
+        },
+        timestamp: new Date(),
+      };
+    }
+  },
+
+  async generateDraft(
+    userSub: string,
+    chatId: number,
+    prompt: string,
+    title?: string
+  ): Promise<ApiResponse<Document> | ApiError> {
+    try {
+      const result = await realApiClient.generateDraft(userSub, chatId, prompt, title);
+      // Convert to frontend Document type
+      const document: Document = {
+        id: result.document_id.toString(),
+        title: result.title,
+        type: 'pdf',
+        size: `${(result.file_size_bytes / 1024).toFixed(2)} KB`,
+        date: new Date(),
+        status: 'completed',
+        url: result.download_url,
+        originalFilename: `${result.title}.pdf`,
+      };
+      return {
+        success: true,
+        data: document,
+        timestamp: new Date(),
+      };
+    } catch (error) {
+      console.error('Error generating draft:', error);
+      return {
+        success: false,
+        error: {
+          code: 'GENERATE_DRAFT_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to generate draft document',
+        },
+        timestamp: new Date(),
+      };
+    }
+  },
+
   async analyzeDocument(
     documentId: string,
     onProgress?: (stage: string, progress: number) => void
@@ -578,10 +944,10 @@ export const documentsApi = {
     try {
       // Try multiple backend endpoints for document access
       const endpoints = [
-        `http://43.217.199.206:8000/documents/${documentId}/proxy`,
-        `http://43.217.199.206:8000/documents/${documentId}/signed-url`,
-        `http://43.217.199.206:8000/documents/${documentId}/download`,
-        `http://43.217.199.206:8000/documents/${documentId}/stream`
+        `${BACKEND_BASE_URL}/documents/${documentId}/proxy`,
+        `${BACKEND_BASE_URL}/documents/${documentId}/signed-url`,
+        `${BACKEND_BASE_URL}/documents/${documentId}/download`,
+        `${BACKEND_BASE_URL}/documents/${documentId}/stream`
       ];
 
       for (const endpoint of endpoints) {
@@ -625,6 +991,25 @@ export const documentsApi = {
 
 };
 
+// Helper function to get current user ID from auth context
+function getCurrentUserId(): string {
+  if (typeof window === 'undefined') {
+    throw new Error('getCurrentUserId can only be called on the client side')
+  }
+  
+  const storedUser = localStorage.getItem('userData')
+  if (!storedUser) {
+    throw new Error('No authenticated user found')
+  }
+  
+  try {
+    const userData = JSON.parse(storedUser)
+    return userData.id
+  } catch (error) {
+    throw new Error('Invalid user data in localStorage')
+  }
+}
+
 // Collections Endpoints
 export const collectionsApi = {
   async getCollections(filters?: {
@@ -635,8 +1020,7 @@ export const collectionsApi = {
   }): Promise<ApiResponse<Collection[]> | ApiError> {
     try {
       // Use real API to get collections
-      // TODO: Get user_sub from authentication context
-      const userSub = "stringstringstringstringstringstring"; // This should come from auth context
+      const userSub = getCurrentUserId(); // Get authenticated user ID
       const limit = filters?.limit || 50;
       const offset = 0; // Could be implemented for pagination
       
@@ -758,10 +1142,26 @@ export const collectionsApi = {
       }
       
       const backendDetails = await collectionApiClient.getCollectionDetails(collectionIdNum);
-      
+
+      // Fetch conversation snapshots separately
+      const conversationsResult = await realApiClient.getCollectionConversations(collectionIdNum, 'test-user-1'); // TODO: Use real user_sub
+      const conversationSnapshots = conversationsResult.success ? conversationsResult.data : [];
+
       // Convert backend data to frontend models
       const collection = mapBackendCollectionToCollection(backendDetails.collection);
-      const conversations = backendDetails.chats.map(mapBackendChatToChatSession);
+
+      // Map conversation list items to a display format
+      const conversations = conversationSnapshots.map(snapshot => ({
+        id: snapshot.snapshot_id,
+        title: snapshot.title,
+        domain: (snapshot.domain as LegalDomain) || 'general',
+        messages: [], // Placeholder - actual messages loaded when viewing
+        messageCount: snapshot.message_count,
+        createdAt: new Date(snapshot.created_at),
+        updatedAt: new Date(snapshot.created_at),
+        preview: snapshot.preview
+      }));
+
       const actionItems = backendDetails.actions.map(mapBackendActionToActionItem);
       
       // Map documents directly from the collection details response
@@ -892,15 +1292,47 @@ export const collectionsApi = {
   async deleteCollection(
     collectionId: string
   ): Promise<ApiResponse<{ success: boolean }> | ApiError> {
-    return mockClient.request(
-      async () => {
-        return { success: true };
-      },
-      "fast",
-      {
-        successMessage: "Collection deleted successfully",
+    try {
+      // Use real API to delete collection
+      const collectionIdNum = parseInt(collectionId);
+      if (isNaN(collectionIdNum)) {
+        throw new Error("Invalid collection ID");
       }
-    );
+
+      const userSub = DEFAULT_USER_ID; // TODO: Get from auth context
+
+      // Call backend DELETE endpoint
+      const response = await fetch(`${getBackendUrl()}/collections/${collectionIdNum}?owner_sub=${userSub}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete collection: ${response.status} ${response.statusText}`);
+      }
+
+      return {
+        success: true,
+        data: { success: true },
+        timestamp: new Date().toISOString(),
+        message: "Collection deleted successfully",
+      };
+    } catch (error) {
+      console.error("Real API delete collection failed, falling back to mock:", error);
+
+      // Fallback to mock implementation
+      return mockClient.request(
+        async () => {
+          return { success: true };
+        },
+        "fast",
+        {
+          successMessage: "Collection deleted successfully",
+        }
+      );
+    }
   },
 
   async getCollectionConversations(
@@ -961,7 +1393,7 @@ export const collectionsApi = {
         throw new Error("Invalid chat ID");
       }
       
-      const userSub = "stringstringstringstringstringstring"; // TODO: Get from auth context
+      const userSub = getCurrentUserId(); // Get authenticated user ID
       const chatDocuments = await collectionApiClient.getChatDocuments(userSub, chatIdNum, 50, 0);
       
       const mappedDocuments = chatDocuments.map(backendDoc => {
@@ -1056,6 +1488,58 @@ export const collectionsApi = {
         successMessage: "Document removed from collection",
       }
     );
+  },
+
+  // Conversation snapshot functions
+  async saveConversationToCollection(
+    request: SaveConversationRequest
+  ): Promise<ApiResponse<ConversationSnapshot> | ApiError> {
+    try {
+      const response = await realApiClient.saveConversationToCollection(request);
+      return response;
+    } catch (error) {
+      console.error("Failed to save conversation:", error);
+      throw error;
+    }
+  },
+
+  async getCollectionConversations(
+    collectionId: number,
+    userSub: string
+  ): Promise<ApiResponse<ConversationListItem[]> | ApiError> {
+    try {
+      const response = await realApiClient.getCollectionConversations(collectionId, userSub);
+      return response;
+    } catch (error) {
+      console.error("Failed to get collection conversations:", error);
+      throw error;
+    }
+  },
+
+  async getConversationSnapshot(
+    snapshotId: string,
+    userSub: string
+  ): Promise<ApiResponse<ConversationSnapshot> | ApiError> {
+    try {
+      const response = await realApiClient.getConversationSnapshot(snapshotId, userSub);
+      return response;
+    } catch (error) {
+      console.error("Failed to get conversation snapshot:", error);
+      throw error;
+    }
+  },
+
+  async deleteConversationFromCollection(
+    snapshotId: string,
+    userSub: string
+  ): Promise<ApiResponse<void> | ApiError> {
+    try {
+      const response = await realApiClient.deleteConversationFromCollection(snapshotId, userSub);
+      return response;
+    } catch (error) {
+      console.error("Failed to delete conversation:", error);
+      throw error;
+    }
   },
 };
 

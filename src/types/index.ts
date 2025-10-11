@@ -1,5 +1,5 @@
-// Domain Types
-export type LegalDomain = 'business' | 'employment' | 'property' | 'marriage' | 'general'
+// Domain Types - SME/Business Owner Focused
+export type LegalDomain = 'company_setup' | 'contracts' | 'employment' | 'business_growth'
 
 // Message Types
 export interface Message {
@@ -158,3 +158,6 @@ export interface NavItem {
   route: string
   isActive?: boolean
 }
+
+// Re-export sub-agent schemas
+export * from './subAgentSchemas'

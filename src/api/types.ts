@@ -6,15 +6,15 @@ export function mapBackendCollectionToCollection(backend: BackendCollection): Co
     id: backend.collection_id.toString(),
     title: backend.name,
     domain: 'general' as LegalDomain, // Default domain since backend doesn't provide this
-    summary: '', // Backend doesn't provide summary
+    summary: backend.description || '', // Use description as summary
     status: mapBackendStatusToStatus(backend.status),
     createdAt: new Date(backend.created_at),
     updatedAt: new Date(backend.created_at), // Use created_at as updated_at since backend doesn't provide it
-    itemCount: 0, // Will be calculated from related data
-    messageCount: 0, // Will be calculated from chats
-    documentCount: 0, // Will be calculated from documents
-    actionItemsCount: 0, // Will be calculated from actions
-    urgentActionsCount: 0, // Will be calculated from actions
+    itemCount: (backend.document_count || 0) + (backend.action_count || 0), // Total items
+    messageCount: backend.conversation_count || 0, // From backend
+    documentCount: backend.document_count || 0, // From backend
+    actionItemsCount: backend.action_count || 0, // From backend
+    urgentActionsCount: 0, // Not provided by backend, would need to calculate
     tags: [], // Backend doesn't provide tags
   }
 }
@@ -113,11 +113,23 @@ export function mapBackendDocumentToDocument(backend: BackendDocument): Document
     filename: backend.filename,
     filenameType: typeof backend.filename,
     file_type: backend.file_type,
-    file_size: backend.file_size
+    file_size: backend.file_size,
+    s3_key: backend.s3_key
   })
-  
-  // Safely handle filename and extension
-  const filename = backend.filename || 'unknown_file'
+
+  // Safely handle filename and extension - extract from S3 key if filename is missing
+  let filename = backend.filename
+  if (!filename || filename.trim() === '') {
+    // Extract filename from S3 key if available
+    if (backend.s3_key) {
+      const keyParts = backend.s3_key.split('/')
+      const lastPart = keyParts[keyParts.length - 1]
+      // Remove UUID prefix if present (e.g., "uuid_contract.pdf" -> "contract.pdf")
+      filename = lastPart.includes('_') ? lastPart.split('_').slice(1).join('_') : lastPart
+    } else {
+      filename = 'document.pdf' // Final fallback
+    }
+  }
   const fileExtension = filename.includes('.') ? filename.split('.').pop() : 'unknown'
   
   return {
@@ -151,9 +163,16 @@ export function mapBackendCollectionDocumentToDocument(backend: BackendCollectio
     source_type: backend.source_type,
     created_at: backend.created_at
   })
-  
-  // Safely handle filename and extension
-  const filename = backend.title || 'unknown_file'
+
+  // Safely handle filename and extension - extract from S3 key if title is missing
+  let filename = backend.title
+  if (!filename || filename.trim() === '') {
+    // Extract filename from S3 key (e.g., "users/user-123/chats/456/uuid_contract.pdf" -> "contract.pdf")
+    const keyParts = backend.s3_key.split('/')
+    const lastPart = keyParts[keyParts.length - 1]
+    // Remove UUID prefix if present (e.g., "uuid_contract.pdf" -> "contract.pdf")
+    filename = lastPart.includes('_') ? lastPart.split('_').slice(1).join('_') : lastPart
+  }
   const fileExtension = filename.includes('.') ? filename.split('.').pop() : 'unknown'
   
   return {
@@ -166,7 +185,7 @@ export function mapBackendCollectionDocumentToDocument(backend: BackendCollectio
     s3Key: backend.s3_key,
     uploadDate: new Date(backend.created_at),
     analysisStatus: 'pending' as const, // Default status since not provided
-    contentSummary: undefined, // Not provided by collection details endpoint
+    contentSummary: backend.content_summary || backend.description,
     collectionId: collectionId.toString(),
     metadata: {
       pages: undefined, // Not provided by collection details endpoint
@@ -230,7 +249,10 @@ function mapBackendStatusToActionStatus(backendStatus: string): 'pending' | 'in_
   }
 }
 
-function mapBackendDocumentStatusToAnalysisStatus(backendStatus: string): 'pending' | 'processing' | 'completed' | 'error' {
+function mapBackendDocumentStatusToAnalysisStatus(backendStatus: string | undefined): 'pending' | 'processing' | 'completed' | 'error' {
+  if (!backendStatus) {
+    return 'pending' // Default to pending if status is undefined
+  }
   switch (backendStatus.toLowerCase()) {
     case 'pending':
       return 'pending'
@@ -293,6 +315,8 @@ export interface BackendCollectionDocument {
   owner_sub: string
   uploaded_in_chat_id: number
   title: string
+  description?: string
+  content_summary?: string
   s3_bucket: string
   s3_key: string
   source_type: string
@@ -387,6 +411,37 @@ export interface SignInResponse {
   expiresAt: Date
 }
 
+// New authentication types for real API endpoints
+export interface SignUpRequest {
+  full_name: string
+  email: string
+  password: string
+}
+
+export interface SignUpResponse {
+  message: string
+  user_id?: string
+}
+
+export interface ConfirmSignupRequest {
+  username: string
+  confirmation_code: string
+}
+
+export interface ConfirmSignupResponse {
+  message: string
+  verified: boolean
+}
+
+export interface ResendCodeRequest {
+  email: string
+}
+
+export interface ResendCodeResponse {
+  message: string
+  sent: boolean
+}
+
 // Domain Types
 export interface DomainInfo {
   id: LegalDomain
@@ -418,6 +473,18 @@ export interface SendMessageRequest {
   content: string
   attachments?: string[] // document IDs
   messageType?: 'text' | 'analysis_request' | 'draft_request'
+  domain?: string // Domain context for specialized assistance
+  uploadedDocuments?: Array<{
+    id: string
+    originalFilename: string
+    fileType: string
+    fileSize: number
+    _fileContent?: ArrayBuffer
+    _fileName?: string
+    _fileType?: string
+    _fileSize?: number
+    [key: string]: any
+  }>
 }
 
 export interface SendMessageResponse {
@@ -425,6 +492,7 @@ export interface SendMessageResponse {
   aiResponse?: Message
   analysisResult?: AnalysisResult
   draftResult?: DraftResult
+  supervisorData?: any // Store the full supervisor response from Bedrock
   modeSwitch?: {
     detected: boolean
     mode: "A" | "B" | "C" | null
@@ -529,6 +597,86 @@ export interface AddToCollectionRequest {
   itemId: string
   itemType: 'conversation' | 'document' | 'action'
   notes?: string
+}
+
+// Conversation Snapshot Types
+export interface MessageSnapshot {
+  id: string
+  content: string
+  sender: 'user' | 'assistant'
+  timestamp: string
+  attachments?: Array<{
+    id: string
+    filename: string
+    fileType: string
+    fileSize: number
+    url: string
+  }>
+  domain?: string
+  type?: 'text' | 'analysis' | 'draft'
+}
+
+export interface SnapshotMetadata {
+  domain?: string
+  totalMessages: number
+  userMessageCount: number
+  assistantMessageCount: number
+  hasDocuments: boolean
+  documentIds: string[]
+}
+
+export interface SnapshotData {
+  messages: MessageSnapshot[]
+  messagePayloads: Record<string, any>
+  metadata: SnapshotMetadata
+}
+
+export interface ConversationSnapshot {
+  snapshot_id: string
+  collection_id: number
+  chat_id: number
+  user_sub: string
+  title: string
+  domain?: string
+  message_count: number
+  created_at: string
+  updated_at: string
+  snapshot_data?: SnapshotData
+}
+
+export interface ConversationListItem {
+  snapshot_id: string
+  title: string
+  domain?: string
+  message_count: number
+  created_at: string
+  preview?: string
+}
+
+export interface StagedFile {
+  filename: string
+  fileContent: number[] // Byte array from ArrayBuffer
+  fileType: string
+  fileSize: number
+}
+
+export interface SaveConversationRequest {
+  collection_id?: number // Optional - will create new collection if not provided
+  chat_id: number
+  user_sub: string
+  title?: string
+  domain?: string
+  messages: Array<{
+    id: string
+    content: string
+    sender: 'user' | 'assistant'
+    timestamp: string
+    attachments?: any[]
+    domain?: string
+    type?: string
+  }>
+  messagePayloads: Record<string, any>
+  stagedFiles?: StagedFile[] // Files to upload to S3
 }
 
 // Action Items Types

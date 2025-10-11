@@ -7,9 +7,14 @@ import {
   DraftResult,
   BackendCollectionDetails,
   BackendDocument,
+  SaveConversationRequest,
+  ConversationSnapshot,
+  ConversationListItem,
 } from "./types";
 import { Document } from "@/types";
 import { mockClient } from "./mockClient";
+import { getEnvConfig } from "@/lib/envConfig";
+import { DEFAULT_USER_ID } from "@/lib/constants";
 
 // Structured response interface for mode detection
 interface StructuredResponse {
@@ -30,25 +35,33 @@ interface ModeSwitch {
   structuredData?: StructuredResponse;
 }
 
-// Backend API configuration
-const BACKEND_CONFIG = {
-  baseUrl: "http://43.217.199.206:8000",
-  endpoints: {
-    uploadDocument:
-      "/api/v1/datasets/1e99cdde96d611f08ce90242ac120005/documents",
-    chatCompletions:
-      "/api/v1/chats_openai/13dfe97696dd11f0a6b70242ac130005/chat/completions",
-  },
-  auth: {
-    token: "ragflow-E1YWMxNmU4OTZkNTExZjBiNzUwMDI0Mm", // Backend authorization token
-  },
-  // Connection timeout settings
-  timeout: {
-    upload: 30000, // 30 seconds for uploads
-    chat: 60000, // 60 seconds for chat completion
-    connection: 10000, // 10 seconds for initial connection
-  },
+// Backend configuration using centralized environment config
+const getBackendConfig = () => {
+  const envConfig = getEnvConfig();
+  
+  return {
+    baseUrl: envConfig.backendUrl,
+    endpoints: {
+      uploadDocument: "/documents/upload",
+      chatCompletions:
+        "/api/v1/chats_openai/13dfe97696dd11f0a6b70242ac130005/chat/completions",
+      // New supervisor endpoint
+      supervisorMessage: "/messages/supervisor",
+    },
+    auth: {
+      token: envConfig.apiToken,
+    },
+    // Connection timeout settings
+    timeout: {
+      upload: 120000, // 120 seconds (2 minutes) for uploads
+      chat: 60000, // 60 seconds for chat completion
+      connection: 10000, // 10 seconds for initial connection
+    },
+    isDevMode: envConfig.isDevMode,
+  };
 };
+
+const BACKEND_CONFIG = getBackendConfig();
 
 // Document upload API response type from backend
 interface BackendUploadResponse {
@@ -99,22 +112,31 @@ interface ChatCompletionChunk {
 export class RealApiClient {
   private baseUrl: string;
   private authToken: string;
+  private isDevMode: boolean;
 
   constructor() {
-    this.baseUrl = BACKEND_CONFIG.baseUrl;
-    this.authToken = BACKEND_CONFIG.auth.token;
+    // Refresh config in case environment changed
+    const config = getBackendConfig();
+    this.baseUrl = config.baseUrl;
+    this.authToken = config.auth.token;
+    this.isDevMode = config.isDevMode;
 
     // Log configuration for debugging
-    console.log("RealApiClient initialized with:");
-    console.log("Base URL:", this.baseUrl);
-    console.log("Auth token:", this.authToken);
+    console.log("🔗 RealApiClient initialized:");
+    console.log("   Base URL:", this.baseUrl);
+    console.log("   Auth token:", this.authToken.substring(0, 10) + "...");
+    console.log("   Dev Mode:", this.isDevMode);
     console.log(
-      "Upload endpoint:",
+      "   Upload endpoint:",
       `${this.baseUrl}${BACKEND_CONFIG.endpoints.uploadDocument}`
     );
     console.log(
-      "Chat endpoint:",
+      "   Chat endpoint:",
       `${this.baseUrl}${BACKEND_CONFIG.endpoints.chatCompletions}`
+    );
+    console.log(
+      "   Supervisor endpoint:",
+      `${this.baseUrl}${BACKEND_CONFIG.endpoints.supervisorMessage}`
     );
   }
 
@@ -196,22 +218,21 @@ export class RealApiClient {
   // Upload document with FormData
   async uploadDocument(
     file: File,
-    onProgress?: (progress: number) => void
+    onProgress?: (progress: number) => void,
+    chatId?: number
   ): Promise<UploadDocumentResponse> {
-    // First test backend connectivity
-    const endpointTests = await this.testEndpoints();
-    console.log("Endpoint test results:", endpointTests);
+    const userSub = DEFAULT_USER_ID; // TODO: Get from auth context
+    const providedChatId = chatId || Date.now();
 
-    if (!endpointTests.upload) {
-      console.warn(
-        "Upload endpoint not available, falling back to mock client"
-      );
-      return this.fallbackToMockUpload(file, onProgress);
-    }
+    // Ensure chat exists in backend before uploading (may return different ID)
+    const actualChatId = await this.ensureChatExists(userSub, providedChatId);
 
     const formData = new FormData();
-    // Use the exact field name from API documentation
     formData.append("file", file);
+    formData.append("owner_sub", userSub);
+    formData.append("uploaded_in_chat_id", actualChatId.toString());
+    formData.append("title", file.name);
+    formData.append("source_type", "upload");
 
     const xhr = new XMLHttpRequest();
 
@@ -236,61 +257,29 @@ export class RealApiClient {
           responseText: xhr.responseText,
         });
 
-        if (xhr.status === 200) {
+        if (xhr.status === 200 || xhr.status === 201) {
           try {
-            const response: BackendUploadResponse = JSON.parse(
-              xhr.responseText
-            );
+            const response = JSON.parse(xhr.responseText);
             console.log("Parsed response:", response);
 
-            if (
-              response.code === 0 &&
-              response.data &&
-              response.data.length > 0
-            ) {
-              const uploadedDoc = response.data[0];
+            // New backend format
+            const document = {
+              id: response.document_id?.toString() || Date.now().toString(),
+              originalFilename: response.title || file.name,
+              storedFilename: response.s3_key,
+              fileType: response.mime_type || file.type,
+              fileSize: response.file_size_bytes || file.size,
+              s3Bucket: response.s3_bucket,
+              s3Key: response.s3_key,
+              uploadDate: new Date(),
+              analysisStatus: "completed" as const,
+            };
 
-              // Transform backend response to our format
-              const document = {
-                id: uploadedDoc.id,
-                originalFilename: uploadedDoc.name,
-                storedFilename: uploadedDoc.location,
-                fileType: `application/${uploadedDoc.suffix}`,
-                fileSize: uploadedDoc.size,
-                s3Bucket: "", // Not provided in backend response
-                s3Key: uploadedDoc.location,
-                uploadDate: new Date(),
-                analysisStatus: (uploadedDoc.run === "UNSTART"
-                  ? "pending"
-                  : "completed") as "pending" | "completed",
-              };
-
-              resolve({
-                document,
-                uploadUrl: `${this.baseUrl}/${uploadedDoc.location}`,
-                analysisJobId: uploadedDoc.id,
-              });
-            } else {
-              // Enhanced error handling with more specific messages
-              const errorMessage = this.getUploadErrorMessage(
-                response.code,
-                response
-              );
-              console.error("Upload failed with response:", response);
-
-              // For certain error codes, try fallback to mock
-              if (response.code >= 100 && response.code <= 115) {
-                console.warn(
-                  `Backend error ${response.code}, falling back to mock client`
-                );
-                this.fallbackToMockUpload(file, onProgress)
-                  .then(resolve)
-                  .catch(reject);
-                return;
-              }
-
-              reject(new Error(errorMessage));
-            }
+            resolve({
+              document,
+              uploadUrl: `${this.baseUrl}/documents/${response.document_id}/presign?owner_sub=${DEFAULT_USER_ID}`,
+              analysisJobId: response.document_id?.toString(),
+            });
           } catch (error) {
             console.error(
               "JSON parse error:",
@@ -325,15 +314,15 @@ export class RealApiClient {
 
       const uploadUrl = `${this.baseUrl}${BACKEND_CONFIG.endpoints.uploadDocument}`;
       console.log("Uploading to:", uploadUrl);
-      console.log("Auth token:", this.authToken);
-      console.log("File details:", {
-        name: file.name,
-        size: file.size,
-        type: file.type,
+      console.log("FormData fields:", {
+        file: file.name,
+        owner_sub: DEFAULT_USER_ID,
+        uploaded_in_chat_id: chatId || "auto-generated",
+        title: file.name,
       });
 
       xhr.open("POST", uploadUrl);
-      xhr.setRequestHeader("Authorization", `Bearer ${this.authToken}`);
+      // Don't set Authorization header - our backend doesn't require it for document upload
 
       try {
         xhr.send(formData);
@@ -489,6 +478,311 @@ export class RealApiClient {
     }
 
     return processedResponse;
+  }
+
+  // Send message to supervisor agent endpoint (new structured response)
+  async sendSupervisorMessage(
+    chatId: number,
+    content: string,
+    uploadedFiles?: Array<{ name: string; type: string; size: number; content: ArrayBuffer }>,
+    onProgress?: (stage: string, progress: number) => void,
+    domain?: string
+  ): Promise<SendMessageResponse> {
+    try {
+      const supervisorUrl = `${this.baseUrl}${BACKEND_CONFIG.endpoints.supervisorMessage}`;
+      console.log("📤 Sending supervisor request to:", supervisorUrl);
+
+      // Prepare the request body
+      const requestBody = {
+        chat_id: chatId,
+        content: content,
+        domain: domain,
+        uploaded_files: uploadedFiles?.map(f => ({
+          name: f.name,
+          type: f.type,
+          size: f.size,
+          content: Array.from(new Uint8Array(f.content)) // Convert ArrayBuffer to number array
+        }))
+      };
+
+      if (onProgress) {
+        onProgress("Sending request...", 10);
+      }
+
+      const response = await fetch(supervisorUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (onProgress) {
+        onProgress("Processing response...", 50);
+      }
+
+      console.log("Supervisor response status:", response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Supervisor API error response:", errorText);
+        throw new Error(
+          `Supervisor API failed: HTTP ${response.status} - ${errorText}`
+        );
+      }
+
+      const supervisorResponse = await response.json();
+      console.log("Supervisor response:", supervisorResponse);
+
+      if (onProgress) {
+        onProgress("Formatting response...", 90);
+      }
+
+      // Map supervisor response to frontend format
+      const now = new Date();
+      const userMessage = {
+        id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        content: content,
+        sender: "user" as const,
+        timestamp: now,
+      };
+
+      // Extract tab contents from supervisor response
+      const supervisorData = supervisorResponse.supervisor_response;
+      let displayContent = "";
+
+      // Helper function to extract and parse JSON blocks from content
+      const extractJsonBlock = (content: string): { json: unknown; remainingContent: string } | null => {
+        // Match ```json ... ``` blocks at the start of content
+        const jsonBlockRegex = /^```json\s*\n([\s\S]*?)\n```\s*\n/;
+        const match = content.match(jsonBlockRegex);
+
+        if (match) {
+          try {
+            const jsonStr = match[1];
+            const parsed = JSON.parse(jsonStr);
+            const remainingContent = content.slice(match[0].length);
+            console.log("[RealApiClient] Extracted JSON block from content:", parsed);
+            return { json: parsed, remainingContent };
+          } catch (e) {
+            console.warn("[RealApiClient] Failed to parse JSON block:", e);
+          }
+        }
+        return null;
+      };
+
+      // Check if this should be rendered as a simple message
+      const isGenericGreeting = (content: string) => {
+        const genericPhrases = [
+          "hello", "hi", "hey", "good morning", "good afternoon", "good evening",
+          "how can i help", "how can i assist", "i'm here to help", "what can i help you with",
+          "ai system", "legal assistant", "created by amazon", "inventors"
+        ];
+        return genericPhrases.some(phrase => 
+          content.toLowerCase().includes(phrase)
+        );
+      };
+
+      const hasSystemMessage = supervisorData.conversation_context?.system_message;
+      const hasActiveTabs =
+        supervisorData.explanation_tab?.status === "active" ||
+        supervisorData.analysis_tab?.status === "active" ||
+        supervisorData.action_tab?.status === "active";
+
+      // Check for pending_clarification status - render as simple message with clarification questions
+      const hasClarificationStatus =
+        supervisorData.explanation_tab?.status === "pending_clarification" ||
+        supervisorData.analysis_tab?.status === "pending_clarification" ||
+        supervisorData.action_tab?.status === "pending_clarification";
+
+      const shouldRenderAsSimple = (
+        !hasActiveTabs && hasSystemMessage
+      ) || hasClarificationStatus || (
+        supervisorData.explanation_tab?.status === "active" &&
+        supervisorData.analysis_tab?.status === "not_applicable" &&
+        supervisorData.action_tab?.status === "not_applicable" &&
+        isGenericGreeting(supervisorData.explanation_tab.content)
+      );
+
+      if (shouldRenderAsSimple) {
+        // Render as simple message for system messages, clarifications, or generic responses
+        if (hasClarificationStatus && supervisorData.conversation_context) {
+          // Handle clarification needed response
+          displayContent = supervisorData.conversation_context.system_message || "Could you provide more details?";
+
+          // Add clarification questions if available
+          if (supervisorData.conversation_context.clarification_questions &&
+              supervisorData.conversation_context.clarification_questions.length > 0) {
+            displayContent += "\n\n";
+            supervisorData.conversation_context.clarification_questions.forEach((q: string, i: number) => {
+              displayContent += `${i + 1}. ${q}\n`;
+            });
+          }
+          console.log("[RealApiClient] Rendering as simple message (clarification needed)");
+        } else if (hasSystemMessage && !hasActiveTabs) {
+          displayContent = supervisorData.conversation_context.system_message;
+          console.log("[RealApiClient] Rendering as simple message (system message)");
+        } else {
+          displayContent = supervisorData.explanation_tab.content;
+          console.log("[RealApiClient] Rendering as simple message (generic greeting detected)");
+        }
+      } else {
+        // Render with tabs for structured responses
+        console.log("[RealApiClient] Rendering with tabs (structured response)");
+
+        // Helper function to extract and parse JSON blocks from content
+        const extractJsonBlock = (content: string): { json: unknown; remainingContent: string } | null => {
+          // Match ```json ... ``` blocks at the start of content
+          const jsonBlockRegex = /^```json\s*\n([\s\S]*?)\n```\s*\n/;
+          const match = content.match(jsonBlockRegex);
+
+          if (match) {
+            try {
+              const jsonStr = match[1];
+              const parsed = JSON.parse(jsonStr);
+              const remainingContent = content.slice(match[0].length);
+              console.log("[RealApiClient] Extracted JSON block from content:", parsed);
+              return { json: parsed, remainingContent };
+            } catch (e) {
+              console.warn("[RealApiClient] Failed to parse JSON block:", e);
+            }
+          }
+          return null;
+        };
+
+        if (supervisorData.explanation_tab?.status === "active") {
+          const extracted = extractJsonBlock(supervisorData.explanation_tab.content);
+          if (extracted) {
+            // TODO: Frontend can use extracted.json for structured rendering
+            displayContent += `## Explanation\n\n${extracted.remainingContent}\n\n`;
+          } else {
+            displayContent += `## Explanation\n\n${supervisorData.explanation_tab.content}\n\n`;
+          }
+          if (supervisorData.explanation_tab.relevance) {
+            displayContent += `*${supervisorData.explanation_tab.relevance}*\n\n`;
+          }
+        }
+
+        if (supervisorData.analysis_tab?.status === "active") {
+          const extracted = extractJsonBlock(supervisorData.analysis_tab.content);
+          if (extracted) {
+            // TODO: Frontend can use extracted.json for structured rendering
+            displayContent += `## Analysis\n\n${extracted.remainingContent}\n\n`;
+          } else {
+            displayContent += `## Analysis\n\n${supervisorData.analysis_tab.content}\n\n`;
+          }
+          if (supervisorData.analysis_tab.relevance) {
+            displayContent += `*${supervisorData.analysis_tab.relevance}*\n\n`;
+          }
+        }
+
+        if (supervisorData.action_tab?.status === "active") {
+          const extracted = extractJsonBlock(supervisorData.action_tab.content);
+          if (extracted) {
+            // TODO: Frontend can use extracted.json for structured checklist rendering
+            console.log("[RealApiClient] Action tab has structured JSON checklist");
+            displayContent += `## Actions\n\n${extracted.remainingContent}\n\n`;
+          } else {
+            displayContent += `## Actions\n\n${supervisorData.action_tab.content}\n\n`;
+          }
+          if (supervisorData.action_tab.relevance) {
+            displayContent += `*${supervisorData.action_tab.relevance}*\n\n`;
+          }
+        }
+      }
+
+      // Determine response type based on content
+      const getResponseType = (): "text" | "analysis" | "draft" => {
+        if (supervisorData.analysis_tab?.status === "active") {
+          return "analysis";
+        }
+        if (supervisorData.action_tab?.status === "active" && 
+            supervisorData.action_tab.content.toLowerCase().includes("draft")) {
+          return "draft";
+        }
+        return "text";
+      };
+
+      const aiResponse = {
+        id: `msg_${Date.now() + 1}`,
+        content: displayContent.trim(),
+        sender: "assistant" as const,
+        timestamp: new Date(now.getTime() + 1000),
+        type: getResponseType(),
+      };
+
+      if (onProgress) {
+        onProgress("Complete", 100);
+      }
+
+      // Extract structured JSON from each tab
+      // Note: The backend may return EITHER:
+      // 1. Content with embedded ```json blocks (legacy format)
+      // 2. Plain markdown content (new format - tabs ARE the structure)
+      const extractedData: {
+        explanation?: unknown;
+        analysis?: unknown;
+        action?: unknown;
+        visualization?: unknown;
+        draft?: unknown;
+      } = {};
+
+      if (supervisorData.explanation_tab?.status === "active") {
+        const extracted = extractJsonBlock(supervisorData.explanation_tab.content);
+        if (extracted) {
+          // Legacy format: JSON block found
+          extractedData.explanation = extracted.json;
+        }
+        // For new format: tabs contain plain markdown - no extraction needed
+        // Frontend will render markdown directly
+      }
+
+      if (supervisorData.analysis_tab?.status === "active") {
+        const extracted = extractJsonBlock(supervisorData.analysis_tab.content);
+        if (extracted) {
+          // Legacy format: JSON block found
+          extractedData.analysis = extracted.json;
+        }
+        // For new format: tabs contain plain markdown - no extraction needed
+      }
+
+      if (supervisorData.action_tab?.status === "active") {
+        const extracted = extractJsonBlock(supervisorData.action_tab.content);
+        if (extracted) {
+          // Legacy format: JSON block found
+          extractedData.action = extracted.json;
+        }
+        // For new format: tabs contain plain markdown - no extraction needed
+      }
+
+      // For clarification responses, inject the formatted message into the supervisor data
+      if (hasClarificationStatus && displayContent) {
+        console.log("[RealApiClient] Injecting clarification message into supervisor data");
+        return {
+          message: userMessage,
+          aiResponse,
+          supervisorData: {
+            ...supervisorData,
+            extractedData,
+            // Add a clarification_message field that frontend can check
+            clarification_message: displayContent,
+          },
+        };
+      }
+
+      return {
+        message: userMessage,
+        aiResponse,
+        // Store the full supervisor response AND extracted JSON for structured rendering
+        supervisorData: {
+          ...supervisorData,
+          extractedData, // Add extracted JSON data
+        },
+      };
+    } catch (error) {
+      console.error("Supervisor message failed:", error);
+      throw error;
+    }
   }
 
   // Parse structured JSON response and detect mode switching
@@ -966,6 +1260,206 @@ export class RealApiClient {
       analysisJobId: mockResponse.data.fileId,
     };
   }
+
+  // Conversation Snapshot Methods
+  async saveConversationToCollection(request: SaveConversationRequest): Promise<{ success: boolean; data: ConversationSnapshot }> {
+    const url = `${this.baseUrl}/conversations/save`;
+
+    console.log("🔍 Saving conversation with request:", JSON.stringify(request, null, 2));
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error("❌ Backend error response:", errorBody);
+      throw new Error(`Failed to save conversation: ${response.statusText} - ${errorBody}`);
+    }
+
+    const data = await response.json();
+    return { success: true, data };
+  }
+
+  async getCollectionConversations(collectionId: number, userSub: string): Promise<{ success: boolean; data: ConversationListItem[] }> {
+    const url = `${this.baseUrl}/conversations/collection/${collectionId}?user_sub=${encodeURIComponent(userSub)}`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to get collection conversations: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return { success: true, data };
+  }
+
+  async getConversationSnapshot(snapshotId: string, userSub: string): Promise<{ success: boolean; data: ConversationSnapshot }> {
+    const url = `${this.baseUrl}/conversations/${snapshotId}?user_sub=${encodeURIComponent(userSub)}`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to get conversation snapshot: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return { success: true, data };
+  }
+
+  async deleteConversationFromCollection(snapshotId: string, userSub: string): Promise<{ success: boolean; data: null }> {
+    const url = `${this.baseUrl}/conversations/${snapshotId}?user_sub=${encodeURIComponent(userSub)}`;
+
+    const response = await fetch(url, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to delete conversation: ${response.statusText}`);
+    }
+
+    return { success: true, data: null };
+  }
+
+  async ensureChatExists(userSub: string, chatId: number): Promise<number> {
+    try {
+      // Check if chat exists by querying chat directly (no timeout - let it take as long as needed)
+      const checkResponse = await fetch(
+        `${this.baseUrl}/chats/${chatId}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      // If we get a 200, the chat exists
+      if (checkResponse.ok) {
+        const existingChat = await checkResponse.json();
+        console.log(`✅ Chat ${chatId} already exists for user ${existingChat.user_sub}`);
+        return chatId;
+      }
+
+      // Chat doesn't exist (404), create it
+      console.log(`📝 Creating chat ${chatId} for user ${userSub}`);
+      const createResponse = await fetch(`${this.baseUrl}/chats/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_sub: userSub,
+          chat_id: chatId,
+          chat_name: `Chat Session`,
+        }),
+      });
+
+      if (!createResponse.ok) {
+        const errorText = await createResponse.text();
+        console.warn(`Failed to create chat: ${createResponse.status} ${errorText}`);
+        return chatId; // Use the provided chatId as fallback
+      }
+
+      const createdChat = await createResponse.json();
+      console.log(`✅ Created chat with ID: ${createdChat.chat_id}`);
+      return createdChat.chat_id;
+    } catch (error) {
+      console.error('Error ensuring chat exists:', error);
+      // Return the provided chatId as fallback
+      return chatId;
+    }
+  }
+
+  async getChatDocuments(userSub: string, chatId: number, limit: number = 50, offset: number = 0): Promise<BackendDocument[]> {
+    const url = `${this.baseUrl}/documents/?owner_sub=${userSub}&chat_id=${chatId}&limit=${limit}&offset=${offset}`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json',
+        },
+        signal: AbortSignal.timeout(BACKEND_CONFIG.timeout.connection),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const documents: BackendDocument[] = await response.json();
+      return documents;
+    } catch (error) {
+      console.error('Error fetching chat documents:', error);
+      throw error;
+    }
+  }
+
+  async generateDraft(
+    userSub: string,
+    chatId: number,
+    prompt: string,
+    title?: string
+  ): Promise<{
+    document_id: number;
+    title: string;
+    download_url: string;
+    s3_key: string;
+    s3_bucket: string;
+    file_size_bytes: number;
+  }> {
+    // Ensure chat exists before generating document
+    await this.ensureChatExists(userSub, chatId);
+
+    const url = `${this.baseUrl}/documents/generate-draft`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_sub: userSub,
+          chat_id: chatId,
+          prompt,
+          title,
+        }),
+        signal: AbortSignal.timeout(120000), // 2 minutes for document generation
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.detail || `HTTP error! status: ${response.status}`
+        );
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error generating draft:', error);
+      throw error;
+    }
+  }
 }
 
 // Manual test function for debugging
@@ -1044,8 +1538,12 @@ export interface BackendCollection {
   collection_id: number;
   owner_sub: string;
   name: string;
+  description?: string;
   status: string;
   created_at: string;
+  conversation_count?: number;  // From /with-conversations endpoint
+  document_count?: number;      // From /with-conversations endpoint
+  action_count?: number;         // From /with-conversations endpoint
 }
 
 export interface BackendChat {
@@ -1083,14 +1581,14 @@ export class CollectionApiClient {
   }
 
   async getCollections(userSub: string, limit: number = 50, offset: number = 0): Promise<BackendCollection[]> {
-    // Try multiple approaches to get collections from backend
+    // Use the with-conversations endpoint to get document and action counts
     const approaches = [
-      // Approach 1: Try with the provided userSub
-      `${this.baseUrl}/collections/?owner_sub=${userSub}&limit=${limit}&offset=${offset}`,
+      // Approach 1: Try with-conversations endpoint with provided userSub
+      `${this.baseUrl}/collections/with-conversations?owner_sub=${userSub}&limit=${limit}&offset=${offset}`,
       // Approach 2: Try without user filter (get all collections)
-      `${this.baseUrl}/collections/?limit=${limit}&offset=${offset}`,
+      `${this.baseUrl}/collections/with-conversations?limit=${limit}&offset=${offset}`,
       // Approach 3: Try with a default user ID that might exist in the backend
-      `${this.baseUrl}/collections/?owner_sub=user-1&limit=${limit}&offset=${offset}`,
+      `${this.baseUrl}/collections/with-conversations?owner_sub=${DEFAULT_USER_ID}&limit=${limit}&offset=${offset}`,
     ];
 
     for (const url of approaches) {
@@ -1142,32 +1640,6 @@ export class CollectionApiClient {
       return details;
     } catch (error) {
       console.error('Error fetching collection details:', error);
-      throw error;
-    }
-  }
-
-
-  async getChatDocuments(userSub: string, chatId: number, limit: number = 50, offset: number = 0): Promise<BackendDocument[]> {
-    const url = `${this.baseUrl}/documents/?owner_sub=${userSub}&chat_id=${chatId}&limit=${limit}&offset=${offset}`;
-    
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${this.authToken}`,
-          'Content-Type': 'application/json',
-        },
-        signal: AbortSignal.timeout(BACKEND_CONFIG.timeout.connection),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const documents: BackendDocument[] = await response.json();
-      return documents;
-    } catch (error) {
-      console.error('Error fetching chat documents:', error);
       throw error;
     }
   }
