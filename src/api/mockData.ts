@@ -8,10 +8,11 @@ import {
   ActivityItem,
 } from "./types";
 import { LegalDomain, ChatSession, Document, ActionItem } from "@/types";
+import { DEFAULT_USER_ID } from "@/lib/constants";
 
 // User Data
 export const mockUser: User = {
-  id: "user-1",
+  id: DEFAULT_USER_ID,
   name: "Guest User",
   preferences: {
     theme: "light",
@@ -226,7 +227,7 @@ export const mockDocuments: Document[] = [
     fileType: "application/pdf",
     fileSize: 245760, // ~240KB
     s3Bucket: "legalkaki-documents",
-    s3Key: "documents/user-1/550e8400-e29b-41d4-a716-446655440001.pdf",
+    s3Key: `documents/${DEFAULT_USER_ID}/550e8400-e29b-41d4-a716-446655440001.pdf`,
     uploadDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
     analysisStatus: "completed",
     contentSummary: "Employment contract with standard terms and conditions",
@@ -245,7 +246,7 @@ export const mockDocuments: Document[] = [
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     fileSize: 1048576, // 1MB
     s3Bucket: "legalkaki-documents",
-    s3Key: "documents/user-1/550e8400-e29b-41d4-a716-446655440002.docx",
+    s3Key: `documents/${DEFAULT_USER_ID}/550e8400-e29b-41d4-a716-446655440002.docx`,
     uploadDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
     analysisStatus: "processing",
     collectionId: "collection-2", // Linked to Business Registration collection
@@ -262,7 +263,7 @@ export const mockDocuments: Document[] = [
     fileType: "application/pdf",
     fileSize: 512000, // 500KB
     s3Bucket: "legalkaki-documents",
-    s3Key: "documents/user-1/550e8400-e29b-41d4-a716-446655440003.pdf",
+    s3Key: `documents/${DEFAULT_USER_ID}/550e8400-e29b-41d4-a716-446655440003.pdf`,
     uploadDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3 days ago
     analysisStatus: "completed",
     contentSummary: "Corporate bylaws and governance structure",
@@ -280,7 +281,7 @@ export const mockDocuments: Document[] = [
     fileType: "application/pdf",
     fileSize: 768000, // 750KB
     s3Bucket: "legalkaki-documents",
-    s3Key: "documents/user-1/550e8400-e29b-41d4-a716-446655440004.pdf",
+    s3Key: `documents/${DEFAULT_USER_ID}/550e8400-e29b-41d4-a716-446655440004.pdf`,
     uploadDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
     analysisStatus: "pending",
     metadata: {
