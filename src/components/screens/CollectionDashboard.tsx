@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
-import { ArrowLeft, Grid, List, CheckCircle, Clock, AlertTriangle, Eye, MoreVertical, ExternalLink, ClipboardList, FileText, Settings, Calendar, MessageCircle, Brain, Music, FileIcon, FileSpreadsheet, ImageIcon, Loader2 } from 'lucide-react'
+import { ArrowLeft, Grid, List, CheckCircle, Clock, AlertTriangle, Eye, MoreVertical, ExternalLink, ClipboardList, FileText, Settings, Calendar, MessageCircle, Brain, Music, FileIcon, FileSpreadsheet, ImageIcon, Loader2, Sparkles } from 'lucide-react'
 import { PDFViewer } from '@/components/ui/PDFViewer'
 import { MindMapViewer } from '@/components/ui/MindMapViewer'
 import { ActionItem, Document } from '@/types'
@@ -28,6 +28,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
   const [mindMapCode, setMindMapCode] = useState('')
   const [enhancedMindMapData, setEnhancedMindMapData] = useState<EnhancedMindMapData | null>(null)
   const [isGeneratingMindMap, setIsGeneratingMindMap] = useState(false)
+  const [generatingSummaries, setGeneratingSummaries] = useState(false)
 
   const { 
     data: dashboardData, 
@@ -145,6 +146,34 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
       case 'processing': return 'text-yellow-500'
       case 'error': return 'text-red-500'
       default: return 'text-gray-500'
+    }
+  }
+
+  const handleGenerateSummaries = async () => {
+    try {
+      setGeneratingSummaries(true)
+      console.log('📝 Generating summaries for collection:', collectionId)
+
+      // Call backend endpoint to generate summaries
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+      const response = await fetch(`${backendUrl}/collections/${collectionId}/generate-summaries?user_sub=test-user-1`, {
+        method: 'POST',
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to generate summaries: ${response.statusText}`)
+      }
+
+      const result = await response.json()
+      console.log('✅ Summary generation result:', result)
+
+      // Refresh the collection data to show updated summaries
+      window.location.reload()
+    } catch (error) {
+      console.error('❌ Error generating summaries:', error)
+      alert('Failed to generate summaries. Please ensure AWS credentials are configured.')
+    } finally {
+      setGeneratingSummaries(false)
     }
   }
 
@@ -476,20 +505,31 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
               <FileText className="w-6 h-6 text-purple-primary" />
               <h2 className="heading-3">Your Documents</h2>
             </div>
-            
+
             <div className="flex items-center space-x-2">
               {documents.length > 0 && (
-                <Button
-                  variant="primary"
-                  size="small"
-                  onClick={() => setSelectedDocument(documents[0])}
-                  leftIcon={<Eye className="w-4 h-4" />}
-                  className="bg-gradient-to-r from-purple-primary to-purple-light"
-                >
-                  View Document
-                </Button>
+                <>
+                  <Button
+                    variant="secondary"
+                    size="small"
+                    onClick={handleGenerateSummaries}
+                    disabled={generatingSummaries}
+                    leftIcon={<Sparkles className="w-4 h-4" />}
+                  >
+                    {generatingSummaries ? 'Generating...' : 'Generate Summaries'}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="small"
+                    onClick={() => setSelectedDocument(documents[0])}
+                    leftIcon={<Eye className="w-4 h-4" />}
+                    className="bg-gradient-to-r from-purple-primary to-purple-light"
+                  >
+                    View Document
+                  </Button>
+                </>
               )}
-              
+
               <Button
                 variant={viewMode === 'grid' ? 'primary' : 'ghost'}
                 size="small"

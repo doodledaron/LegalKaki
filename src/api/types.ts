@@ -6,15 +6,15 @@ export function mapBackendCollectionToCollection(backend: BackendCollection): Co
     id: backend.collection_id.toString(),
     title: backend.name,
     domain: 'general' as LegalDomain, // Default domain since backend doesn't provide this
-    summary: '', // Backend doesn't provide summary
+    summary: backend.description || '', // Use description as summary
     status: mapBackendStatusToStatus(backend.status),
     createdAt: new Date(backend.created_at),
     updatedAt: new Date(backend.created_at), // Use created_at as updated_at since backend doesn't provide it
-    itemCount: 0, // Will be calculated from related data
-    messageCount: 0, // Will be calculated from chats
-    documentCount: 0, // Will be calculated from documents
-    actionItemsCount: 0, // Will be calculated from actions
-    urgentActionsCount: 0, // Will be calculated from actions
+    itemCount: (backend.document_count || 0) + (backend.action_count || 0), // Total items
+    messageCount: backend.conversation_count || 0, // From backend
+    documentCount: backend.document_count || 0, // From backend
+    actionItemsCount: backend.action_count || 0, // From backend
+    urgentActionsCount: 0, // Not provided by backend, would need to calculate
     tags: [], // Backend doesn't provide tags
   }
 }
