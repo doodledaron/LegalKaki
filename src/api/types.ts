@@ -575,6 +575,78 @@ export interface AddToCollectionRequest {
   notes?: string
 }
 
+// Conversation Snapshot Types
+export interface MessageSnapshot {
+  id: string
+  content: string
+  sender: 'user' | 'assistant'
+  timestamp: string
+  attachments?: Array<{
+    id: string
+    filename: string
+    fileType: string
+    fileSize: number
+    url: string
+  }>
+  domain?: string
+  type?: 'text' | 'analysis' | 'draft'
+}
+
+export interface SnapshotMetadata {
+  domain?: string
+  totalMessages: number
+  userMessageCount: number
+  assistantMessageCount: number
+  hasDocuments: boolean
+  documentIds: string[]
+}
+
+export interface SnapshotData {
+  messages: MessageSnapshot[]
+  messagePayloads: Record<string, any>
+  metadata: SnapshotMetadata
+}
+
+export interface ConversationSnapshot {
+  snapshot_id: string
+  collection_id: number
+  chat_id: number
+  user_sub: string
+  title: string
+  domain?: string
+  message_count: number
+  created_at: string
+  updated_at: string
+  snapshot_data?: SnapshotData
+}
+
+export interface ConversationListItem {
+  snapshot_id: string
+  title: string
+  domain?: string
+  message_count: number
+  created_at: string
+  preview?: string
+}
+
+export interface SaveConversationRequest {
+  collection_id: number
+  chat_id: number
+  user_sub: string
+  title?: string
+  domain?: string
+  messages: Array<{
+    id: string
+    content: string
+    sender: 'user' | 'assistant'
+    timestamp: string
+    attachments?: any[]
+    domain?: string
+    type?: string
+  }>
+  messagePayloads: Record<string, any>
+}
+
 // Action Items Types
 export interface CreateActionItemRequest {
   title: string
