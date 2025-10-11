@@ -4,8 +4,9 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
-import { ArrowLeft, MessageCircle, FileText, AlertTriangle, CheckCircle, ChevronRight, Search, Grid, List, Loader2 } from 'lucide-react'
-import { collectionsApi, userApi, useApiCall } from '@/api'
+import { ArrowLeft, MessageCircle, FileText, AlertTriangle, CheckCircle, ChevronRight, Search, Grid, List, Loader2, Trash2, MoreVertical } from 'lucide-react'
+import { collectionsApi, userApi, useApiCall, useApiMutation } from '@/api'
+import { ConfirmDeleteModal } from '@/components/modals/ConfirmDeleteModal'
 
 interface CollectionListProps {
   onBack: () => void
@@ -17,6 +18,8 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'archived' | 'completed'>('all')
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [collectionToDelete, setCollectionToDelete] = useState<any>(null)
 
   // Load collections from API with filters
   const { 
