@@ -2,18 +2,41 @@
 
 import { LoginScreen } from '@/components/screens/LoginScreen'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/contexts/AuthContext'
+import { useEffect } from 'react'
 
 export default function LoginPage() {
   const router = useRouter()
+  const { login, isAuthenticated } = useAuth()
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push('/')
+    }
+  }, [isAuthenticated, router])
+
+  // Don't render anything if already authenticated
+  if (isAuthenticated) {
+    return null
+  }
 
   const handleLogin = async (email: string, password: string) => {
-    // TODO: Implement actual authentication logic
-    console.log('Login attempt:', { email, password })
-    
-    // For now, just redirect to home after "successful" login
-    setTimeout(() => {
+    try {
+      console.log('Login attempt:', { email, password })
+      
+      // Use the auth context login method
+      await login({
+        email: email,
+        password: password,
+      })
+      
+      // Login successful, redirect to home
       router.push('/')
-    }, 1000)
+    } catch (error) {
+      console.error('Login error:', error)
+      throw error
+    }
   }
 
   const handleSignUpRedirect = () => {

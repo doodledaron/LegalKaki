@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ConditionalLayout } from '@/components/layout/ConditionalLayout'
+import { AuthProvider } from '@/contexts/AuthContext'
 
 // Polyfill for Promise.withResolvers (for PDF.js compatibility)
 if (!Promise.withResolvers) {
@@ -36,9 +37,11 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full">
       <body className="h-full font-sans text-text-primary bg-background antialiased">
-        <ConditionalLayout>
-          {children}
-        </ConditionalLayout>
+        <AuthProvider>
+          <ConditionalLayout>
+            {children}
+          </ConditionalLayout>
+        </AuthProvider>
       </body>
     </html>
   );

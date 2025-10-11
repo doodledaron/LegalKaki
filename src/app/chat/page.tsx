@@ -4,6 +4,7 @@ import { ChatbotScreen } from '@/components/screens/ChatbotScreen'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { LegalDomain } from '@/types'
 import { Suspense } from 'react'
+import { AuthGuard } from '@/components/auth/AuthGuard'
 
 function ChatPageContent() {
   const router = useRouter()
@@ -42,14 +43,16 @@ function ChatPageContent() {
 
 export default function ChatPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <p className="body-regular text-text-secondary">Loading chat...</p>
+    <AuthGuard>
+      <Suspense fallback={
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <div className="text-center">
+            <p className="body-regular text-text-secondary">Loading chat...</p>
+          </div>
         </div>
-      </div>
-    }>
-      <ChatPageContent />
-    </Suspense>
+      }>
+        <ChatPageContent />
+      </Suspense>
+    </AuthGuard>
   )
 }

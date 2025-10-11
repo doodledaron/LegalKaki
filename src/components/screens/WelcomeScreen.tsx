@@ -10,9 +10,10 @@ interface WelcomeScreenProps {
   onViewCollection?: () => void
   onLogin?: () => void
   onSignUp?: () => void
+  isAuthenticated?: boolean
 }
 
-export function WelcomeScreen({ onGetStarted, onViewCollection, onLogin, onSignUp }: WelcomeScreenProps) {
+export function WelcomeScreen({ onGetStarted, onViewCollection, onLogin, onSignUp, isAuthenticated }: WelcomeScreenProps) {
   const [isLoading, setIsLoading] = useState(false)
 
   const handleGetStarted = () => {
@@ -305,8 +306,8 @@ export function WelcomeScreen({ onGetStarted, onViewCollection, onLogin, onSignU
             </button>
           )}
           
-          {/* Auth Options */}
-          {(onLogin || onSignUp) && (
+          {/* Auth Options - Only show if user is not authenticated */}
+          {!isAuthenticated && (onLogin || onSignUp) && (
             <div className="flex items-center space-x-6 mt-4">
               {onLogin && (
                 <button

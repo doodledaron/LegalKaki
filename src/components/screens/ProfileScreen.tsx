@@ -4,12 +4,14 @@ import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
 import { ArrowLeft, Settings, HelpCircle, Shield, LogOut, User as UserIcon } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface ProfileScreenProps {
   onBack: () => void
 }
 
 export function ProfileScreen({ onBack }: ProfileScreenProps) {
+  const { user, logout } = useAuth()
   const profileItems = [
     {
       icon: <Settings className="w-5 h-5" />,
@@ -33,7 +35,7 @@ export function ProfileScreen({ onBack }: ProfileScreenProps) {
       icon: <LogOut className="w-5 h-5" />,
       label: 'Sign Out',
       description: 'Sign out of your account',
-      action: () => console.log('Sign out clicked')
+      action: () => logout()
     }
   ]
 
@@ -73,15 +75,25 @@ export function ProfileScreen({ onBack }: ProfileScreenProps) {
           <Card>
             <CardContent className="p-6 text-center">
               <div className="w-20 h-20 bg-purple-subtle rounded-full flex items-center justify-center mx-auto mb-4">
-                <UserIcon className="w-10 h-10 text-purple-primary" />
+                {user?.avatar ? (
+                  <img 
+                    src={user.avatar} 
+                    alt={user.name} 
+                    className="w-20 h-20 rounded-full object-cover"
+                  />
+                ) : (
+                  <UserIcon className="w-10 h-10 text-purple-primary" />
+                )}
               </div>
-              <h3 className="heading-3 mb-1">Guest User</h3>
+              <h3 className="heading-3 mb-1">{user?.name || 'Guest User'}</h3>
               <p className="body-small text-text-secondary">
-                Sign in to save your progress
+                {user?.email || 'Sign in to save your progress'}
               </p>
-              <Button variant="primary" className="mt-4">
-                Sign In
-              </Button>
+              {!user && (
+                <Button variant="primary" className="mt-4">
+                  Sign In
+                </Button>
+              )}
             </CardContent>
           </Card>
         </motion.div>
