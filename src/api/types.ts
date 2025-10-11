@@ -230,7 +230,10 @@ function mapBackendStatusToActionStatus(backendStatus: string): 'pending' | 'in_
   }
 }
 
-function mapBackendDocumentStatusToAnalysisStatus(backendStatus: string): 'pending' | 'processing' | 'completed' | 'error' {
+function mapBackendDocumentStatusToAnalysisStatus(backendStatus: string | undefined): 'pending' | 'processing' | 'completed' | 'error' {
+  if (!backendStatus) {
+    return 'pending' // Default to pending if status is undefined
+  }
   switch (backendStatus.toLowerCase()) {
     case 'pending':
       return 'pending'

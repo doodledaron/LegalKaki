@@ -901,7 +901,8 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
     }
 
     // Only trigger auto-save if we have NEW messages (beyond what was initially loaded)
-    const hasNewMessages = currentSession.messages.length > initialMessageCount;
+    const messageCount = currentSession.messages.length;
+    const hasNewMessages = messageCount > initialMessageCount && initialMessageCount > 0;
     if (!hasNewMessages) {
       return;
     }
@@ -910,16 +911,17 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
     const timeoutId = setTimeout(async () => {
       try {
         console.log(`🔄 Auto-saving conversation to collection: ${currentCollectionName}`);
-        console.log(`   Initial: ${initialMessageCount}, Current: ${currentSession.messages.length}`);
+        console.log(`   Initial: ${initialMessageCount}, Current: ${messageCount}`);
         await handleSaveConversation(parseInt(currentCollectionId), currentSession?.title);
-        console.log(`✅ Auto-saved ${currentSession.messages.length} messages`);
+        console.log(`✅ Auto-saved ${messageCount} messages`);
       } catch (error) {
         console.error('Auto-save failed:', error);
       }
     }, 2000); // 2 second debounce
 
     return () => clearTimeout(timeoutId);
-  }, [currentSession?.messages?.length, currentCollectionId, initialMessageCount]); // Trigger when message count changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSession?.messages?.length, currentCollectionId]); // Don't include initialMessageCount to avoid array size change warning
 
   // Fetch chat documents ONLY for resumed/saved chats (not new chats)
   useEffect(() => {
