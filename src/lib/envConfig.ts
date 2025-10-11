@@ -16,7 +16,24 @@ export interface EnvConfig {
 export function getEnvConfig(): EnvConfig {
   // Use NEXT_PUBLIC_DEV_MODE explicitly, not NODE_ENV
   // This allows controlling backend URL independently of Next.js build mode
+
+  // Log all environment variables for debugging (will show in browser console and build logs)
+  const envVars = {
+    NEXT_PUBLIC_DEV_MODE: process.env.NEXT_PUBLIC_DEV_MODE,
+    NEXT_PUBLIC_BACKEND_URL: process.env.NEXT_PUBLIC_BACKEND_URL,
+    NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL,
+    NODE_ENV: process.env.NODE_ENV,
+  };
+  console.log('🔧 [EnvConfig] Environment variables:', envVars);
+
   const isDevMode = process.env.NEXT_PUBLIC_DEV_MODE === 'true';
+  console.log('🔧 [EnvConfig] isDevMode calculation:', {
+    raw: process.env.NEXT_PUBLIC_DEV_MODE,
+    type: typeof process.env.NEXT_PUBLIC_DEV_MODE,
+    result: isDevMode,
+    comparison: `"${process.env.NEXT_PUBLIC_DEV_MODE}" === "true"`,
+  });
+
   const isProduction = process.env.NODE_ENV === 'production' && !isDevMode;
 
   // Determine backend URL with priority:
@@ -27,10 +44,13 @@ export function getEnvConfig(): EnvConfig {
 
   if (process.env.NEXT_PUBLIC_BACKEND_URL) {
     backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+    console.log('🔧 [EnvConfig] Using NEXT_PUBLIC_BACKEND_URL override:', backendUrl);
   } else if (isDevMode) {
     backendUrl = "http://localhost:8000";
+    console.log('🔧 [EnvConfig] Using dev mode (localhost):', backendUrl);
   } else {
     backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://43.217.199.206:8000";
+    console.log('🔧 [EnvConfig] Using production URL:', backendUrl);
   }
   
   const apiToken = process.env.NEXT_PUBLIC_API_TOKEN || "ragflow-E1YWMxNmU4OTZkNTExZjBiNzUwMDI0Mm";
