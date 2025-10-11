@@ -492,6 +492,14 @@ const SupervisorMessageBubble = memo(({ supervisorData }: { supervisorData: any 
 
   // If no active tabs at all, render as simple message
   if (!hasAnyActiveTab) {
+    // Try to get content from conversation_context.system_message (for plain text responses)
+    // or fallback to tab contents
+    const messageContent = conversation_context?.system_message ||
+                          explanation_tab?.content ||
+                          action_tab?.content ||
+                          analysis_tab?.content ||
+                          "No response available.";
+
     return (
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -500,7 +508,7 @@ const SupervisorMessageBubble = memo(({ supervisorData }: { supervisorData: any 
       >
         <div className="w-[70%] bg-surface-white border border-gray-200 text-text-primary rounded-2xl rounded-bl-sm">
           <p className="body-regular p-4 whitespace-pre-wrap">
-            {explanation_tab?.content || action_tab?.content || analysis_tab?.content || "No response available."}
+            {messageContent}
           </p>
         </div>
       </motion.div>
@@ -695,6 +703,30 @@ const RegularMessageBubble = memo(({ message }: { message: Message }) => (
           : "bg-surface-white border border-gray-200 text-text-primary rounded-bl-sm"
       }`}
     >
+      {/* Show file attachments if present */}
+      {message.attachments && message.attachments.length > 0 && (
+        <div className="mb-2 space-y-1">
+          {message.attachments.map((attachment) => (
+            <div
+              key={attachment.id}
+              className={`flex items-center gap-2 text-xs ${
+                message.sender === "user"
+                  ? "text-white/90"
+                  : "text-purple-700"
+              }`}
+            >
+              <FileText className="w-3 h-3 flex-shrink-0" />
+              <span className="truncate">{attachment.filename}</span>
+              {attachment.fileSize && (
+                <span className="text-xs opacity-75">
+                  ({(attachment.fileSize / 1024).toFixed(1)} KB)
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       <p
         className={`body-regular ${
           message.sender === "user" ? "text-white" : "text-text-primary"
@@ -853,13 +885,51 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
     const messageContent = inputValue.trim();
     setInputValue("");
 
-    // Create user message immediately
+    // Upload any staged files before sending message
+    const stagedDocs = sessionDocuments.filter((doc: any) => doc._staged);
+    setUploading(true);
+
+    try {
+      for (const stagedDoc of stagedDocs) {
+        if (stagedDoc._file) {
+          console.log(`Uploading staged file: ${stagedDoc.originalFilename}`);
+          const uploadResponse = await documentsApi.upload(
+            { file: stagedDoc._file },
+            (progress) => console.log(`Upload progress: ${progress}%`)
+          );
+
+          if (uploadResponse.success) {
+            // Update the staged doc with S3 info
+            stagedDoc.s3Bucket = uploadResponse.data.document.s3Bucket;
+            stagedDoc.s3Key = uploadResponse.data.document.s3Key;
+            stagedDoc._staged = false;
+            delete stagedDoc._file; // Clean up file reference
+            console.log(`Uploaded: ${stagedDoc.originalFilename}`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("File upload error:", error);
+    } finally {
+      setUploading(false);
+    }
+
+    // Create user message with file attachments if any
     const userMessage: Message = {
       id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       content: messageContent,
       sender: "user",
       timestamp: new Date(),
       domain,
+      attachments: stagedDocs.length > 0
+        ? stagedDocs.map((doc: any) => ({
+            id: doc.id,
+            filename: doc.originalFilename,
+            fileType: doc.fileType,
+            fileSize: doc.fileSize,
+            url: `#document-${doc.id}`,
+          }))
+        : undefined,
     };
 
     // Add user message to session immediately
@@ -870,12 +940,22 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
     });
 
     try {
+      // Log file information being sent
+      if (sessionDocuments.length > 0) {
+        console.log(`[Chat] Sending message with ${sessionDocuments.length} documents:`);
+        sessionDocuments.forEach((doc: any) => {
+          console.log(`  - ${doc.originalFilename} (${doc.fileSize} bytes, has content: ${!!doc._fileContent})`);
+        });
+      }
+
       const response = await sendMessage(currentSession.id, {
         content: messageContent,
         messageType: messageType,
+        domain: domain, // Pass domain for specialized context
         attachments: selectedDocumentForEdit
           ? [selectedDocumentForEdit.id]
           : undefined,
+        uploadedDocuments: sessionDocuments.length > 0 ? sessionDocuments as any[] : undefined,
       });
 
       if (response && response.success) {
@@ -966,133 +1046,43 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
       return;
     }
 
-    setUploading(true);
-
     try {
-      // Upload files using real API with progress tracking
+      // Stage files (don't upload to S3 yet - wait for user to send message with prompt)
       for (const file of pdfFiles) {
-        const uploadProgress = (progress: number) => {
-          console.log(`Upload progress: ${progress}%`);
-          // Could add progress UI here if needed
+        const fileContent = await file.arrayBuffer();
+
+        // Store in sessionDocuments for immediate display, but mark as not yet uploaded
+        const stagedDoc = {
+          id: `staged_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          originalFilename: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+          s3Bucket: '', // Will be filled after upload
+          s3Key: '', // Will be filled after upload
+          uploadDate: new Date(),
+          analysisStatus: 'pending' as const,
+          _staged: true, // Mark as staged (not uploaded yet)
+          _file: file, // Store original file for upload later
+          _fileContent: fileContent, // Store content for Bedrock
         };
 
-        const uploadResponse = await documentsApi.upload(
-          { file },
-          uploadProgress
-        );
+        setSessionDocuments((prev) => [...prev, stagedDoc as any]);
+        console.log(`Staged file: ${file.name} (will upload when you send a message)`);
+      }
 
-        if (uploadResponse.success) {
-          const newDocument = uploadResponse.data.document;
-
-          // Add to session documents (temporary memory)
-          setSessionDocuments((prev) => [...prev, newDocument]);
-
-          console.log(`Successfully uploaded: ${newDocument.originalFilename}`);
-        } else {
-          console.error("Upload failed:", uploadResponse);
-          alert(`Failed to upload ${file.name}. Please try again.`);
-        }
+      // If showing document prompt, start the chat session so user can enter their prompt
+      if (showDocumentPrompt) {
+        handleUploadFirst();
       }
     } catch (error) {
-      console.error("Upload error:", error);
-      alert("Upload failed. Please check your connection and try again.");
-    } finally {
-      setUploading(false);
+      console.error("File staging error:", error);
+      alert("Failed to prepare files. Please try again.");
     }
 
-    // If this is the first upload (document prompt is showing), start the chat
-    if (showDocumentPrompt) {
-      handleUploadFirst();
-      return;
-    }
-
-    // Handle uploads during chat - trigger AI analysis
-    if (currentSession && pdfFiles.length > 0) {
-      const file = pdfFiles[0];
-      const messageType = isDraftMode ? "draft_request" : "analysis_request";
-
-      try {
-        const response = await sendMessage(currentSession.id, {
-          content: `I've uploaded "${file.name}" for ${
-            isDraftMode ? "editing" : "analysis"
-          }. Please help me with this document.`,
-          messageType: messageType,
-        });
-
-        if (response && response.success) {
-          const responseData = response.data;
-          console.log("[Chat] upload-triggered sendMessage response:", {
-            success: response.success,
-            aiType: responseData.aiResponse?.type,
-            modeSwitch: responseData.modeSwitch || null,
-            hasAnalysis: Boolean(responseData.analysisResult),
-            hasDraft: Boolean(responseData.draftResult),
-          });
-          // Update session with new messages
-          const newMessages = [
-            ...currentSession.messages,
-            responseData.message,
-          ];
-
-          if (responseData.aiResponse) {
-            const aiMsg = responseData.aiResponse as Message;
-            newMessages.push(aiMsg);
-
-            // Use real supervisor data if available, otherwise don't attach payloads
-            if (responseData.supervisorData) {
-              console.log("[Chat] Using real supervisor data for upload message", aiMsg.id, responseData.supervisorData);
-              // Don't attach mock payloads - let the message render with its actual content
-            } else {
-              // Only attach mock payloads if no supervisor data (legacy fallback)
-              setMessagePayloads((prev) => ({
-                ...prev,
-                [aiMsg.id]: {
-                  analysis: {
-                    ...mockAnalysisResult,
-                    id: `analysis_${Date.now()}`,
-                  },
-                  draft: { ...mockDraftResult, id: `draft_${Date.now()}` },
-                },
-              }));
-              console.log("[Chat] stored mock payloads for upload message", aiMsg.id, {
-                type: aiMsg.type,
-                hasAnalysis: Boolean(responseData.analysisResult),
-                hasDraft: Boolean(responseData.draftResult),
-              });
-            }
-          }
-
-          // Handle mode switch
-          if (responseData.modeSwitch?.detected) {
-            const switchingToDraft = responseData.modeSwitch.toDraftMode;
-            setIsDraftMode(switchingToDraft);
-            console.log(
-              "[Chat] mode switch detected (upload):",
-              responseData.modeSwitch
-            );
-
-            const modeMessage: Message = {
-              id: `mode_${Date.now()}`,
-              content: switchingToDraft
-                ? "🔁 Switched to Draft Mode based on AI response (Mode C)"
-                : "🔁 Staying in Analysis Mode based on AI response (Mode A/B)",
-              sender: "assistant",
-              timestamp: new Date(),
-              domain,
-            };
-            newMessages.push(modeMessage);
-          }
-
-          setCurrentSession({
-            ...currentSession,
-            messages: newMessages,
-          });
-        }
-      } catch (error) {
-        console.error("Failed to analyze uploaded file:", error);
-      }
-    }
+    // Files are now staged - wait for user to enter prompt and click send
+    // (Removed auto-send logic to match ChatGPT/Claude behavior)
   };
+
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -1726,12 +1716,27 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
           </AnimatePresence>
 
           {/* Messages Container or Document Upload Prompt */}
-          {showDocumentPrompt ? (
-            <DocumentUploadPrompt />
-          ) : (
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-4">
-              <AnimatePresence>
-                {currentSession?.messages.map((message: Message) => {
+          <AnimatePresence mode="wait">
+            {showDocumentPrompt ? (
+              <motion.div
+                key="document-prompt"
+                initial={{ opacity: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.2 }}
+                className="flex-1"
+              >
+                <DocumentUploadPrompt />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="chat-messages"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3, delay: 0.1 }}
+                className="flex-1 overflow-y-auto p-4 space-y-4 pb-4"
+              >
+                <AnimatePresence>
+                  {currentSession?.messages.map((message: Message) => {
                   const analysis = messagePayloads[message.id]?.analysis;
                   const draft = messagePayloads[message.id]?.draft;
                   const supervisor = messagePayloads[message.id]?.supervisor;
@@ -1829,8 +1834,9 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
               )}
 
               <div ref={messagesEndRef} />
-            </div>
-          )}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Input Section - Only show when session exists */}
           {currentSession && (
@@ -1872,6 +1878,33 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
               </div>
 
               <div className="relative">
+                {/* Show staged files indicator */}
+                {sessionDocuments.filter((doc: any) => doc._staged).length > 0 && (
+                  <div className="mb-2 p-2 bg-purple-50 border border-purple-200 rounded-lg">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <FileText className="w-4 h-4 text-purple-600 flex-shrink-0" />
+                      <span className="text-xs font-medium text-purple-900">
+                        {sessionDocuments.filter((doc: any) => doc._staged).length} file(s) ready to send:
+                      </span>
+                      {sessionDocuments.filter((doc: any) => doc._staged).map((doc: any) => (
+                        <span key={doc.id} className="flex items-center gap-1 text-xs text-purple-700 bg-purple-100 px-2 py-0.5 rounded">
+                          <span>{doc.originalFilename}</span>
+                          <button
+                            onClick={() => {
+                              // Remove the staged file
+                              setSessionDocuments(prev => prev.filter(d => d.id !== doc.id));
+                            }}
+                            className="hover:bg-purple-200 rounded p-0.5 transition-colors"
+                            title="Remove file"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <Textarea
                   ref={textareaRef}
                   value={inputValue}
@@ -1880,6 +1913,8 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
                   placeholder={
                     isDraftMode
                       ? "Describe the legal document you need or ask for editing help..."
+                      : sessionDocuments.filter((doc: any) => doc._staged).length > 0
+                      ? "Add your question about the file(s)..."
                       : "Ask your legal question or drag & drop a PDF..."
                   }
                   className="pr-12 min-h-[44px] max-h-[120px] resize-none bg-gray-50 focus:bg-surface-white border-purple-primary/20 focus:border-purple-primary"

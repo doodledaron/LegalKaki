@@ -449,6 +449,18 @@ export interface SendMessageRequest {
   content: string
   attachments?: string[] // document IDs
   messageType?: 'text' | 'analysis_request' | 'draft_request'
+  domain?: string // Domain context for specialized assistance
+  uploadedDocuments?: Array<{
+    id: string
+    originalFilename: string
+    fileType: string
+    fileSize: number
+    _fileContent?: ArrayBuffer
+    _fileName?: string
+    _fileType?: string
+    _fileSize?: number
+    [key: string]: any
+  }>
 }
 
 export interface SendMessageResponse {

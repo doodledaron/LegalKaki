@@ -498,7 +498,8 @@ export class RealApiClient {
     chatId: number,
     content: string,
     uploadedFiles?: Array<{ name: string; type: string; size: number; content: ArrayBuffer }>,
-    onProgress?: (stage: string, progress: number) => void
+    onProgress?: (stage: string, progress: number) => void,
+    domain?: string
   ): Promise<SendMessageResponse> {
     try {
       const supervisorUrl = `${BACKEND_CONFIG.legalKakiBaseUrl}${BACKEND_CONFIG.endpoints.supervisorMessage}`;
@@ -508,6 +509,7 @@ export class RealApiClient {
       const requestBody = {
         chat_id: chatId,
         content: content,
+        domain: domain,
         uploaded_files: uploadedFiles?.map(f => ({
           name: f.name,
           type: f.type,
