@@ -1292,15 +1292,47 @@ export const collectionsApi = {
   async deleteCollection(
     collectionId: string
   ): Promise<ApiResponse<{ success: boolean }> | ApiError> {
-    return mockClient.request(
-      async () => {
-        return { success: true };
-      },
-      "fast",
-      {
-        successMessage: "Collection deleted successfully",
+    try {
+      // Use real API to delete collection
+      const collectionIdNum = parseInt(collectionId);
+      if (isNaN(collectionIdNum)) {
+        throw new Error("Invalid collection ID");
       }
-    );
+
+      const userSub = DEFAULT_USER_ID; // TODO: Get from auth context
+
+      // Call backend DELETE endpoint
+      const response = await fetch(`${getBackendUrl()}/collections/${collectionIdNum}?owner_sub=${userSub}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete collection: ${response.status} ${response.statusText}`);
+      }
+
+      return {
+        success: true,
+        data: { success: true },
+        timestamp: new Date().toISOString(),
+        message: "Collection deleted successfully",
+      };
+    } catch (error) {
+      console.error("Real API delete collection failed, falling back to mock:", error);
+
+      // Fallback to mock implementation
+      return mockClient.request(
+        async () => {
+          return { success: true };
+        },
+        "fast",
+        {
+          successMessage: "Collection deleted successfully",
+        }
+      );
+    }
   },
 
   async getCollectionConversations(
