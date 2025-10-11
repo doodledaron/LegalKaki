@@ -812,6 +812,7 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
   // State for collection info (when viewing from collection)
   const [currentCollectionId, setCurrentCollectionId] = useState<string | undefined>(collectionId);
   const [currentCollectionName, setCurrentCollectionName] = useState<string | undefined>(collectionName);
+  const [initialMessageCount, setInitialMessageCount] = useState<number>(0);
 
   // Fetch real documents for the current chat session
   const [chatDocuments, setChatDocuments] = useState<Document[]>([]);
@@ -873,6 +874,9 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
           setCurrentSession(session);
           setShowDocumentPrompt(false); // Hide prompt for resumed chats
 
+          // Track initial message count to detect new messages
+          setInitialMessageCount(messages.length);
+
           // Restore message payloads if available
           if (snapshot.snapshot_data.messagePayloads) {
             setMessagePayloads(snapshot.snapshot_data.messagePayloads);
@@ -885,6 +889,37 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
 
     loadConversationSnapshot();
   }, [conversationId, domain]);
+
+  // Auto-save to collection after NEW messages are added (when already in a collection)
+  useEffect(() => {
+    // Only auto-save if:
+    // 1. We're in a collection (currentCollectionId exists)
+    // 2. We have a session with messages
+    // 3. Message count has increased beyond the initial load
+    if (!currentCollectionId || !currentSession || !currentSession.messages.length) {
+      return;
+    }
+
+    // Only trigger auto-save if we have NEW messages (beyond what was initially loaded)
+    const hasNewMessages = currentSession.messages.length > initialMessageCount;
+    if (!hasNewMessages) {
+      return;
+    }
+
+    // Auto-save with debounce to avoid too many saves
+    const timeoutId = setTimeout(async () => {
+      try {
+        console.log(`🔄 Auto-saving conversation to collection: ${currentCollectionName}`);
+        console.log(`   Initial: ${initialMessageCount}, Current: ${currentSession.messages.length}`);
+        await handleSaveConversation(parseInt(currentCollectionId), currentSession?.title);
+        console.log(`✅ Auto-saved ${currentSession.messages.length} messages`);
+      } catch (error) {
+        console.error('Auto-save failed:', error);
+      }
+    }, 2000); // 2 second debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [currentSession?.messages?.length, currentCollectionId, initialMessageCount]); // Trigger when message count changes
 
   // Fetch chat documents ONLY for resumed/saved chats (not new chats)
   useEffect(() => {
@@ -2256,7 +2291,7 @@ Generate a complete, updated version of the document incorporating all the reque
 
           {/* Input Section - Only show when session exists */}
           {currentSession && (
-            <div className="bg-surface-white border-t border-gray-200 p-4 pb-nav">
+            <div className="bg-surface-white border-t border-gray-200 p-4">
               <div className="flex items-center space-x-2 mb-3">
                 <Button
                   variant="ghost"
