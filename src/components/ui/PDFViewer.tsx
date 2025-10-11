@@ -95,37 +95,18 @@ export function PDFViewer({ document, onClose, collectionId }: PDFViewerProps) {
               region: 'ap-southeast-5'
             })
             
-            // Get presigned URL for the document
+            // Use backend proxy endpoint to avoid CORS issues
             try {
-              console.log('🔄 Getting presigned URL for document...')
-              const presignedResult = await getDocumentPresignedUrl(
-                collectionDocument.s3_bucket,
-                collectionDocument.s3_key
-              )
-              
-              if (presignedResult.success && presignedResult.url) {
-                console.log('✅ Presigned URL generated successfully')
-                
-                // Test if the presigned URL is accessible
-                const isAccessible = await testPresignedUrl(presignedResult.url)
-                
-                if (isAccessible) {
-                  console.log('✅ Presigned URL is accessible, using for PDF viewer')
-                  console.log('📄 Setting PDF URL:', presignedResult.url.substring(0, 100) + '...')
-                  setPdfUrl(presignedResult.url)
-                  return
-                } else {
-                  console.error('❌ Presigned URL not accessible')
-                  // Still try to use it - the validation might be too strict
-                  console.log('⚠️ Attempting to use presigned URL despite validation failure')
-                  setPdfUrl(presignedResult.url)
-                  return
-                }
-              } else {
-                console.error('❌ Failed to generate presigned URL:', presignedResult.error)
-              }
-            } catch (presignedError) {
-              console.error('❌ Error getting presigned URL:', presignedError)
+              console.log('🔄 Using backend proxy for document:', document.id)
+              const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+              const contentUrl = `${backendUrl}/documents/${document.id}/content?owner_sub=test-user-1`
+
+              console.log('📡 Using proxied content URL:', contentUrl)
+              console.log('✅ Backend will proxy S3 content to avoid CORS')
+              setPdfUrl(contentUrl)
+              return
+            } catch (proxyError) {
+              console.error('❌ Error setting up backend proxy:', proxyError)
             }
           } else {
             console.warn('⚠️ Document not found in collection details or missing S3 info')
@@ -143,37 +124,18 @@ export function PDFViewer({ document, onClose, collectionId }: PDFViewerProps) {
             region: 'ap-southeast-5'
           })
           
-          // Get presigned URL for the document
+          // Use backend proxy endpoint (fallback)
           try {
-            console.log('🔄 Getting presigned URL for document (fallback)...')
-            const presignedResult = await getDocumentPresignedUrl(
-              document.s3Bucket,
-              document.s3Key
-            )
-            
-            if (presignedResult.success && presignedResult.url) {
-              console.log('✅ Presigned URL generated successfully (fallback)')
-              
-              // Test if the presigned URL is accessible
-              const isAccessible = await testPresignedUrl(presignedResult.url)
-              
-              if (isAccessible) {
-                console.log('✅ Presigned URL is accessible (fallback), using for PDF viewer')
-                console.log('📄 Setting PDF URL (fallback):', presignedResult.url.substring(0, 100) + '...')
-                setPdfUrl(presignedResult.url)
-                return
-              } else {
-                console.error('❌ Presigned URL not accessible (fallback)')
-                // Still try to use it - the validation might be too strict
-                console.log('⚠️ Attempting to use presigned URL despite validation failure (fallback)')
-                setPdfUrl(presignedResult.url)
-                return
-              }
-            } else {
-              console.error('❌ Failed to generate presigned URL (fallback):', presignedResult.error)
-            }
-          } catch (presignedError) {
-            console.error('❌ Error getting presigned URL (fallback):', presignedError)
+            console.log('🔄 Using backend proxy (fallback)...')
+            const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+            const contentUrl = `${backendUrl}/documents/${document.id}/content?owner_sub=test-user-1`
+
+            console.log('📡 Using proxied content URL (fallback):', contentUrl)
+            console.log('✅ Backend will proxy S3 content to avoid CORS (fallback)')
+            setPdfUrl(contentUrl)
+            return
+          } catch (proxyError) {
+            console.error('❌ Error setting up backend proxy (fallback):', proxyError)
           }
         }
         
