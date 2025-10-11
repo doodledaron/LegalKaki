@@ -1511,7 +1511,7 @@ Generate a complete, updated version of the document incorporating all the reque
         type: msg.type,
       }));
 
-      // Extract staged files (files with _staged flag)
+      // Extract staged files (files with _staged flag that haven't been uploaded yet)
       const stagedFiles = sessionDocuments
         .filter((doc: any) => doc._staged && doc._fileContent)
         .map((doc: any) => ({
@@ -1521,7 +1521,12 @@ Generate a complete, updated version of the document incorporating all the reque
           fileSize: doc.fileSize,
         }));
 
-      console.log(`📤 Saving conversation with ${stagedFiles.length} staged files`);
+      // Get already-uploaded document IDs from the chat
+      const existingDocumentIds = chatDocuments
+        .filter(doc => doc.id && !doc.id.startsWith('staged_'))
+        .map(doc => parseInt(doc.id));
+
+      console.log(`📤 Saving conversation with ${stagedFiles.length} staged files and ${existingDocumentIds.length} existing documents`);
 
       // Extract numeric chat ID from session ID (e.g., "session_1234567_abc" -> 1234567)
       const chatIdMatch = currentSession.id.match(/session_(\d+)/);
@@ -1539,6 +1544,7 @@ Generate a complete, updated version of the document incorporating all the reque
         messages: serializedMessages,
         messagePayloads,
         stagedFiles: stagedFiles.length > 0 ? stagedFiles : undefined,
+        existingDocumentIds: existingDocumentIds.length > 0 ? existingDocumentIds : undefined,
       });
 
       console.log("✅ Conversation saved successfully");
