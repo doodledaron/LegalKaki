@@ -1114,10 +1114,25 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
         // Add to chat documents so it appears in dropdown
         setChatDocuments(prev => [...prev, doc]);
 
+        // Get presigned URL for the newly generated document
+        const authenticatedUserId = getUserId();
+        let downloadUrl = '';
+        try {
+          const presignResponse = await fetch(
+            `${getEnvConfig().backendUrl}/documents/${doc.id}/presign?owner_sub=${authenticatedUserId}`
+          );
+          if (presignResponse.ok) {
+            const { url } = await presignResponse.json();
+            downloadUrl = url;
+          }
+        } catch (error) {
+          console.warn('Failed to get presigned URL for generated document:', error);
+        }
+
         // Add success message with download link
         const successMessage: Message = {
           id: `doc_${Date.now()}`,
-          content: `✅ **Document Generated Successfully!**\n\n**${doc.originalFilename}**\n\nSize: ${(doc.fileSize / 1024).toFixed(1)} KB\n\nThe document has been added to your chat and can be accessed from the Analysis Mode dropdown.`,
+          content: `✅ **Document Generated Successfully!**\n\n${downloadUrl ? `📄 [**${doc.originalFilename}**](${downloadUrl})` : `**${doc.originalFilename}**`}\n\nSize: ${(doc.fileSize / 1024).toFixed(1)} KB\n\n${downloadUrl ? 'Click the document name above to view it, or' : 'The document can be'} access${downloadUrl ? 'ed' : 'ed'} from the Analysis Mode dropdown.`,
           sender: "assistant",
           timestamp: new Date(),
           domain,

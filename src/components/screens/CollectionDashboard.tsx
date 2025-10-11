@@ -489,7 +489,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
                             </span>
                             <span className="flex items-center space-x-1">
                               <MessageCircle className="w-4 h-4" />
-                              <span>{conversation.messages?.length || 0} messages</span>
+                              <span>{conversation.messageCount || 0} messages</span>
                             </span>
                           </div>
 
