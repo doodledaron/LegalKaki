@@ -1538,8 +1538,12 @@ export interface BackendCollection {
   collection_id: number;
   owner_sub: string;
   name: string;
+  description?: string;
   status: string;
   created_at: string;
+  conversation_count?: number;  // From /with-conversations endpoint
+  document_count?: number;      // From /with-conversations endpoint
+  action_count?: number;         // From /with-conversations endpoint
 }
 
 export interface BackendChat {
@@ -1577,14 +1581,14 @@ export class CollectionApiClient {
   }
 
   async getCollections(userSub: string, limit: number = 50, offset: number = 0): Promise<BackendCollection[]> {
-    // Try multiple approaches to get collections from backend
+    // Use the with-conversations endpoint to get document and action counts
     const approaches = [
-      // Approach 1: Try with the provided userSub
-      `${this.baseUrl}/collections/?owner_sub=${userSub}&limit=${limit}&offset=${offset}`,
+      // Approach 1: Try with-conversations endpoint with provided userSub
+      `${this.baseUrl}/collections/with-conversations?owner_sub=${userSub}&limit=${limit}&offset=${offset}`,
       // Approach 2: Try without user filter (get all collections)
-      `${this.baseUrl}/collections/?limit=${limit}&offset=${offset}`,
+      `${this.baseUrl}/collections/with-conversations?limit=${limit}&offset=${offset}`,
       // Approach 3: Try with a default user ID that might exist in the backend
-      `${this.baseUrl}/collections/?owner_sub=${DEFAULT_USER_ID}&limit=${limit}&offset=${offset}`,
+      `${this.baseUrl}/collections/with-conversations?owner_sub=${DEFAULT_USER_ID}&limit=${limit}&offset=${offset}`,
     ];
 
     for (const url of approaches) {
