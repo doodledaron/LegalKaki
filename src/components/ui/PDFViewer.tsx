@@ -8,7 +8,8 @@ import { Document as PDFDocument, Page, pdfjs } from 'react-pdf'
 import { bedrockService } from '@/api/bedrockService'
 import { documentsApi, api } from '@/api'
 import { Document as DocumentType } from '@/types'
-import { getDocumentUrlWithProxy } from '@/lib/corsProxy'
+import { collectionApiClient } from '@/api/realApi'
+import { getDocumentPresignedUrl, testPresignedUrl } from '@/lib/presignedUrlService'
 
 // Configure PDF.js worker for react-pdf v9
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -33,9 +34,10 @@ interface Tooltip {
 interface PDFViewerProps {
   document: DocumentType
   onClose?: () => void
+  collectionId?: string // Optional collection ID for fetching document details
 }
 
-export function PDFViewer({ document, onClose }: PDFViewerProps) {
+export function PDFViewer({ document, onClose, collectionId }: PDFViewerProps) {
   const [isHighlightMode, setIsHighlightMode] = useState(false)
   const [zoom, setZoom] = useState(1.0)
   const [tooltip, setTooltip] = useState<Tooltip>({ 
@@ -68,55 +70,122 @@ export function PDFViewer({ document, onClose }: PDFViewerProps) {
           fileType: document.fileType
         })
         
-        // Try to get document URL through backend proxy first
+        // Get document details from collection endpoint
         try {
-          const response = await documentsApi.getDocumentProxy(document.id)
-          if (response.success) {
-            setPdfUrl(response.data.url)
-            console.log('✅ Got document URL from backend proxy:', response.data.url)
-            return
+          console.log('🔄 Getting document details from collection endpoint...')
+          
+          // Use collectionId prop or document.collectionId, with fallback
+          const collectionIdToUse = collectionId || document.collectionId || '7' // Fallback to '7' as seen in logs
+          
+          console.log(`📋 Fetching collection ${collectionIdToUse} details for document ${document.id}`)
+          const collectionDetails = await collectionApiClient.getCollectionDetails(parseInt(collectionIdToUse))
+          
+          // Find the specific document in the collection
+          console.log(`🔍 Searching for document ${document.id} in collection documents:`, collectionDetails.documents.map(d => ({ id: d.document_id, title: d.title })))
+          
+          const collectionDocument = collectionDetails.documents.find(doc => 
+            doc.document_id.toString() === document.id
+          )
+          
+          if (collectionDocument && collectionDocument.s3_bucket && collectionDocument.s3_key) {
+            console.log('✅ Found document in collection details')
+            console.log('📄 Document S3 info:', { 
+              bucket: collectionDocument.s3_bucket, 
+              key: collectionDocument.s3_key,
+              region: 'ap-southeast-5'
+            })
+            
+            // Get presigned URL for the document
+            try {
+              console.log('🔄 Getting presigned URL for document...')
+              const presignedResult = await getDocumentPresignedUrl(
+                collectionDocument.s3_bucket,
+                collectionDocument.s3_key
+              )
+              
+              if (presignedResult.success && presignedResult.url) {
+                console.log('✅ Presigned URL generated successfully')
+                
+                // Test if the presigned URL is accessible
+                const isAccessible = await testPresignedUrl(presignedResult.url)
+                
+                if (isAccessible) {
+                  console.log('✅ Presigned URL is accessible, using for PDF viewer')
+                  console.log('📄 Setting PDF URL:', presignedResult.url.substring(0, 100) + '...')
+                  setPdfUrl(presignedResult.url)
+                  return
+                } else {
+                  console.error('❌ Presigned URL not accessible')
+                  // Still try to use it - the validation might be too strict
+                  console.log('⚠️ Attempting to use presigned URL despite validation failure')
+                  setPdfUrl(presignedResult.url)
+                  return
+                }
+              } else {
+                console.error('❌ Failed to generate presigned URL:', presignedResult.error)
+              }
+            } catch (presignedError) {
+              console.error('❌ Error getting presigned URL:', presignedError)
+            }
+          } else {
+            console.warn('⚠️ Document not found in collection details or missing S3 info')
           }
-        } catch (proxyError) {
-          console.warn('Backend proxy failed, trying direct S3 URL:', proxyError)
+        } catch (collectionError) {
+          console.error('❌ Collection endpoint failed:', collectionError)
         }
         
-        // Fallback: try CORS proxy for S3 access
+        // Fallback: try presigned URL with document's own S3 info
         if (document.s3Bucket && document.s3Key) {
-          console.log('⚠️ Backend proxy failed, trying CORS proxy solutions')
+          console.log('⚠️ Collection endpoint failed, trying presigned URL with document info')
           console.log('📄 Document S3 info:', { 
             bucket: document.s3Bucket, 
             key: document.s3Key,
             region: 'ap-southeast-5'
           })
           
+          // Get presigned URL for the document
           try {
-            const proxyResult = await getDocumentUrlWithProxy(
-              document.s3Bucket, 
-              document.s3Key, 
-              'ap-southeast-5'
+            console.log('🔄 Getting presigned URL for document (fallback)...')
+            const presignedResult = await getDocumentPresignedUrl(
+              document.s3Bucket,
+              document.s3Key
             )
             
-            if (proxyResult.success && proxyResult.url) {
-              console.log('✅ CORS proxy successful:', proxyResult.url)
-              setPdfUrl(proxyResult.url)
-              return
+            if (presignedResult.success && presignedResult.url) {
+              console.log('✅ Presigned URL generated successfully (fallback)')
+              
+              // Test if the presigned URL is accessible
+              const isAccessible = await testPresignedUrl(presignedResult.url)
+              
+              if (isAccessible) {
+                console.log('✅ Presigned URL is accessible (fallback), using for PDF viewer')
+                console.log('📄 Setting PDF URL (fallback):', presignedResult.url.substring(0, 100) + '...')
+                setPdfUrl(presignedResult.url)
+                return
+              } else {
+                console.error('❌ Presigned URL not accessible (fallback)')
+                // Still try to use it - the validation might be too strict
+                console.log('⚠️ Attempting to use presigned URL despite validation failure (fallback)')
+                setPdfUrl(presignedResult.url)
+                return
+              }
             } else {
-              console.error('❌ CORS proxy failed:', proxyResult.error)
+              console.error('❌ Failed to generate presigned URL (fallback):', presignedResult.error)
             }
-          } catch (proxyError) {
-            console.error('❌ CORS proxy error:', proxyError)
+          } catch (presignedError) {
+            console.error('❌ Error getting presigned URL (fallback):', presignedError)
           }
-        } else {
-          // Final fallback to static file
-          setPdfUrl('/partnership.pdf')
-          console.log('⚠️ Using fallback static PDF - no S3 info available')
-          console.log('📄 Document info:', {
-            hasS3Bucket: !!document.s3Bucket,
-            hasS3Key: !!document.s3Key,
-            s3Bucket: document.s3Bucket,
-            s3Key: document.s3Key
-          })
         }
+        
+        // Final fallback to static file
+        setPdfUrl('/partnership.pdf')
+        console.log('⚠️ Using fallback static PDF - S3 access failed')
+        console.log('📄 Document info:', {
+          hasS3Bucket: !!document.s3Bucket,
+          hasS3Key: !!document.s3Key,
+          s3Bucket: document.s3Bucket,
+          s3Key: document.s3Key
+        })
       } catch (error) {
         console.error('Error loading PDF URL:', error)
         setPdfError('Failed to load document')

@@ -666,6 +666,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
         <PDFViewer
           document={selectedDocument}
           onClose={() => setSelectedDocument(null)}
+          collectionId={collectionId}
         />
       )}
 
