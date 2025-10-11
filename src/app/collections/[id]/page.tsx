@@ -17,6 +17,11 @@ export default function CollectionPage() {
     router.push('/domains')
   }
 
+  const handleViewConversation = (conversationId: string, domain: string) => {
+    // Navigate to chat page with conversation context
+    router.push(`/chat?domain=${domain}&conversationId=${conversationId}&collectionId=${collectionId}`)
+  }
+
   if (!collectionId) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
@@ -37,11 +42,12 @@ export default function CollectionPage() {
 
   return (
     <AuthGuard>
-      <CollectionDashboard 
+      <CollectionDashboard
         collectionId={collectionId}
         onBack={handleBack}
         onStartNewChat={handleStartNewChat}
-      />
+        onViewConversation={handleViewConversation}
+    />
     </AuthGuard>
   )
 }

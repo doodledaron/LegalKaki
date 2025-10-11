@@ -10,9 +10,16 @@ function ChatPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const domain = searchParams.get('domain') as LegalDomain
+  const conversationId = searchParams.get('conversationId')
+  const collectionId = searchParams.get('collectionId')
 
   const handleBack = () => {
-    router.push('/domains')
+    // If viewing from collection, go back to collection; otherwise go to domains
+    if (collectionId) {
+      router.push(`/collections/${collectionId}`)
+    } else {
+      router.push('/domains')
+    }
   }
 
   if (!domain) {
@@ -34,9 +41,11 @@ function ChatPageContent() {
   }
 
   return (
-    <ChatbotScreen 
+    <ChatbotScreen
       domain={domain}
       onBack={handleBack}
+      conversationId={conversationId || undefined}
+      collectionId={collectionId || undefined}
     />
   )
 }

@@ -1142,10 +1142,26 @@ export const collectionsApi = {
       }
       
       const backendDetails = await collectionApiClient.getCollectionDetails(collectionIdNum);
-      
+
+      // Fetch conversation snapshots separately
+      const conversationsResult = await realApiClient.getCollectionConversations(collectionIdNum, 'test-user-1'); // TODO: Use real user_sub
+      const conversationSnapshots = conversationsResult.success ? conversationsResult.data : [];
+
       // Convert backend data to frontend models
       const collection = mapBackendCollectionToCollection(backendDetails.collection);
-      const conversations = backendDetails.chats.map(mapBackendChatToChatSession);
+
+      // Map conversation list items to a display format
+      const conversations = conversationSnapshots.map(snapshot => ({
+        id: snapshot.snapshot_id,
+        title: snapshot.title,
+        domain: (snapshot.domain as LegalDomain) || 'general',
+        messages: [], // Placeholder - actual messages loaded when viewing
+        messageCount: snapshot.message_count,
+        createdAt: new Date(snapshot.created_at),
+        updatedAt: new Date(snapshot.created_at),
+        preview: snapshot.preview
+      }));
+
       const actionItems = backendDetails.actions.map(mapBackendActionToActionItem);
       
       // Map documents directly from the collection details response

@@ -17,9 +17,10 @@ interface CollectionDashboardProps {
   onBack: () => void
   // TODO: Remove onStartNewChat when API is ready - this is for viewing user history only
   onStartNewChat?: () => void
+  onViewConversation?: (conversationId: string, domain: string) => void
 }
 
-export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: CollectionDashboardProps) {
+export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onViewConversation }: CollectionDashboardProps) {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [activeFilter, setActiveFilter] = useState<'all' | 'urgent' | 'pending' | 'completed'>('all')
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null)
@@ -379,6 +380,88 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
               <div className="body-small text-text-secondary">Conversations</div>
             </motion.div> */}
           </div>
+        </motion.div>
+
+        {/* Conversations Section */}
+        <motion.div
+          className="mb-8"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.05 }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-2">
+              <MessageCircle className="w-6 h-6 text-purple-primary" />
+              <h2 className="heading-3">Saved Conversations</h2>
+            </div>
+          </div>
+
+          {conversations.length === 0 ? (
+            <Card className="text-center py-8">
+              <CardContent>
+                <div className="mb-4 flex justify-center">
+                  <MessageCircle className="w-16 h-16 text-gray-400" />
+                </div>
+                <h3 className="heading-3 mb-2">No conversations saved yet</h3>
+                <p className="body-regular text-text-secondary mb-4">
+                  Start a chat and save it to this collection to see it here
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 gap-4">
+              {conversations.map((conversation, index) => (
+                <motion.div
+                  key={conversation.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3, delay: index * 0.1 }}
+                >
+                  <Card className="bg-white border-0 shadow-sm hover:shadow-xl hover:shadow-purple-primary/10 transition-all duration-300 cursor-pointer group">
+                    <CardContent className="p-6">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-3 mb-2">
+                            <MessageCircle className="w-5 h-5 text-purple-primary flex-shrink-0" />
+                            <h4 className="heading-4 text-text-primary truncate group-hover:text-purple-primary transition-colors">
+                              {conversation.title}
+                            </h4>
+                          </div>
+
+                          <div className="flex items-center space-x-4 text-sm text-text-secondary mb-3">
+                            <span className="flex items-center space-x-1">
+                              <Calendar className="w-4 h-4" />
+                              <span>{formatDate(conversation.createdAt)}</span>
+                            </span>
+                            <span className="flex items-center space-x-1">
+                              <MessageCircle className="w-4 h-4" />
+                              <span>{conversation.messageCount || conversation.messages?.length || 0} messages</span>
+                            </span>
+                          </div>
+
+                          {(conversation.preview || (conversation.messages && conversation.messages.length > 0)) && (
+                            <p className="body-small text-text-secondary line-clamp-2">
+                              {conversation.preview || conversation.messages?.find(m => m.sender === 'user')?.content || 'No preview available'}
+                            </p>
+                          )}
+                        </div>
+
+                        <Button
+                          variant="ghost"
+                          size="small"
+                          leftIcon={<Eye className="w-4 h-4" />}
+                          className="ml-4 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => onViewConversation?.(conversation.id, conversation.domain)}
+                        >
+                          View
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
+            </div>
+          )}
         </motion.div>
 
         {/* Documents Section */}
