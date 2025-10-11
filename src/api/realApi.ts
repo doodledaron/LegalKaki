@@ -1342,6 +1342,80 @@ export async function debugApiConnection() {
   return endpointResults;
 }
 
+  // Conversation Snapshot Methods
+  async saveConversationToCollection(request: any): Promise<any> {
+    const url = `${BACKEND_CONFIG.legalKakiBaseUrl}/conversations/save`;
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to save conversation: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return { success: true, data };
+  }
+
+  async getCollectionConversations(collectionId: number, userSub: string): Promise<any> {
+    const url = `${BACKEND_CONFIG.legalKakiBaseUrl}/conversations/collection/${collectionId}?user_sub=${encodeURIComponent(userSub)}`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to get collection conversations: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return { success: true, data };
+  }
+
+  async getConversationSnapshot(snapshotId: string, userSub: string): Promise<any> {
+    const url = `${BACKEND_CONFIG.legalKakiBaseUrl}/conversations/${snapshotId}?user_sub=${encodeURIComponent(userSub)}`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to get conversation snapshot: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return { success: true, data };
+  }
+
+  async deleteConversationFromCollection(snapshotId: string, userSub: string): Promise<any> {
+    const url = `${BACKEND_CONFIG.legalKakiBaseUrl}/conversations/${snapshotId}?user_sub=${encodeURIComponent(userSub)}`;
+
+    const response = await fetch(url, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to delete conversation: ${response.statusText}`);
+    }
+
+    return { success: true, data: null };
+  }
+}
+
 // Export singleton instance
 export const realApiClient = new RealApiClient();
 export default realApiClient;

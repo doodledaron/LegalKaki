@@ -68,6 +68,9 @@ import {
   mapBackendActionToActionItem,
   mapBackendDocumentToDocument,
   mapBackendCollectionDocumentToDocument,
+  SaveConversationRequest,
+  ConversationSnapshot,
+  ConversationListItem,
 } from "./types";
 import { LegalDomain, Message, Document, ActionItem, ChatSession } from "@/types";
 
@@ -1370,6 +1373,58 @@ export const collectionsApi = {
         successMessage: "Document removed from collection",
       }
     );
+  },
+
+  // Conversation snapshot functions
+  async saveConversationToCollection(
+    request: SaveConversationRequest
+  ): Promise<ApiResponse<ConversationSnapshot> | ApiError> {
+    try {
+      const response = await realApiClient.saveConversationToCollection(request);
+      return response;
+    } catch (error) {
+      console.error("Failed to save conversation:", error);
+      throw error;
+    }
+  },
+
+  async getCollectionConversations(
+    collectionId: number,
+    userSub: string
+  ): Promise<ApiResponse<ConversationListItem[]> | ApiError> {
+    try {
+      const response = await realApiClient.getCollectionConversations(collectionId, userSub);
+      return response;
+    } catch (error) {
+      console.error("Failed to get collection conversations:", error);
+      throw error;
+    }
+  },
+
+  async getConversationSnapshot(
+    snapshotId: string,
+    userSub: string
+  ): Promise<ApiResponse<ConversationSnapshot> | ApiError> {
+    try {
+      const response = await realApiClient.getConversationSnapshot(snapshotId, userSub);
+      return response;
+    } catch (error) {
+      console.error("Failed to get conversation snapshot:", error);
+      throw error;
+    }
+  },
+
+  async deleteConversationFromCollection(
+    snapshotId: string,
+    userSub: string
+  ): Promise<ApiResponse<void> | ApiError> {
+    try {
+      const response = await realApiClient.deleteConversationFromCollection(snapshotId, userSub);
+      return response;
+    } catch (error) {
+      console.error("Failed to delete conversation:", error);
+      throw error;
+    }
   },
 };
 

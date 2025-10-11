@@ -33,6 +33,7 @@ import {
   Target,
 } from "lucide-react";
 import { ExplanationTab, AnalysisTab, ActionTab, SupplementaryTab } from "@/components/chat/tabs";
+import { SaveToCollectionModal } from "@/components/modals/SaveToCollectionModal";
 import {
   isEducatorResponse,
   isAnalystResponse,
@@ -1107,10 +1108,46 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
     }
   };
 
+  const [showSaveModal, setShowSaveModal] = useState(false);
+
   const handleSaveToCollection = () => {
-    // #TODO: Implement save to collection with collectionsApi.createCollection()
-    // POST /api/collections - Save current chat session to a collection
-    console.log("Save to collection clicked");
+    setShowSaveModal(true);
+  };
+
+  const handleSaveConversation = async (collectionId: number, title?: string) => {
+    if (!currentSession) {
+      console.error("No active session to save");
+      return;
+    }
+
+    try {
+      // Serialize current state
+      const serializedMessages = currentSession.messages.map(msg => ({
+        id: msg.id,
+        content: msg.content,
+        sender: msg.sender,
+        timestamp: msg.timestamp.toISOString(),
+        attachments: msg.attachments,
+        domain: msg.domain,
+        type: msg.type,
+      }));
+
+      // Call API to save
+      await collectionsApi.saveConversationToCollection({
+        collection_id: collectionId,
+        chat_id: parseInt(currentSession.id),
+        user_sub: "user-1", // TODO: Get from auth context
+        title,
+        domain,
+        messages: serializedMessages,
+        messagePayloads,
+      });
+
+      console.log("✅ Conversation saved successfully");
+    } catch (error) {
+      console.error("Failed to save conversation:", error);
+      throw error;
+    }
   };
 
   const handleToggleEmailDoc = (docId: string) => {
@@ -2070,6 +2107,16 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Save to Collection Modal */}
+        <SaveToCollectionModal
+          isOpen={showSaveModal}
+          onClose={() => setShowSaveModal(false)}
+          onSave={handleSaveConversation}
+          domain={domain}
+          defaultTitle={currentSession?.title}
+          userSub="user-1"
+        />
       </div>
     </div>
   );
