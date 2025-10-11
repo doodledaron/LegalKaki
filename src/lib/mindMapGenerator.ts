@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { Document, ActionItem } from '@/types'
 import { bedrockService, MindMapInsights, MindMapAnalysisRequest } from '@/api/bedrockService'
+import { MindMapGenerationResponse } from '@/api/types'
 
 export interface CollectionMindMapData {
   id: string
@@ -431,4 +432,126 @@ export function createMindMapDataFromCollection(
     documents,
     actionItems
   }
+}
+
+// Generate hierarchical mindmap from backend API response
+export function generateMindMapFromBackendResponse(response: MindMapGenerationResponse): string {
+  console.log('🎨 Generating hierarchical mindmap from backend response:', response)
+
+  const { agentResponse } = response
+  const { title, summary, data } = agentResponse
+
+  // Start mindmap with root node (title)
+  const rootNode = cleanTextForNode(title)
+  let mermaidCode = `mindmap
+  root((${rootNode}))
+`
+
+  // Add summary as a descriptive child node
+  if (summary) {
+    const summaryText = cleanTextForNode(summary)
+    mermaidCode += `    ${summaryText}
+`
+  }
+
+  // Process the dynamic data field to create branches
+  if (data && typeof data === 'object') {
+    mermaidCode += generateHierarchicalBranches(data, 2) // Start at indentation level 2
+  }
+
+  console.log('📋 Generated hierarchical mermaid code:', mermaidCode)
+  return mermaidCode
+}
+
+// Recursively generate hierarchical branches from nested data
+function generateHierarchicalBranches(
+  data: Record<string, unknown> | unknown[],
+  indentLevel: number
+): string {
+  let branches = ''
+  const indent = '  '.repeat(indentLevel)
+
+  if (Array.isArray(data)) {
+    // Handle array - each item becomes a child node
+    data.forEach((item, index) => {
+      if (typeof item === 'object' && item !== null) {
+        // For objects in array, use title, name, or id as node label
+        const itemObj = item as Record<string, unknown>
+        const label = itemObj.title || itemObj.name || itemObj.id || `Item ${index + 1}`
+        const cleanLabel = cleanTextForNode(String(label))
+
+        // Add node with size based on indentation level
+        // Parent nodes (indent level 2) are wrapped in )) (( for larger size
+        if (indentLevel === 2) {
+          branches += `${indent}))${cleanLabel}((
+`
+        } else {
+          branches += `${indent}${cleanLabel}
+`
+        }
+
+        // Recursively add child properties as leaf nodes
+        Object.entries(itemObj).forEach(([key, value]) => {
+          if (key !== 'title' && key !== 'name' && key !== 'id' && value !== null && value !== undefined) {
+            const childIndent = '  '.repeat(indentLevel + 1)
+            if (typeof value === 'object' && !Array.isArray(value)) {
+              // Nested object - recurse
+              branches += generateHierarchicalBranches(value as Record<string, unknown>, indentLevel + 1)
+            } else if (Array.isArray(value)) {
+              // Nested array
+              branches += generateHierarchicalBranches(value, indentLevel + 1)
+            } else {
+              // Leaf node - display key-value pair
+              const valueStr = String(value)
+              if (valueStr.length > 0 && valueStr !== 'string') {
+                const cleanKey = cleanTextForNode(key)
+                const cleanValue = cleanTextForNode(valueStr)
+                branches += `${childIndent}${cleanKey}: ${cleanValue}
+`
+              }
+            }
+          }
+        })
+      } else {
+        // Primitive value in array
+        const cleanValue = cleanTextForNode(String(item))
+        if (cleanValue.length > 0) {
+          branches += `${indent}${cleanValue}
+`
+        }
+      }
+    })
+  } else {
+    // Handle object - each key becomes a branch
+    Object.entries(data).forEach(([key, value]) => {
+      if (value !== null && value !== undefined) {
+        const cleanKey = cleanTextForNode(key)
+
+        if (typeof value === 'object') {
+          // Branch node - parent nodes at indent level 2 get larger size
+          if (indentLevel === 2) {
+            branches += `${indent}))${cleanKey}((
+`
+          } else {
+            branches += `${indent}${cleanKey}
+`
+          }
+          branches += generateHierarchicalBranches(
+            Array.isArray(value) ? value : value as Record<string, unknown>,
+            indentLevel + 1
+          )
+        } else {
+          // Leaf node
+          const valueStr = String(value)
+          if (valueStr.length > 0 && valueStr !== 'string') {
+            const cleanValue = cleanTextForNode(valueStr)
+            branches += `${indent}${cleanKey}: ${cleanValue}
+`
+          }
+        }
+      }
+    })
+  }
+
+  return branches
 }

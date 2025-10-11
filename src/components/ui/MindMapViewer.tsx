@@ -14,11 +14,13 @@ interface MindMapViewerProps {
   onClose: () => void
   mermaidCode: string
   title: string
+  mindMapTitle?: string
+  mindMapSummary?: string
   enhancedData?: EnhancedMindMapData
   onNodeClick?: (node: InteractiveMindMapNode) => void
 }
 
-export function MindMapViewer({ isOpen, onClose, mermaidCode, title, enhancedData, onNodeClick }: MindMapViewerProps) {
+export function MindMapViewer({ isOpen, onClose, mermaidCode, title, mindMapTitle, mindMapSummary, enhancedData, onNodeClick }: MindMapViewerProps) {
   const mermaidRef = useRef<HTMLDivElement>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -252,8 +254,8 @@ export function MindMapViewer({ isOpen, onClose, mermaidCode, title, enhancedDat
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">{title} - Mind Map</h2>
-              <p className="text-gray-600 mt-1">Visual overview of your collection</p>
+              <h2 className="text-2xl font-bold text-gray-900">{mindMapTitle || title} - Mind Map</h2>
+              <p className="text-gray-600 mt-1">{mindMapSummary || "Visual overview of your collection"}</p>
             </div>
             
             <div className="flex items-center space-x-2">
