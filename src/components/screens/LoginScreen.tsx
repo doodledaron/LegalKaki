@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { Eye, EyeOff, Mail, Lock, ArrowRight, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card'
+import { Card, CardContent } from '@/components/ui/Card'
 
 interface LoginScreenProps {
   onLogin: (email: string, password: string) => Promise<void>
@@ -218,7 +218,7 @@ export function LoginScreen({ onLogin, onSignUpRedirect, onForgotPassword }: Log
           transition={{ duration: 0.6, delay: 0.6 }}
         >
           <p className="text-text-secondary">
-            Don't have an account?{' '}
+            Don&apos;t have an account?{' '}
             <button
               onClick={onSignUpRedirect}
               className="text-purple-primary hover:text-purple-dark font-medium transition-colors"

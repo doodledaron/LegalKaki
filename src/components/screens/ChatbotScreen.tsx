@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable react-hooks/exhaustive-deps */
 "use client";
@@ -43,7 +44,7 @@ import {
   isVisualizationResponse,
   isDraftResponse,
 } from "@/types";
-import { DEFAULT_USER_ID } from "@/lib/constants";
+import { getUserId } from "@/lib/auth-utils";
 import {
   LegalDomain,
   Message,
@@ -64,6 +65,7 @@ import type {
 import { LEGAL_DOMAINS } from "@/constants/domains";
 import { documentsApi, chatApi, collectionsApi, useApiCall, useApiMutation } from "@/api";
 import { mockAnalysisResult, mockDraftResult } from "@/api/mockData";
+import { getEnvConfig } from "@/lib/envConfig";
 
 interface ChatbotScreenProps {
   domain: LegalDomain;
@@ -133,9 +135,9 @@ const AnalysisMessageBubble = memo(
                       >
                         <AlertTriangle
                           className={`w-4 h-4 mt-0.5 ${
-                            risk.severity === "high"
+                            risk.level === "high"
                               ? "text-red-500"
-                              : risk.severity === "medium"
+                              : risk.level === "medium"
                               ? "text-yellow-500"
                               : "text-green-500"
                           }`}
@@ -265,11 +267,11 @@ const DraftMessageBubble = memo(
                 <div className="flex items-center space-x-2 mb-2">
                   <FileText className="w-4 h-4 text-purple-primary" />
                   <span className="body-small font-medium text-purple-primary">
-                    Document Draft
+                    Document Draft - {draftResult.documentType}
                   </span>
                 </div>
                 <p className="body-regular text-text-primary">
-                  {draftResult.explanation}
+                  {draftResult.disclaimer}
                 </p>
               </div>
             </div>
@@ -294,9 +296,9 @@ const DraftMessageBubble = memo(
                       >
                         <div
                           className={`w-2 h-2 rounded-full mt-2 ${
-                            suggestion.priority === "urgent"
+                            suggestion.priority === "high"
                               ? "bg-red-500"
-                              : suggestion.priority === "important"
+                              : suggestion.priority === "medium"
                               ? "bg-yellow-500"
                               : "bg-green-500"
                           }`}
@@ -328,7 +330,7 @@ const DraftMessageBubble = memo(
                         Draft Document
                       </span>
                       <span className="body-small font-medium text-text-primary">
-                        {draftResult.title}
+                        {draftResult.documentType}
                       </span>
                     </div>
                     <div className="bg-white rounded-lg p-4 border border-gray-200">
@@ -338,15 +340,15 @@ const DraftMessageBubble = memo(
                     </div>
                     <div className="mt-3 flex space-x-2">
                       <Button
-                        size="sm"
+                        size="small"
                         className="bg-purple-primary text-white hover:bg-purple-primary/90"
                       >
                         <Download className="w-4 h-4 mr-2" />
                         Download
                       </Button>
                       <Button
-                        size="sm"
-                        variant="outline"
+                        size="small"
+                        variant="secondary"
                         className="border-purple-primary text-purple-primary hover:bg-purple-subtle/20"
                       >
                         <Edit className="w-4 h-4 mr-2" />
@@ -441,29 +443,29 @@ const CombinedMessageBubble = memo(
 CombinedMessageBubble.displayName = "CombinedMessageBubble";
 
 // Supervisor Message Bubble Component - renders tabs from supervisor response with structured UI
-const SupervisorMessageBubble = memo(({ supervisorData }: { supervisorData: any }) => {
+const SupervisorMessageBubble = memo(({ supervisorData }: { supervisorData: Record<string, unknown> }) => {
   const { explanation_tab, analysis_tab, action_tab, extractedData, response_type, conversation_context } = supervisorData;
 
   // Determine which tabs are active
   const activeTabs = {
-    explanation: explanation_tab?.status === "active",
-    analysis: analysis_tab?.status === "active",
-    action: action_tab?.status === "active",
+    explanation: (explanation_tab as { status?: string })?.status === "active",
+    analysis: (analysis_tab as { status?: string })?.status === "active",
+    action: (action_tab as { status?: string })?.status === "active",
   };
 
   const hasAnyActiveTab = Object.values(activeTabs).some(Boolean);
 
   // Check if we have extracted JSON data (legacy format with embedded JSON blocks)
-  const hasExplanationJson = extractedData?.explanation && isEducatorResponse(extractedData.explanation);
-  const hasAnalysisJson = extractedData?.analysis && isAnalystResponse(extractedData.analysis);
-  const hasActionJson = extractedData?.action && isAdvisorResponse(extractedData.action);
-  const hasVisualizationJson = extractedData?.visualization && isVisualizationResponse(extractedData.visualization);
-  const hasDraftJson = extractedData?.draft && isDraftResponse(extractedData.draft);
+  const hasExplanationJson = (extractedData as Record<string, unknown>)?.explanation && isEducatorResponse((extractedData as Record<string, unknown>).explanation);
+  const hasAnalysisJson = (extractedData as Record<string, unknown>)?.analysis && isAnalystResponse((extractedData as Record<string, unknown>).analysis);
+  const hasActionJson = (extractedData as Record<string, unknown>)?.action && isAdvisorResponse((extractedData as Record<string, unknown>).action);
+  const hasVisualizationJson = (extractedData as Record<string, unknown>)?.visualization && isVisualizationResponse((extractedData as Record<string, unknown>).visualization);
+  const hasDraftJson = (extractedData as Record<string, unknown>)?.draft && isDraftResponse((extractedData as Record<string, unknown>).draft);
 
   // Handle clarification_needed response type
   if (response_type === "clarification_needed" && conversation_context) {
-    const systemMessage = conversation_context.system_message || "";
-    const clarificationQuestions = conversation_context.clarification_questions || [];
+    const systemMessage = (conversation_context as { system_message?: string }).system_message || "";
+    const clarificationQuestions = (conversation_context as { clarification_questions?: string[] }).clarification_questions || [];
 
     return (
       <motion.div
@@ -502,10 +504,10 @@ const SupervisorMessageBubble = memo(({ supervisorData }: { supervisorData: any 
   if (!hasAnyActiveTab) {
     // Try to get content from conversation_context.system_message (for plain text responses)
     // or fallback to tab contents
-    const messageContent = conversation_context?.system_message ||
-                          explanation_tab?.content ||
-                          action_tab?.content ||
-                          analysis_tab?.content ||
+    const messageContent = (conversation_context as { system_message?: string })?.system_message ||
+                          (explanation_tab as { content?: string })?.content ||
+                          (action_tab as { content?: string })?.content ||
+                          (analysis_tab as { content?: string })?.content ||
                           "No response available.";
 
     return (
@@ -543,36 +545,36 @@ const SupervisorMessageBubble = memo(({ supervisorData }: { supervisorData: any 
       <div className="w-[70%] bg-surface-white border-2 border-indigo-200/50 rounded-2xl rounded-bl-sm shadow-md overflow-hidden">
         <Tabs defaultValue={getDefaultTab()} className="w-full">
           <TabsList className="w-full justify-start border-b border-gray-100 bg-gray-50/50 rounded-none px-4">
-            {activeTabs.explanation && (
+            {activeTabs.explanation ? (
               <TabsTrigger value="explanation" className="flex items-center space-x-2">
                 <BookOpen className="w-4 h-4" />
                 <span>Explanation</span>
               </TabsTrigger>
-            )}
-            {activeTabs.analysis && (
+            ) : null}
+            {activeTabs.analysis ? (
               <TabsTrigger value="analysis" className="flex items-center space-x-2">
                 <Search className="w-4 h-4" />
                 <span>Analysis</span>
               </TabsTrigger>
-            )}
-            {activeTabs.action && (
+            ) : null}
+            {activeTabs.action ? (
               <TabsTrigger value="action" className="flex items-center space-x-2">
                 <Target className="w-4 h-4" />
                 <span>Actions</span>
               </TabsTrigger>
-            )}
-            {hasSupplementary && (
+            ) : null}
+            {hasSupplementary ? (
               <TabsTrigger value="supplementary" className="flex items-center space-x-2">
                 <FileText className="w-4 h-4" />
                 <span>Supplementary</span>
               </TabsTrigger>
-            )}
+            ) : null}
           </TabsList>
 
-          {activeTabs.explanation && (
+          {activeTabs.explanation ? (
             <TabsContent value="explanation" className="p-0 max-h-96 overflow-y-auto">
               {hasExplanationJson ? (
-                <ExplanationTab data={extractedData.explanation} />
+                <ExplanationTab data={(extractedData as Record<string, unknown>).explanation as unknown as import("@/types/subAgentSchemas").EducatorResponse} />
               ) : (
                 <div className="p-4 space-y-3">
                   <ReactMarkdown
@@ -590,22 +592,22 @@ const SupervisorMessageBubble = memo(({ supervisorData }: { supervisorData: any 
                       code: ({children}) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
                     }}
                   >
-                    {explanation_tab.content}
+                    {(explanation_tab as { content?: string })?.content}
                   </ReactMarkdown>
-                  {explanation_tab.relevance && (
+                  {(explanation_tab as { relevance?: string })?.relevance && (
                     <p className="caption text-text-secondary italic mt-3 pt-3 border-t border-gray-100">
-                      {explanation_tab.relevance}
+                      {(explanation_tab as { relevance?: string })?.relevance}
                     </p>
                   )}
                 </div>
               )}
             </TabsContent>
-          )}
+          ) : null}
 
-          {activeTabs.analysis && (
+          {activeTabs.analysis ? (
             <TabsContent value="analysis" className="p-0 max-h-96 overflow-y-auto">
               {hasAnalysisJson ? (
-                <AnalysisTab data={extractedData.analysis} />
+                <AnalysisTab data={(extractedData as Record<string, unknown>).analysis as unknown as import("@/types/subAgentSchemas").AnalystResponse} />
               ) : (
                 <div className="p-4 space-y-3">
                   <ReactMarkdown
@@ -623,22 +625,22 @@ const SupervisorMessageBubble = memo(({ supervisorData }: { supervisorData: any 
                       code: ({children}) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
                     }}
                   >
-                    {analysis_tab.content}
+                    {(analysis_tab as { content?: string })?.content}
                   </ReactMarkdown>
-                  {analysis_tab.relevance && (
+                  {(analysis_tab as { relevance?: string })?.relevance && (
                     <p className="caption text-text-secondary italic mt-3 pt-3 border-t border-gray-100">
-                      {analysis_tab.relevance}
+                      {(analysis_tab as { relevance?: string })?.relevance}
                     </p>
                   )}
                 </div>
               )}
             </TabsContent>
-          )}
+          ) : null}
 
-          {activeTabs.action && (
+          {activeTabs.action ? (
             <TabsContent value="action" className="p-0 max-h-96 overflow-y-auto">
               {hasActionJson ? (
-                <ActionTab data={extractedData.action} />
+                <ActionTab data={(extractedData as Record<string, unknown>).action as unknown as import("@/types/subAgentSchemas").AdvisorResponse} />
               ) : (
                 <div className="p-4 space-y-3">
                   <ReactMarkdown
@@ -656,26 +658,26 @@ const SupervisorMessageBubble = memo(({ supervisorData }: { supervisorData: any 
                       code: ({children}) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
                     }}
                   >
-                    {action_tab.content}
+                    {(action_tab as { content?: string })?.content}
                   </ReactMarkdown>
-                  {action_tab.relevance && (
+                  {(action_tab as { relevance?: string })?.relevance && (
                     <p className="caption text-text-secondary italic mt-3 pt-3 border-t border-gray-100">
-                      {action_tab.relevance}
+                      {(action_tab as { relevance?: string })?.relevance}
                     </p>
                   )}
                 </div>
               )}
             </TabsContent>
-          )}
+          ) : null}
 
-          {hasSupplementary && (
+          {hasSupplementary ? (
             <TabsContent value="supplementary" className="p-0 max-h-96 overflow-y-auto">
               <SupplementaryTab
-                visualizationData={hasVisualizationJson ? extractedData.visualization : undefined}
-                draftData={hasDraftJson ? extractedData.draft : undefined}
+                visualizationData={hasVisualizationJson ? (extractedData as Record<string, unknown>).visualization as unknown as import("@/types/subAgentSchemas").VisualizationResponse : undefined}
+                draftData={hasDraftJson ? (extractedData as Record<string, unknown>).draft as unknown as import("@/types/subAgentSchemas").DraftResponse : undefined}
               />
             </TabsContent>
-          )}
+          ) : null}
         </Tabs>
 
         <div className="p-3 bg-gray-50/50 border-t border-gray-100">
@@ -790,22 +792,32 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
   const [isSidePanelOpen, setIsSidePanelOpen] = useState(false);
   const [messagePayloads, setMessagePayloads] = useState<
     Record<string, { 
-      analysis?: ApiAnalysisResult; 
-      draft?: ApiDraftResult; 
-      supervisor?: any; // TODO: Add proper type for supervisor response
+      analysis?: ApiAnalysisResult;
+      draft?: ApiDraftResult;
+      supervisor?: Record<string, unknown>; // Supervisor response structure
     }>
   >({});
   // Email modal state
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
 
   // State for temporarily storing uploaded documents (memory-based, no persistence)
-  const [sessionDocuments, setSessionDocuments] = useState<Document[]>([]);
+  // Extended type for documents with staging metadata
+  type StagedDocument = Document & {
+    _staged?: boolean;
+    _fileContent?: ArrayBuffer;
+    _file?: File;
+    _fileName?: string;
+    _fileType?: string;
+    _fileSize?: number;
+  };
+  const [sessionDocuments, setSessionDocuments] = useState<StagedDocument[]>([]);
   const [uploading, setUploading] = useState(false);
 
   // State for collection info (when viewing from collection)
   const [currentCollectionId, setCurrentCollectionId] = useState<string | undefined>(collectionId);
   const [currentCollectionName, setCurrentCollectionName] = useState<string | undefined>(collectionName);
   const [initialMessageCount, setInitialMessageCount] = useState<number>(0);
+  const isLoadingConversation = useRef(false);
 
   // Fetch real documents for the current chat session
   const [chatDocuments, setChatDocuments] = useState<Document[]>([]);
@@ -835,16 +847,17 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
       if (!conversationId) return;
 
       console.log(`📥 Loading conversation snapshot: ${conversationId}`);
+      isLoadingConversation.current = true;
 
       try {
-        const result = await collectionsApi.getConversationSnapshot(conversationId, DEFAULT_USER_ID);
+        const result = await collectionsApi.getConversationSnapshot(conversationId, getUserId());
 
         if (result.success && result.data) {
           const snapshot = result.data;
-          console.log(`✅ Loaded snapshot with ${snapshot.snapshot_data.messages.length} messages`);
+          console.log(`✅ Loaded snapshot with ${snapshot.snapshot_data?.messages.length || 0} messages`);
 
           // Convert snapshot messages to ChatSession format
-          const messages: Message[] = snapshot.snapshot_data.messages.map(msg => ({
+          const messages: Message[] = (snapshot.snapshot_data?.messages || []).map(msg => ({
             id: msg.id,
             content: msg.content,
             sender: msg.sender as 'user' | 'assistant',
@@ -853,6 +866,9 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
             domain: msg.domain as LegalDomain,
             type: msg.type,
           }));
+
+          // Track initial message count BEFORE setting session to prevent auto-save trigger
+          setInitialMessageCount(messages.length);
 
           // Recreate the session
           const session: ChatSession = {
@@ -867,16 +883,22 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
           setCurrentSession(session);
           setShowDocumentPrompt(false); // Hide prompt for resumed chats
 
-          // Track initial message count to detect new messages
-          setInitialMessageCount(messages.length);
-
           // Restore message payloads if available
-          if (snapshot.snapshot_data.messagePayloads) {
-            setMessagePayloads(snapshot.snapshot_data.messagePayloads);
+          if (snapshot.snapshot_data?.messagePayloads) {
+            setMessagePayloads(snapshot.snapshot_data.messagePayloads as Record<string, {
+              analysis?: ApiAnalysisResult;
+              draft?: ApiDraftResult;
+              supervisor?: Record<string, unknown>;
+            }>);
           }
         }
       } catch (error) {
         console.error('❌ Failed to load conversation snapshot:', error);
+      } finally {
+        // Mark loading as complete after a brief delay to ensure state updates have settled
+        setTimeout(() => {
+          isLoadingConversation.current = false;
+        }, 100);
       }
     };
 
@@ -885,6 +907,12 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
 
   // Auto-save to collection after NEW messages are added (when already in a collection)
   useEffect(() => {
+    // Skip auto-save if currently loading a conversation
+    if (isLoadingConversation.current) {
+      console.log('⏩ Skipping auto-save: conversation is loading');
+      return;
+    }
+
     // Only auto-save if:
     // 1. We're in a collection (currentCollectionId exists)
     // 2. We have a session with messages
@@ -907,14 +935,15 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
         console.log(`   Initial: ${initialMessageCount}, Current: ${messageCount}`);
         await handleSaveConversation(parseInt(currentCollectionId), currentSession?.title);
         console.log(`✅ Auto-saved ${messageCount} messages`);
+        // Update initial count after successful save to prevent duplicate saves
+        setInitialMessageCount(messageCount);
       } catch (error) {
         console.error('Auto-save failed:', error);
       }
     }, 2000); // 2 second debounce
 
     return () => clearTimeout(timeoutId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSession?.messages?.length, currentCollectionId]); // Don't include initialMessageCount to avoid array size change warning
+  }, [currentSession?.messages?.length, currentCollectionId, currentCollectionName, initialMessageCount]);
 
   // Fetch chat documents ONLY for resumed/saved chats (not new chats)
   useEffect(() => {
@@ -936,7 +965,7 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
 
       setLoadingChatDocuments(true);
       try {
-        const result = await documentsApi.getChatDocuments(DEFAULT_USER_ID, chatId);
+        const result = await documentsApi.getChatDocuments(getUserId(), chatId);
         if (result.success) {
           setChatDocuments(result.data);
           console.log(`📄 Loaded ${result.data.length} documents for chat ${chatId}`);
@@ -1073,7 +1102,7 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
 
       // Call API to generate draft
       const result = await documentsApi.generateDraft(
-        DEFAULT_USER_ID, // TODO: Get from auth context
+        getUserId(),
         chatId,
         prompt,
         title
@@ -1088,7 +1117,7 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
         // Add success message with download link
         const successMessage: Message = {
           id: `doc_${Date.now()}`,
-          content: `✅ **Document Generated Successfully!**\n\n**${doc.title}**\n\nSize: ${doc.size}\n\n[📥 Download PDF](${doc.url})\n\nThe document has been added to your chat and can be accessed from the Analysis Mode dropdown.`,
+          content: `✅ **Document Generated Successfully!**\n\n**${doc.originalFilename}**\n\nSize: ${(doc.fileSize / 1024).toFixed(1)} KB\n\nThe document has been added to your chat and can be accessed from the Analysis Mode dropdown.`,
           sender: "assistant",
           timestamp: new Date(),
           domain,
@@ -1101,14 +1130,14 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
         }));
 
         // Refresh documents list
-        const refreshResult = await documentsApi.getChatDocuments(DEFAULT_USER_ID, chatId);
+        const refreshResult = await documentsApi.getChatDocuments(getUserId(), chatId);
         if (refreshResult.success) {
           setChatDocuments(refreshResult.data);
         }
 
-        console.log(`✅ Document generated: ${doc.id} - ${doc.title}`);
+        console.log(`✅ Document generated: ${doc.id} - ${doc.originalFilename}`);
       } else {
-        throw new Error(result.error?.message || 'Failed to generate document');
+        throw new Error(('error' in result ? result.error : 'Failed to generate document') || 'Failed to generate document');
       }
     } catch (error) {
       console.error('❌ Error generating draft:', error);
@@ -1136,8 +1165,9 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
       console.log(`📄 Fetching document content for: ${document.id}`);
 
       // Get presigned URL for the document
+      const authenticatedUserId = getUserId(); // Get the authenticated user ID
       const presignResponse = await fetch(
-        `${getEnvConfig().backendUrl}/documents/${document.id}/presign?owner_sub=${DEFAULT_USER_ID}`
+        `${getEnvConfig().backendUrl}/documents/${document.id}/presign?owner_sub=${authenticatedUserId}`
       );
 
       if (!presignResponse.ok) {
@@ -1174,7 +1204,7 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
       console.log(`✅ Document uploaded to chat context`);
 
       // Create edit prompt that references the uploaded document
-      const editPrompt = `I have uploaded the document "${document.title || document.originalFilename}". Please edit this document with the following changes:
+      const editPrompt = `I have uploaded the document "${document.originalFilename}". Please edit this document with the following changes:
 
 ${changes}
 
@@ -1234,7 +1264,7 @@ Generate a complete, updated version of the document incorporating all the reque
     setInputValue("");
 
     // Upload any staged files before sending message
-    const stagedDocs = sessionDocuments.filter((doc: any) => doc._staged);
+    const stagedDocs = sessionDocuments.filter((doc: StagedDocument) => doc._staged);
 
     setUploading(true);
 
@@ -1261,7 +1291,7 @@ Generate a complete, updated version of the document incorporating all the reque
 
       // Refresh documents list after upload
       if (stagedDocs.length > 0) {
-        const refreshResult = await documentsApi.getChatDocuments(DEFAULT_USER_ID, chatId);
+        const refreshResult = await documentsApi.getChatDocuments(getUserId(), chatId);
         if (refreshResult.success) {
           setChatDocuments(refreshResult.data);
           console.log(`Refreshed documents list: ${refreshResult.data.length} documents`);
@@ -1281,7 +1311,7 @@ Generate a complete, updated version of the document incorporating all the reque
       timestamp: new Date(),
       domain,
       attachments: stagedDocs.length > 0
-        ? stagedDocs.map((doc: any) => ({
+        ? stagedDocs.map((doc: StagedDocument) => ({
             id: doc.id,
             filename: doc.originalFilename,
             fileType: doc.fileType,
@@ -1302,7 +1332,7 @@ Generate a complete, updated version of the document incorporating all the reque
       // Log file information being sent
       if (sessionDocuments.length > 0) {
         console.log(`[Chat] Sending message with ${sessionDocuments.length} documents:`);
-        sessionDocuments.forEach((doc: any) => {
+        sessionDocuments.forEach((doc: StagedDocument) => {
           console.log(`  - ${doc.originalFilename} (${doc.fileSize} bytes, has content: ${!!doc._fileContent})`);
         });
       }
@@ -1312,7 +1342,7 @@ Generate a complete, updated version of the document incorporating all the reque
         messageType: messageType,
         domain: domain, // Pass domain for specialized context
         attachments: selectedDocumentForEdit
-          ? [selectedDocumentForEdit.id]
+          ? [(selectedDocumentForEdit as Document).id]
           : undefined,
         uploadedDocuments: sessionDocuments.length > 0 ? sessionDocuments as any[] : undefined,
       });
@@ -1506,10 +1536,10 @@ Generate a complete, updated version of the document incorporating all the reque
 
       // Extract staged files (files with _staged flag that haven't been uploaded yet)
       const stagedFiles = sessionDocuments
-        .filter((doc: any) => doc._staged && doc._fileContent)
-        .map((doc: any) => ({
+        .filter((doc: StagedDocument) => doc._staged && doc._fileContent)
+        .map((doc: StagedDocument) => ({
           filename: doc.originalFilename,
-          fileContent: Array.from(new Uint8Array(doc._fileContent)), // Convert ArrayBuffer to number array
+          fileContent: Array.from(new Uint8Array(doc._fileContent!)), // Convert ArrayBuffer to number array
           fileType: doc.fileType,
           fileSize: doc.fileSize,
         }));
@@ -1531,13 +1561,12 @@ Generate a complete, updated version of the document incorporating all the reque
       await collectionsApi.saveConversationToCollection({
         collection_id: collectionId || undefined,
         chat_id: chatId,
-        user_sub: DEFAULT_USER_ID, // TODO: Get from auth context
+        user_sub: getUserId(),
         title: title || undefined,
         domain: domain || undefined,
         messages: serializedMessages,
         messagePayloads,
         stagedFiles: stagedFiles.length > 0 ? stagedFiles : undefined,
-        existingDocumentIds: existingDocumentIds.length > 0 ? existingDocumentIds : undefined,
       });
 
       console.log("✅ Conversation saved successfully");
@@ -2309,14 +2338,14 @@ Generate a complete, updated version of the document incorporating all the reque
 
               <div className="relative">
                 {/* Show staged files indicator */}
-                {sessionDocuments.filter((doc: any) => doc._staged).length > 0 && (
+                {sessionDocuments.filter((doc: StagedDocument) => doc._staged).length > 0 && (
                   <div className="mb-2 p-2 bg-purple-50 border border-purple-200 rounded-lg">
                     <div className="flex items-center gap-2 flex-wrap">
                       <FileText className="w-4 h-4 text-purple-600 flex-shrink-0" />
                       <span className="text-xs font-medium text-purple-900">
-                        {sessionDocuments.filter((doc: any) => doc._staged).length} file(s) ready to send:
+                        {sessionDocuments.filter((doc: StagedDocument) => doc._staged).length} file(s) ready to send:
                       </span>
-                      {sessionDocuments.filter((doc: any) => doc._staged).map((doc: any) => (
+                      {sessionDocuments.filter((doc: StagedDocument) => doc._staged).map((doc: StagedDocument) => (
                         <span key={doc.id} className="flex items-center gap-1 text-xs text-purple-700 bg-purple-100 px-2 py-0.5 rounded">
                           <span>{doc.originalFilename}</span>
                           <button
@@ -2343,7 +2372,7 @@ Generate a complete, updated version of the document incorporating all the reque
                   placeholder={
                     isDraftMode
                       ? "Describe the legal document you need or ask for editing help..."
-                      : sessionDocuments.filter((doc: any) => doc._staged).length > 0
+                      : sessionDocuments.filter((doc: StagedDocument) => doc._staged).length > 0
                       ? "Add your question about the file(s)..."
                       : "Ask your legal question or drag & drop a PDF..."
                   }
@@ -2387,7 +2416,7 @@ Generate a complete, updated version of the document incorporating all the reque
           onSave={handleSaveConversation}
           domain={domain}
           defaultTitle={currentSession?.title || ""}
-          userSub={DEFAULT_USER_ID}
+          userSub={getUserId()}
         />
       </div>
     </div>

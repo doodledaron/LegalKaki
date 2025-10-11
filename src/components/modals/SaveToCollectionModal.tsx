@@ -20,9 +20,7 @@ export function SaveToCollectionModal({
   isOpen,
   onClose,
   onSave,
-  domain,
   defaultTitle,
-  userSub,
 }: SaveToCollectionModalProps) {
   const [customTitle, setCustomTitle] = useState("");
   const [isSaving, setIsSaving] = useState(false);

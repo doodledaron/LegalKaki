@@ -5,12 +5,13 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
-import { ArrowLeft, Grid, List, CheckCircle, Clock, AlertTriangle, Eye, MoreVertical, ExternalLink, ClipboardList, FileText, Calendar, MessageCircle, Brain, FileIcon, FileSpreadsheet, ImageIcon, Loader2 } from 'lucide-react'
+import { ArrowLeft, Grid, List, CheckCircle, Clock, AlertTriangle, Eye, MoreVertical, ExternalLink, ClipboardList, FileText, Calendar, MessageCircle, Brain, FileIcon, FileSpreadsheet, ImageIcon, Loader2, Trash2, Sparkles } from 'lucide-react'
 import { PDFViewer } from '@/components/ui/PDFViewer'
 import { MindMapViewer } from '@/components/ui/MindMapViewer'
 import { ActionItem, Document } from '@/types'
 import { generateMindMapCode, createMindMapDataFromCollection, generateEnhancedMindMap, generateMindMapFromBackendResponse, EnhancedMindMapData, InteractiveMindMapNode } from '@/lib/mindMapGenerator'
-import { collectionsApi, useApiCall, toolsApi } from '@/api'
+import { collectionsApi, useApiCall, useApiMutation, toolsApi } from '@/api'
+import { ConfirmDeleteModal } from '@/components/modals/ConfirmDeleteModal'
 
 interface CollectionDashboardProps {
   collectionId: string
@@ -30,6 +31,8 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
   const [isGeneratingMindMap, setIsGeneratingMindMap] = useState(false)
   const [mindMapTitle, setMindMapTitle] = useState<string | undefined>(undefined)
   const [mindMapSummary, setMindMapSummary] = useState<string | undefined>(undefined)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [generatingSummaries, setGeneratingSummaries] = useState(false)
 
   const { 
     data: dashboardData, 
@@ -486,13 +489,13 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
                             </span>
                             <span className="flex items-center space-x-1">
                               <MessageCircle className="w-4 h-4" />
-                              <span>{conversation.messageCount || conversation.messages?.length || 0} messages</span>
+                              <span>{conversation.messages?.length || 0} messages</span>
                             </span>
                           </div>
 
-                          {(conversation.preview || (conversation.messages && conversation.messages.length > 0)) && (
+                          {(conversation.messages && conversation.messages.length > 0) && (
                             <p className="body-small text-text-secondary line-clamp-2">
-                              {conversation.preview || conversation.messages?.find(m => m.sender === 'user')?.content || 'No preview available'}
+                              {conversation.messages?.find(m => m.sender === 'user')?.content || 'No preview available'}
                             </p>
                           )}
                         </div>

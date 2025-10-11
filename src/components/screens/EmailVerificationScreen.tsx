@@ -140,7 +140,7 @@ export function EmailVerificationScreen({
             </CardTitle>
             
             <p className="text-text-secondary text-sm leading-relaxed">
-              We've sent a verification link to
+              We&apos;ve sent a verification link to
             </p>
             
             <motion.div
@@ -207,7 +207,7 @@ export function EmailVerificationScreen({
               transition={{ delay: 0.8 }}
             >
               <p className="text-text-secondary text-sm text-center mb-4">
-                Didn't receive the email?
+                Didn&apos;t receive the email?
               </p>
               
               <Button

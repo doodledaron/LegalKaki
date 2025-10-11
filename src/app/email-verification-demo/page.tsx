@@ -106,9 +106,9 @@ export default function EmailVerificationDemoPage() {
           <h3 className="font-semibold text-text-primary mb-2">Usage Instructions:</h3>
           <ul className="text-sm text-text-secondary space-y-1">
             <li>• Click any button above to see different modal states</li>
-            <li>• The "Pending" modal shows verification code input</li>
+            <li>• The &ldquo;Pending&rdquo; modal shows verification code input</li>
             <li>• Enter any 6-digit code to test verification</li>
-            <li>• The "Verified" modal auto-closes after 3 seconds</li>
+            <li>• The &ldquo;Verified&rdquo; modal auto-closes after 3 seconds</li>
             <li>• All modals are responsive and follow LegalKaki theme</li>
           </ul>
         </div>

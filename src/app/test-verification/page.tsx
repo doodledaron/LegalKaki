@@ -45,7 +45,7 @@ export default function TestVerificationPage() {
             <li>• Click any email above to test the verification flow</li>
             <li>• The verification page will load with the selected email</li>
             <li>• You can test the 6-digit code input (enter any 6 digits)</li>
-            <li>• Use the "Back to Login" button to return here</li>
+            <li>• Use the &ldquo;Back to Login&rdquo; button to return here</li>
           </ul>
         </div>
 

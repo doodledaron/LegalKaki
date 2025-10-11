@@ -99,7 +99,7 @@ export function ConfirmDeleteModal({
             {/* Footer */}
             <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-200 bg-gray-50/50">
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={onClose}
                 disabled={isDeleting}
               >

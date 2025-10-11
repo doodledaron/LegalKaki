@@ -1,8 +1,8 @@
 'use client'
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { User, SignInRequest, SignInResponse } from '@/api/types'
-import { authApi } from '@/api'
+import { User, SignInRequest } from '@/api/types'
+import { authApi, userApi } from '@/api'
 
 interface AuthContextType {
   user: User | null
@@ -65,7 +65,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (credentials: SignInRequest) => {
     try {
       setIsLoading(true)
-      
+
+      // Clear any existing auth state before login
+      clearAuthState()
+
       const response = await authApi.signIn(credentials)
       
       if (response.success) {
@@ -76,9 +79,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setToken(authToken)
         localStorage.setItem('authToken', authToken)
         localStorage.setItem('userData', JSON.stringify(userData))
-        
-        // Send token_id to FastAPI for authentication
-        await authenticateWithFastAPI(authToken)
+
+        console.log('[Auth] Login successful, stored user data:', userData)
       } else {
         throw new Error('Login failed')
       }
@@ -102,7 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!token) return
 
     try {
-      const response = await authApi.getProfile()
+      const response = await userApi.getProfile()
       if (response.success) {
         setUser(response.data)
         localStorage.setItem('userData', JSON.stringify(response.data))
@@ -112,29 +114,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('Failed to refresh user:', error)
       throw error
-    }
-  }
-
-  const authenticateWithFastAPI = async (authToken: string) => {
-    try {
-      // Send token to FastAPI to authenticate the session
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/authenticate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
-        },
-        body: JSON.stringify({
-          token_id: authToken,
-        }),
-      })
-
-      if (!response.ok) {
-        console.warn('FastAPI authentication failed, but continuing with login')
-      }
-    } catch (error) {
-      console.warn('Failed to authenticate with FastAPI:', error)
-      // Don't fail the login process if FastAPI auth fails
     }
   }
 

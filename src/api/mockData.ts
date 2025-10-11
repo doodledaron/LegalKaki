@@ -29,23 +29,36 @@ export const mockUser: User = {
 
 // Legal Domains Data
 export const mockDomains: Record<LegalDomain, DomainInfo> = {
-  business: {
-    id: "business",
-    title: "Business",
-    description: "Company registration, contracts, compliance",
+  company_setup: {
+    id: "company_setup",
+    title: "Company Setup",
+    description: "Company registration, business structure, compliance",
     examples: [
       "SSM registration",
-      "Partnership agreements",
-      "Employment contracts",
+      "Business structure selection",
+      "Regulatory compliance",
     ],
     color: "#7B68EE",
     icon: "briefcase",
     isAvailable: true,
   },
+  contracts: {
+    id: "contracts",
+    title: "Contracts",
+    description: "Contract drafting, review, and negotiation",
+    examples: [
+      "Partnership agreements",
+      "Service agreements",
+      "Contract disputes",
+    ],
+    color: "#7B68EE",
+    icon: "file-text",
+    isAvailable: true,
+  },
   employment: {
     id: "employment",
     title: "Employment",
-    description: "Work rights, contracts, disputes",
+    description: "Work rights, employment contracts, disputes",
     examples: [
       "Employment Act queries",
       "Salary disputes",
@@ -55,35 +68,17 @@ export const mockDomains: Record<LegalDomain, DomainInfo> = {
     icon: "user",
     isAvailable: true,
   },
-  property: {
-    id: "property",
-    title: "Tenancy",
-    description: "Rental agreements, property disputes",
+  business_growth: {
+    id: "business_growth",
+    title: "Business Growth",
+    description: "Expansion, partnerships, investments",
     examples: [
-      "Tenancy agreements",
-      "Deposit disputes",
-      "Landlord-tenant issues",
+      "Partnership agreements",
+      "Investment terms",
+      "Business expansion",
     ],
     color: "#7B68EE",
-    icon: "home",
-    isAvailable: true,
-  },
-  marriage: {
-    id: "marriage",
-    title: "Partnership",
-    description: "Business partnerships, joint ventures",
-    examples: ["Partnership agreements", "Profit sharing", "Partner disputes"],
-    color: "#7B68EE",
-    icon: "handshake",
-    isAvailable: true,
-  },
-  general: {
-    id: "general",
-    title: "General Legal",
-    description: "Other legal matters",
-    examples: ["Legal advice", "Document review", "General queries"],
-    color: "#7B68EE",
-    icon: "book-open",
+    icon: "trending-up",
     isAvailable: true,
   },
 };
@@ -109,7 +104,7 @@ export const mockCollections: Collection[] = [
   {
     id: "2",
     title: "Business Registration Malaysia",
-    domain: "business",
+    domain: "company_setup",
     summary:
       "Complete guidance for SSM registration process, business structure analysis, and regulatory compliance requirements for starting a new company in Malaysia.",
     status: "completed",
@@ -125,7 +120,7 @@ export const mockCollections: Collection[] = [
   {
     id: "3",
     title: "Property Purchase Agreement",
-    domain: "property",
+    domain: "contracts",
     summary:
       "Analysis of property purchase agreement, stamp duty calculations, and legal requirements for property transfer in Kuala Lumpur.",
     status: "active",
@@ -141,7 +136,7 @@ export const mockCollections: Collection[] = [
   {
     id: "4",
     title: "Divorce Proceedings Consultation",
-    domain: "marriage",
+    domain: "business_growth",
     summary:
       "Initial consultation regarding divorce proceedings, child custody arrangements, and asset division under Malaysian family law.",
     status: "archived",
@@ -501,7 +496,7 @@ export const mockChatSessions: ChatSession[] = [
   },
   {
     id: "2",
-    domain: "business",
+    domain: "company_setup",
     title: "Business Registration Inquiry",
     collectionId: "collection-2", // Linked to Business Registration collection
     messages: [
@@ -511,7 +506,7 @@ export const mockChatSessions: ChatSession[] = [
           "Hello! I can help you with business registration and compliance matters. What do you need assistance with?",
         sender: "assistant",
         timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-        domain: "business",
+        domain: "company_setup",
         type: "text",
       },
       {
@@ -519,7 +514,7 @@ export const mockChatSessions: ChatSession[] = [
         content: "I want to register my new company with SSM",
         sender: "user",
         timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000 + 5 * 60 * 1000), // 1h 55m ago
-        domain: "business",
+        domain: "company_setup",
       },
     ],
     createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),

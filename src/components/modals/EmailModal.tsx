@@ -203,7 +203,7 @@ export function EmailModal({ isOpen, onClose, documents, onSendEmail }: EmailMod
                         />
                         <div className="flex-1 min-w-0">
                           <p className="body-small font-medium text-text-primary truncate">
-                            {doc.originalFilename || doc.title}
+                            {doc.originalFilename}
                           </p>
                           <p className="caption text-text-secondary">
                             {formatFileSize(doc.fileSize)} • {doc.fileType || "PDF"}
@@ -296,7 +296,7 @@ export function EmailModal({ isOpen, onClose, documents, onSendEmail }: EmailMod
               </div>
               <div className="flex items-center space-x-3">
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   onClick={onClose}
                   disabled={sendingEmail}
                 >

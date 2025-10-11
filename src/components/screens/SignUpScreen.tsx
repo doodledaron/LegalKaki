@@ -5,7 +5,8 @@ import { useState } from 'react'
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card'
+import { Card, CardContent } from '@/components/ui/Card'
+import Image from 'next/image'
 
 interface SignUpScreenProps {
   onSignUp: (formData: {
@@ -162,7 +163,7 @@ export function SignUpScreen({ onSignUp, onLoginRedirect }: SignUpScreenProps) {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.6, delay: 0.2 }}
         >
-          <img 
+          <Image
             src="/Logo.png" 
             alt="LegalKaki Logo" 
             className="w-16 h-16 mx-auto mb-4 object-contain"

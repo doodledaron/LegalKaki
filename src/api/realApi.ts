@@ -14,7 +14,7 @@ import {
 import { Document } from "@/types";
 import { mockClient } from "./mockClient";
 import { getEnvConfig } from "@/lib/envConfig";
-import { DEFAULT_USER_ID } from "@/lib/constants";
+import { getUserId } from "@/lib/auth-utils";
 
 // Structured response interface for mode detection
 interface StructuredResponse {
@@ -221,7 +221,7 @@ export class RealApiClient {
     onProgress?: (progress: number) => void,
     chatId?: number
   ): Promise<UploadDocumentResponse> {
-    const userSub = DEFAULT_USER_ID; // TODO: Get from auth context
+    const userSub = getUserId(); // Get authenticated user ID
     const providedChatId = chatId || Date.now();
 
     // Ensure chat exists in backend before uploading (may return different ID)
@@ -277,7 +277,7 @@ export class RealApiClient {
 
             resolve({
               document,
-              uploadUrl: `${this.baseUrl}/documents/${response.document_id}/presign?owner_sub=${DEFAULT_USER_ID}`,
+              uploadUrl: `${this.baseUrl}/documents/${response.document_id}/presign?owner_sub=${userSub}`,
               analysisJobId: response.document_id?.toString(),
             });
           } catch (error) {
@@ -316,7 +316,7 @@ export class RealApiClient {
       console.log("Uploading to:", uploadUrl);
       console.log("FormData fields:", {
         file: file.name,
-        owner_sub: DEFAULT_USER_ID,
+        owner_sub: userSub,
         uploaded_in_chat_id: chatId || "auto-generated",
         title: file.name,
       });
@@ -1262,7 +1262,7 @@ export class RealApiClient {
   }
 
   // Conversation Snapshot Methods
-  async saveConversationToCollection(request: SaveConversationRequest): Promise<{ success: boolean; data: ConversationSnapshot }> {
+  async saveConversationToCollection(request: SaveConversationRequest): Promise<{ success: boolean; data: ConversationSnapshot; timestamp: string }> {
     const url = `${this.baseUrl}/conversations/save`;
 
     console.log("🔍 Saving conversation with request:", JSON.stringify(request, null, 2));
@@ -1282,10 +1282,10 @@ export class RealApiClient {
     }
 
     const data = await response.json();
-    return { success: true, data };
+    return { success: true, data, timestamp: new Date().toISOString() };
   }
 
-  async getCollectionConversations(collectionId: number, userSub: string): Promise<{ success: boolean; data: ConversationListItem[] }> {
+  async getCollectionConversations(collectionId: number, userSub: string): Promise<{ success: boolean; data: ConversationListItem[]; timestamp: string }> {
     const url = `${this.baseUrl}/conversations/collection/${collectionId}?user_sub=${encodeURIComponent(userSub)}`;
 
     const response = await fetch(url, {
@@ -1300,10 +1300,10 @@ export class RealApiClient {
     }
 
     const data = await response.json();
-    return { success: true, data };
+    return { success: true, data, timestamp: new Date().toISOString() };
   }
 
-  async getConversationSnapshot(snapshotId: string, userSub: string): Promise<{ success: boolean; data: ConversationSnapshot }> {
+  async getConversationSnapshot(snapshotId: string, userSub: string): Promise<{ success: boolean; data: ConversationSnapshot; timestamp: string }> {
     const url = `${this.baseUrl}/conversations/${snapshotId}?user_sub=${encodeURIComponent(userSub)}`;
 
     const response = await fetch(url, {
@@ -1318,10 +1318,10 @@ export class RealApiClient {
     }
 
     const data = await response.json();
-    return { success: true, data };
+    return { success: true, data, timestamp: new Date().toISOString() };
   }
 
-  async deleteConversationFromCollection(snapshotId: string, userSub: string): Promise<{ success: boolean; data: null }> {
+  async deleteConversationFromCollection(snapshotId: string, userSub: string): Promise<{ success: boolean; data: null; timestamp: string }> {
     const url = `${this.baseUrl}/conversations/${snapshotId}?user_sub=${encodeURIComponent(userSub)}`;
 
     const response = await fetch(url, {
@@ -1335,7 +1335,7 @@ export class RealApiClient {
       throw new Error(`Failed to delete conversation: ${response.statusText}`);
     }
 
-    return { success: true, data: null };
+    return { success: true, data: null, timestamp: new Date().toISOString() };
   }
 
   async ensureChatExists(userSub: string, chatId: number): Promise<number> {
@@ -1581,19 +1581,20 @@ export class CollectionApiClient {
   }
 
   async getCollections(userSub: string, limit: number = 50, offset: number = 0): Promise<BackendCollection[]> {
+    console.log('🎯 [CollectionApiClient] getCollections called with userSub:', userSub);
+
     // Use the with-conversations endpoint to get document and action counts
     const approaches = [
       // Approach 1: Try with-conversations endpoint with provided userSub
       `${this.baseUrl}/collections/with-conversations?owner_sub=${userSub}&limit=${limit}&offset=${offset}`,
       // Approach 2: Try without user filter (get all collections)
       `${this.baseUrl}/collections/with-conversations?limit=${limit}&offset=${offset}`,
-      // Approach 3: Try with a default user ID that might exist in the backend
-      `${this.baseUrl}/collections/with-conversations?owner_sub=${DEFAULT_USER_ID}&limit=${limit}&offset=${offset}`,
     ];
 
-    for (const url of approaches) {
+    for (let i = 0; i < approaches.length; i++) {
+      const url = approaches[i];
       try {
-        console.log(`🔄 Trying backend collections API: ${url}`);
+        console.log(`🔄 [Approach ${i + 1}] Trying backend collections API: ${url}`);
         const response = await fetch(url, {
           method: 'GET',
           headers: {
@@ -1605,7 +1606,7 @@ export class CollectionApiClient {
 
         if (response.ok) {
           const collections: BackendCollection[] = await response.json();
-          console.log(`✅ Successfully fetched ${collections.length} collections from backend`);
+          console.log(`✅ [Approach ${i + 1} SUCCESS] Fetched ${collections.length} collections from backend using userSub:`, i === 0 ? userSub : 'NO_FILTER');
           return collections;
         } else {
           console.log(`❌ Backend API failed with status: ${response.status} for URL: ${url}`);

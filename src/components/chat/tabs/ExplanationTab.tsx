@@ -1,6 +1,5 @@
 "use client";
 
-import { cn } from "@/lib/utils";
 import { EducatorResponse } from "@/types/subAgentSchemas";
 import { BookOpen, Lightbulb, Link } from "lucide-react";
 

@@ -1,4 +1,4 @@
-import { LegalDomain, ActionItem, Document, Message } from '@/types'
+import { LegalDomain, ActionItem, Document, Message, FileAttachment } from '@/types'
 
 // Mapping functions to convert backend data to frontend models
 export function mapBackendCollectionToCollection(backend: BackendCollection): Collection {
@@ -6,15 +6,15 @@ export function mapBackendCollectionToCollection(backend: BackendCollection): Co
     id: backend.collection_id.toString(),
     title: backend.name,
     domain: 'general' as LegalDomain, // Default domain since backend doesn't provide this
-    summary: backend.description || '', // Use description as summary
+    summary: '', // Backend doesn't provide description/summary
     status: mapBackendStatusToStatus(backend.status),
     createdAt: new Date(backend.created_at),
     updatedAt: new Date(backend.created_at), // Use created_at as updated_at since backend doesn't provide it
-    itemCount: (backend.document_count || 0) + (backend.action_count || 0), // Total items
-    messageCount: backend.conversation_count || 0, // From backend
-    documentCount: backend.document_count || 0, // From backend
-    actionItemsCount: backend.action_count || 0, // From backend
-    urgentActionsCount: 0, // Not provided by backend, would need to calculate
+    itemCount: 0, // Will be calculated when fetching collection details
+    messageCount: 0, // Will be calculated when fetching collection details
+    documentCount: 0, // Will be calculated when fetching collection details
+    actionItemsCount: 0, // Will be calculated when fetching collection details
+    urgentActionsCount: 0, // Will be calculated when fetching collection details
     tags: [], // Backend doesn't provide tags
   }
 }
@@ -381,6 +381,8 @@ export interface PaginatedResponse<T> {
 // User Types
 export interface User {
   id: string
+  cognito_sub?: string // Optional: Cognito user sub identifier (can be same as id)
+  sub?: string // Optional: Alternative sub identifier
   email?: string
   name: string
   avatar?: string
@@ -483,7 +485,7 @@ export interface SendMessageRequest {
     _fileName?: string
     _fileType?: string
     _fileSize?: number
-    [key: string]: any
+    [key: string]: unknown
   }>
 }
 
@@ -492,7 +494,7 @@ export interface SendMessageResponse {
   aiResponse?: Message
   analysisResult?: AnalysisResult
   draftResult?: DraftResult
-  supervisorData?: any // Store the full supervisor response from Bedrock
+  supervisorData?: Record<string, unknown> // Store the full supervisor response from Bedrock
   modeSwitch?: {
     detected: boolean
     mode: "A" | "B" | "C" | null
@@ -627,7 +629,7 @@ export interface SnapshotMetadata {
 
 export interface SnapshotData {
   messages: MessageSnapshot[]
-  messagePayloads: Record<string, any>
+  messagePayloads: Record<string, unknown>
   metadata: SnapshotMetadata
 }
 
@@ -671,11 +673,11 @@ export interface SaveConversationRequest {
     content: string
     sender: 'user' | 'assistant'
     timestamp: string
-    attachments?: any[]
+    attachments?: FileAttachment[]
     domain?: string
     type?: string
   }>
-  messagePayloads: Record<string, any>
+  messagePayloads: Record<string, unknown>
   stagedFiles?: StagedFile[] // Files to upload to S3
 }
 

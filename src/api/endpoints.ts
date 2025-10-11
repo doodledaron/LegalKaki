@@ -19,7 +19,7 @@ import {
   mockDraftResult,
 } from "./mockData";
 import { getBackendUrl, getEnvConfig } from "@/lib/envConfig";
-import { DEFAULT_USER_ID } from "@/lib/constants";
+import { getUserId } from "@/lib/auth-utils";
 
 // http://43.217.199.206:8000
 // Backend API service for highlight explainer
@@ -73,6 +73,10 @@ import {
   mapBackendCollectionDocumentToDocument,
   MindMapGenerationResponse,
   MindMapBackendResponse,
+  BackendDocument,
+  ConversationListItem,
+  ConversationSnapshot,
+  SaveConversationRequest,
 } from "./types";
 import { LegalDomain, Message, Document, ActionItem, ChatSession } from "@/types";
 
@@ -258,14 +262,25 @@ export const authApi = {
       }
 
       const data = await response.json();
-      
+
+      console.log('🔑 [SignIn] Backend response:', data);
+
+      // Extract cognito_sub from user_info.attributes.sub (this is the REAL user ID)
+      const cognitoSub = data.user_info?.attributes?.sub || data.user_info?.username || `user_${Date.now()}`;
+      const userEmail = data.user_info?.attributes?.email || request.email;
+      const userName = data.user_info?.attributes?.name || data.user_info?.username || 'User';
+
+      console.log('🔑 [SignIn] Extracted cognito_sub:', cognitoSub);
+      console.log('🔑 [SignIn] Extracted email:', userEmail);
+
       // Map the response to our expected format
       const signInResponse: SignInResponse = {
         user: {
-          id: data.user?.id || `user_${Date.now()}`,
-          email: data.user?.email || request.email,
-          name: data.user?.name || data.user?.full_name || 'User',
-          avatar: data.user?.avatar,
+          id: cognitoSub,  // CRITICAL: Use cognito_sub as the user ID
+          cognito_sub: cognitoSub,  // Store cognito_sub explicitly for fallback checks
+          email: userEmail,
+          name: userName,
+          avatar: data.user_info?.attributes?.picture,
           preferences: {
             theme: 'system',
             language: 'en',
@@ -275,12 +290,14 @@ export const authApi = {
               urgentActions: true,
             },
           },
-          createdAt: new Date(data.user?.created_at || Date.now()),
+          createdAt: new Date(data.user_info?.attributes?.created_at || Date.now()),
           lastLoginAt: new Date(),
         },
-        token: data.token || data.access_token || `token_${Date.now()}`,
-        expiresAt: new Date(data.expires_at || Date.now() + 24 * 60 * 60 * 1000),
+        token: data.access_token || data.id_token || `token_${Date.now()}`,
+        expiresAt: new Date(Date.now() + (data.expires_in || 3600) * 1000),
       };
+
+      console.log('🔑 [SignIn] Final user object:', signInResponse.user);
       
       return {
         success: true,
@@ -368,8 +385,10 @@ export const userApi = {
       const data = await response.json()
       
       // Map the response to our User interface
+      // Backend /auth/me returns { cognito_sub, username, email, ... }
       const userData: User = {
-        id: data.id || data.user_id || `user_${Date.now()}`,
+        id: data.cognito_sub,  // Use cognito_sub from backend
+        cognito_sub: data.cognito_sub,
         email: data.email || data.email_address,
         name: data.name || data.full_name || data.username || 'User',
         avatar: data.avatar || data.profile_picture,
@@ -420,7 +439,7 @@ export const userApi = {
   async getStats(): Promise<ApiResponse<UserStats> | ApiError> {
     try {
       // Try to get real stats from backend data
-      const userSub = getCurrentUserId(); // Get authenticated user ID
+      const userSub = getUserId(); // Get authenticated user ID
       
       // Get collections from backend to calculate real stats
       const backendCollections = await collectionApiClient.getCollections(userSub, 100, 0);
@@ -605,11 +624,11 @@ export const chatApi = {
           const response = await realApiClient.sendSupervisorMessage(
             fallbackChatId,
             request.content,
-            request.attachments?.map(att => ({
-              name: att.filename || "file.pdf",
-              type: att.fileType || "application/pdf",
-              size: att.fileSize || 0,
-              content: new ArrayBuffer(0) // Empty content for now
+            request.uploadedDocuments?.map(doc => ({
+              name: doc.originalFilename || "file.pdf",
+              type: doc.fileType || "application/pdf",
+              size: doc.fileSize || 0,
+              content: doc._fileContent || new ArrayBuffer(0)
             })),
             onProgress,
             request.domain
@@ -625,11 +644,11 @@ export const chatApi = {
           const response = await realApiClient.sendSupervisorMessage(
             chatIdNum,
             request.content,
-            request.attachments?.map(att => ({
-              name: att.filename || "file.pdf",
-              type: att.fileType || "application/pdf",
-              size: att.fileSize || 0,
-              content: new ArrayBuffer(0) // Empty content for now
+            request.uploadedDocuments?.map(doc => ({
+              name: doc.originalFilename || "file.pdf",
+              type: doc.fileType || "application/pdf",
+              size: doc.fileSize || 0,
+              content: doc._fileContent || new ArrayBuffer(0)
             })),
             onProgress,
             request.domain
@@ -801,7 +820,7 @@ export const documentsApi = {
             fileType: request.file.type,
             fileSize: request.file.size,
             s3Bucket: "legalkaki-documents",
-            s3Key: `documents/${DEFAULT_USER_ID}/${
+            s3Key: `documents/${getUserId()}/${
               uploadResult.data.fileId
             }.${request.file.name.split(".").pop()}`,
             uploadDate: new Date(),
@@ -854,17 +873,15 @@ export const documentsApi = {
       return {
         success: true,
         data: documents,
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
       };
     } catch (error) {
       console.error('Error fetching chat documents:', error);
       return {
         success: false,
-        error: {
-          code: 'FETCH_CHAT_DOCUMENTS_ERROR',
-          message: error instanceof Error ? error.message : 'Failed to fetch chat documents',
-        },
-        timestamp: new Date(),
+        error: error instanceof Error ? error.message : 'Failed to fetch chat documents',
+        code: 'FETCH_CHAT_DOCUMENTS_ERROR',
+        timestamp: new Date().toISOString(),
       };
     }
   },
@@ -880,28 +897,28 @@ export const documentsApi = {
       // Convert to frontend Document type
       const document: Document = {
         id: result.document_id.toString(),
-        title: result.title,
-        type: 'pdf',
-        size: `${(result.file_size_bytes / 1024).toFixed(2)} KB`,
-        date: new Date(),
-        status: 'completed',
-        url: result.download_url,
         originalFilename: `${result.title}.pdf`,
+        storedFilename: `${result.document_id}.pdf`,
+        fileType: 'application/pdf',
+        fileSize: result.file_size_bytes,
+        s3Bucket: result.s3_bucket || 'legalkaki-documents',
+        s3Key: result.s3_key || `drafts/${result.document_id}.pdf`,
+        uploadDate: new Date(),
+        analysisStatus: 'completed',
+        contentSummary: result.title,
       };
       return {
         success: true,
         data: document,
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
       };
     } catch (error) {
       console.error('Error generating draft:', error);
       return {
         success: false,
-        error: {
-          code: 'GENERATE_DRAFT_ERROR',
-          message: error instanceof Error ? error.message : 'Failed to generate draft document',
-        },
-        timestamp: new Date(),
+        error: error instanceof Error ? error.message : 'Failed to generate draft document',
+        code: 'GENERATE_DRAFT_ERROR',
+        timestamp: new Date().toISOString(),
       };
     }
   },
@@ -991,25 +1008,6 @@ export const documentsApi = {
 
 };
 
-// Helper function to get current user ID from auth context
-function getCurrentUserId(): string {
-  if (typeof window === 'undefined') {
-    throw new Error('getCurrentUserId can only be called on the client side')
-  }
-  
-  const storedUser = localStorage.getItem('userData')
-  if (!storedUser) {
-    throw new Error('No authenticated user found')
-  }
-  
-  try {
-    const userData = JSON.parse(storedUser)
-    return userData.id
-  } catch (error) {
-    throw new Error('Invalid user data in localStorage')
-  }
-}
-
 // Collections Endpoints
 export const collectionsApi = {
   async getCollections(filters?: {
@@ -1020,11 +1018,14 @@ export const collectionsApi = {
   }): Promise<ApiResponse<Collection[]> | ApiError> {
     try {
       // Use real API to get collections
-      const userSub = getCurrentUserId(); // Get authenticated user ID
+      const userSub = getUserId(); // Get authenticated user ID
+      console.log('🎯 [Collections API] getUserId() returned:', userSub);
+      console.log('🎯 [Collections API] localStorage userData:', localStorage.getItem('userData'));
       const limit = filters?.limit || 50;
       const offset = 0; // Could be implemented for pagination
-      
+
       // Try to get collections from backend with the current user ID
+      console.log('🎯 [Collections API] Calling backend with userSub:', userSub, 'limit:', limit, 'offset:', offset);
       const backendCollections = await collectionApiClient.getCollections(userSub, limit, offset);
       
       // Convert backend collections to frontend format
@@ -1144,7 +1145,8 @@ export const collectionsApi = {
       const backendDetails = await collectionApiClient.getCollectionDetails(collectionIdNum);
 
       // Fetch conversation snapshots separately
-      const conversationsResult = await realApiClient.getCollectionConversations(collectionIdNum, 'test-user-1'); // TODO: Use real user_sub
+      const authenticatedUserId = getUserId();
+      const conversationsResult = await realApiClient.getCollectionConversations(collectionIdNum, authenticatedUserId);
       const conversationSnapshots = conversationsResult.success ? conversationsResult.data : [];
 
       // Convert backend data to frontend models
@@ -1159,13 +1161,14 @@ export const collectionsApi = {
         messageCount: snapshot.message_count,
         createdAt: new Date(snapshot.created_at),
         updatedAt: new Date(snapshot.created_at),
+        status: 'active' as const,
         preview: snapshot.preview
       }));
 
       const actionItems = backendDetails.actions.map(mapBackendActionToActionItem);
       
       // Map documents directly from the collection details response
-      const allDocuments = backendDetails.documents.map((backendDoc: any) => 
+      const allDocuments = backendDetails.documents.map((backendDoc) =>
         mapBackendCollectionDocumentToDocument(backendDoc, collectionIdNum)
       );
       
@@ -1299,7 +1302,7 @@ export const collectionsApi = {
         throw new Error("Invalid collection ID");
       }
 
-      const userSub = DEFAULT_USER_ID; // TODO: Get from auth context
+      const userSub = getUserId();
 
       // Call backend DELETE endpoint
       const response = await fetch(`${getBackendUrl()}/collections/${collectionIdNum}?owner_sub=${userSub}`, {
@@ -1360,7 +1363,7 @@ export const collectionsApi = {
       const backendDetails = await collectionApiClient.getCollectionDetails(collectionIdNum);
       
       // Map the backend documents to frontend Document format
-      const documents = backendDetails.documents.map((backendDoc: any) => 
+      const documents = backendDetails.documents.map((backendDoc) =>
         mapBackendCollectionDocumentToDocument(backendDoc, collectionIdNum)
       );
 
@@ -1393,10 +1396,10 @@ export const collectionsApi = {
         throw new Error("Invalid chat ID");
       }
       
-      const userSub = getCurrentUserId(); // Get authenticated user ID
-      const chatDocuments = await collectionApiClient.getChatDocuments(userSub, chatIdNum, 50, 0);
+      const userSub = getUserId(); // Get authenticated user ID
+      const chatDocuments = await realApiClient.getChatDocuments(userSub, chatIdNum, 50, 0);
       
-      const mappedDocuments = chatDocuments.map(backendDoc => {
+      const mappedDocuments = chatDocuments.map((backendDoc: BackendDocument) => {
         return mapBackendDocumentToDocument(backendDoc);
       });
 
@@ -1503,7 +1506,7 @@ export const collectionsApi = {
     }
   },
 
-  async getCollectionConversations(
+  async getCollectionConversationSnapshots(
     collectionId: number,
     userSub: string
   ): Promise<ApiResponse<ConversationListItem[]> | ApiError> {
@@ -1535,7 +1538,12 @@ export const collectionsApi = {
   ): Promise<ApiResponse<void> | ApiError> {
     try {
       const response = await realApiClient.deleteConversationFromCollection(snapshotId, userSub);
-      return response;
+      // Transform data: null to data: undefined for ApiResponse<void> compatibility
+      return {
+        success: response.success,
+        data: undefined,
+        timestamp: response.timestamp,
+      };
     } catch (error) {
       console.error("Failed to delete conversation:", error);
       throw error;

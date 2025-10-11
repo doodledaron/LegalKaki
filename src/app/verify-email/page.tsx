@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { EmailVerificationScreen } from '@/components/screens/EmailVerificationScreen'
 import { authApi } from '@/api'
 
-export default function EmailVerificationPage() {
+function EmailVerificationContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [isResending, setIsResending] = useState(false)
@@ -227,5 +227,23 @@ export default function EmailVerificationPage() {
       resendCooldown={resendCooldown}
       error={error}
     />
+  )
+}
+
+export default function EmailVerificationPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto p-6">
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-purple-primary border-t-transparent mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-text-primary mb-2">Loading...</h2>
+          <p className="text-text-secondary">
+            Setting up email verification...
+          </p>
+        </div>
+      </div>
+    }>
+      <EmailVerificationContent />
+    </Suspense>
   )
 }

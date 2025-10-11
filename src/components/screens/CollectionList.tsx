@@ -317,8 +317,9 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
                              size="small"
                              onClick={(e) => handleDeleteClick(collection, e)}
                              leftIcon={<Trash2 className="w-4 h-4 text-red-500" />}
-                             className="p-1 hover:bg-red-50"
-                           />
+                           >
+                             Delete
+                           </Button>
                            <ChevronRight className="w-4 h-4 text-text-secondary flex-shrink-0" />
                          </div>
                        </div>
@@ -360,9 +361,8 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
         }}
         onConfirm={handleDeleteCollection}
         title="Delete Collection"
-        message={`Are you sure you want to delete "${collectionToDelete?.title || 'this collection'}"? This action cannot be undone and will remove all associated chats, documents, and action items.`}
-        confirmText="Delete Collection"
-        cancelText="Cancel"
+        message="This action cannot be undone and will remove all associated chats, documents, and action items."
+        itemName={collectionToDelete?.title || 'this collection'}
       />
     </div>
   )

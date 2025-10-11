@@ -1,5 +1,5 @@
 import { CardItem, LegalDomain } from "@/types";
-import { Building2, FileText, Users, TrendingUp } from "lucide-react";
+import { Building2, FileText, Users, TrendingUp, BookOpen } from "lucide-react";
 import { domainsApi } from "@/api";
 
 // SME/Business Owner Focused Domains
