@@ -12,6 +12,7 @@ import { ActionItem, Document } from '@/types'
 import { generateMindMapCode, createMindMapDataFromCollection, generateEnhancedMindMap, generateMindMapFromBackendResponse, EnhancedMindMapData, InteractiveMindMapNode } from '@/lib/mindMapGenerator'
 import { collectionsApi, useApiCall, useApiMutation, toolsApi } from '@/api'
 import { ConfirmDeleteModal } from '@/components/modals/ConfirmDeleteModal'
+import { getUserId } from '@/lib/auth-utils'
 
 interface CollectionDashboardProps {
   collectionId: string
@@ -160,11 +161,12 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
   const handleGenerateSummaries = async () => {
     try {
       setGeneratingSummaries(true)
-      console.log('📝 Generating summaries for collection:', collectionId)
+      const userId = getUserId()
+      console.log('📝 Generating summaries for collection:', collectionId, 'user:', userId)
 
       // Call backend endpoint to generate summaries
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
-      const response = await fetch(`${backendUrl}/collections/${collectionId}/generate-summaries?user_sub=test-user-1`, {
+      const response = await fetch(`${backendUrl}/collections/${collectionId}/generate-summaries?user_sub=${userId}`, {
         method: 'POST',
       })
 

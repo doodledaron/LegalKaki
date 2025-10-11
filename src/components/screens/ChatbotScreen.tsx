@@ -1582,6 +1582,7 @@ Generate a complete, updated version of the document incorporating all the reque
         messages: serializedMessages,
         messagePayloads,
         stagedFiles: stagedFiles.length > 0 ? stagedFiles : undefined,
+        existingDocumentIds: existingDocumentIds.length > 0 ? existingDocumentIds : undefined,
       });
 
       console.log("✅ Conversation saved successfully");

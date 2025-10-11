@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/Button'
 import { Eye, EyeOff, ZoomIn, ZoomOut, Download, X, Lightbulb, AlertCircle, Loader2 } from 'lucide-react'
 import { Document as PDFDocument, Page, pdfjs } from 'react-pdf'
 import { bedrockService } from '@/api/bedrockService'
-import { documentsApi, api } from '@/api'
+import { api } from '@/api'
 import { Document as DocumentType } from '@/types'
 import { collectionApiClient } from '@/api/realApi'
-import { getDocumentPresignedUrl, testPresignedUrl } from '@/lib/presignedUrlService'
+import { getUserId } from '@/lib/auth-utils'
 
 // Configure PDF.js worker for react-pdf v9
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -62,44 +62,46 @@ export function PDFViewer({ document, onClose, collectionId }: PDFViewerProps) {
     const loadPdfUrl = async () => {
       try {
         setPdfLoading(true)
+        const userId = getUserId()
         console.log('📄 Loading PDF for document:', {
           id: document.id,
           filename: document.originalFilename,
           s3Bucket: document.s3Bucket,
           s3Key: document.s3Key,
-          fileType: document.fileType
+          fileType: document.fileType,
+          userId: userId
         })
-        
+
         // Get document details from collection endpoint
         try {
           console.log('🔄 Getting document details from collection endpoint...')
-          
+
           // Use collectionId prop or document.collectionId, with fallback
           const collectionIdToUse = collectionId || document.collectionId || '7' // Fallback to '7' as seen in logs
-          
+
           console.log(`📋 Fetching collection ${collectionIdToUse} details for document ${document.id}`)
           const collectionDetails = await collectionApiClient.getCollectionDetails(parseInt(collectionIdToUse))
-          
+
           // Find the specific document in the collection
           console.log(`🔍 Searching for document ${document.id} in collection documents:`, collectionDetails.documents.map(d => ({ id: d.document_id, title: d.title })))
-          
-          const collectionDocument = collectionDetails.documents.find(doc => 
+
+          const collectionDocument = collectionDetails.documents.find(doc =>
             doc.document_id.toString() === document.id
           )
-          
+
           if (collectionDocument && collectionDocument.s3_bucket && collectionDocument.s3_key) {
             console.log('✅ Found document in collection details')
-            console.log('📄 Document S3 info:', { 
-              bucket: collectionDocument.s3_bucket, 
+            console.log('📄 Document S3 info:', {
+              bucket: collectionDocument.s3_bucket,
               key: collectionDocument.s3_key,
               region: 'ap-southeast-5'
             })
-            
+
             // Use backend proxy endpoint to avoid CORS issues
             try {
               console.log('🔄 Using backend proxy for document:', document.id)
               const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
-              const contentUrl = `${backendUrl}/documents/${document.id}/content?owner_sub=test-user-1`
+              const contentUrl = `${backendUrl}/documents/${document.id}/content?owner_sub=${userId}`
 
               console.log('📡 Using proxied content URL:', contentUrl)
               console.log('✅ Backend will proxy S3 content to avoid CORS')
@@ -118,17 +120,17 @@ export function PDFViewer({ document, onClose, collectionId }: PDFViewerProps) {
         // Fallback: try presigned URL with document's own S3 info
         if (document.s3Bucket && document.s3Key) {
           console.log('⚠️ Collection endpoint failed, trying presigned URL with document info')
-          console.log('📄 Document S3 info:', { 
-            bucket: document.s3Bucket, 
+          console.log('📄 Document S3 info:', {
+            bucket: document.s3Bucket,
             key: document.s3Key,
             region: 'ap-southeast-5'
           })
-          
+
           // Use backend proxy endpoint (fallback)
           try {
             console.log('🔄 Using backend proxy (fallback)...')
             const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
-            const contentUrl = `${backendUrl}/documents/${document.id}/content?owner_sub=test-user-1`
+            const contentUrl = `${backendUrl}/documents/${document.id}/content?owner_sub=${userId}`
 
             console.log('📡 Using proxied content URL (fallback):', contentUrl)
             console.log('✅ Backend will proxy S3 content to avoid CORS (fallback)')

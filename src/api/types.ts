@@ -2,19 +2,24 @@ import { LegalDomain, ActionItem, Document, Message, FileAttachment } from '@/ty
 
 // Mapping functions to convert backend data to frontend models
 export function mapBackendCollectionToCollection(backend: BackendCollection): Collection {
+  // Calculate counts from backend data (from /collections/with-conversations endpoint)
+  const documentCount = backend.document_count ?? 0;
+  const actionCount = backend.action_count ?? 0;
+  const conversationCount = backend.conversation_count ?? 0;
+
   return {
     id: backend.collection_id.toString(),
     title: backend.name,
     domain: 'general' as LegalDomain, // Default domain since backend doesn't provide this
-    summary: '', // Backend doesn't provide description/summary
+    summary: backend.description || '', // Use backend description if available
     status: mapBackendStatusToStatus(backend.status),
     createdAt: new Date(backend.created_at),
     updatedAt: new Date(backend.created_at), // Use created_at as updated_at since backend doesn't provide it
-    itemCount: 0, // Will be calculated when fetching collection details
-    messageCount: 0, // Will be calculated when fetching collection details
-    documentCount: 0, // Will be calculated when fetching collection details
-    actionItemsCount: 0, // Will be calculated when fetching collection details
-    urgentActionsCount: 0, // Will be calculated when fetching collection details
+    itemCount: documentCount + actionCount + conversationCount,
+    messageCount: conversationCount,
+    documentCount: documentCount,
+    actionItemsCount: actionCount,
+    urgentActionsCount: 0, // Backend doesn't provide urgent count in list endpoint
     tags: [], // Backend doesn't provide tags
   }
 }
@@ -275,8 +280,12 @@ export interface BackendCollection {
   collection_id: number
   owner_sub: string
   name: string
+  description?: string
   status: string
   created_at: string
+  conversation_count?: number // From /collections/with-conversations endpoint
+  document_count?: number // From /collections/with-conversations endpoint
+  action_count?: number // From /collections/with-conversations endpoint
 }
 
 export interface BackendChat {
@@ -466,6 +475,7 @@ export interface ChatSessionResponse {
   domain: LegalDomain
   title?: string
   messages: Message[]
+  messageCount?: number // Number of messages in the conversation
   createdAt: Date
   updatedAt: Date
   status: 'active' | 'archived'
@@ -679,6 +689,7 @@ export interface SaveConversationRequest {
   }>
   messagePayloads: Record<string, unknown>
   stagedFiles?: StagedFile[] // Files to upload to S3
+  existingDocumentIds?: number[] // IDs of documents already in the chat to link to collection
 }
 
 // Action Items Types
