@@ -549,7 +549,7 @@ export const chatApi = {
         return {
           id: sessionId,
           domain: request.domain,
-          title: `${mockDomains[request.domain]?.title} Consultation`,
+          title: `${mockDomains[request.domain]?.title || "Legal"} Consultation`,
           messages,
           createdAt: now,
           updatedAt: now,

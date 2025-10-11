@@ -59,7 +59,7 @@ import type {
   ApiError,
 } from "@/api/types";
 import { LEGAL_DOMAINS } from "@/constants/domains";
-import { documentsApi, chatApi, useApiCall, useApiMutation } from "@/api";
+import { documentsApi, chatApi, collectionsApi, useApiCall, useApiMutation } from "@/api";
 import { mockAnalysisResult, mockDraftResult } from "@/api/mockData";
 
 interface ChatbotScreenProps {
@@ -188,9 +188,9 @@ const AnalysisMessageBubble = memo(
                       <div className="flex items-center space-x-2 mb-2">
                         <span
                           className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            action.priority === "high"
+                            action.priority === "urgent"
                               ? "bg-red-100 text-red-700"
-                              : action.priority === "medium"
+                              : action.priority === "important"
                               ? "bg-yellow-100 text-yellow-700"
                               : "bg-green-100 text-green-700"
                           }`}
@@ -287,9 +287,9 @@ const DraftMessageBubble = memo(
                       >
                         <div
                           className={`w-2 h-2 rounded-full mt-2 ${
-                            suggestion.priority === "high"
+                            suggestion.priority === "urgent"
                               ? "bg-red-500"
-                              : suggestion.priority === "medium"
+                              : suggestion.priority === "important"
                               ? "bg-yellow-500"
                               : "bg-green-500"
                           }`}
@@ -366,7 +366,7 @@ const DraftMessageBubble = memo(
   )
 );
 
-AnalysisMessageBubble.displayName = "AnalysisMessageBubble";
+DraftMessageBubble.displayName = "DraftMessageBubble";
 
 // Combined bubble: shows tabs for Analysis and Draft when both exist for a single AI message
 const CombinedMessageBubble = memo(
@@ -1114,7 +1114,7 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
     setShowSaveModal(true);
   };
 
-  const handleSaveConversation = async (collectionId: number, title?: string) => {
+  const handleSaveConversation = async (collectionId: number | undefined, title?: string) => {
     if (!currentSession) {
       console.error("No active session to save");
       return;
@@ -1132,15 +1132,34 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
         type: msg.type,
       }));
 
-      // Call API to save
+      // Extract staged files (files with _staged flag)
+      const stagedFiles = sessionDocuments
+        .filter((doc: any) => doc._staged && doc._fileContent)
+        .map((doc: any) => ({
+          filename: doc.originalFilename,
+          fileContent: Array.from(new Uint8Array(doc._fileContent)), // Convert ArrayBuffer to number array
+          fileType: doc.fileType,
+          fileSize: doc.fileSize,
+        }));
+
+      console.log(`📤 Saving conversation with ${stagedFiles.length} staged files`);
+
+      // Extract numeric chat ID from session ID (e.g., "session_1234567_abc" -> 1234567)
+      const chatIdMatch = currentSession.id.match(/session_(\d+)/);
+      const chatId = chatIdMatch ? parseInt(chatIdMatch[1]) : Date.now();
+
+      console.log(`📝 Session ID: ${currentSession.id}, Numeric Chat ID: ${chatId}`);
+
+      // Call API to save (collectionId is optional - will create new collection if undefined)
       await collectionsApi.saveConversationToCollection({
-        collection_id: collectionId,
-        chat_id: parseInt(currentSession.id),
-        user_sub: "user-1", // TODO: Get from auth context
-        title,
-        domain,
+        collection_id: collectionId || undefined,
+        chat_id: chatId,
+        user_sub: "test-user-1", // TODO: Get from auth context
+        title: title || undefined,
+        domain: domain || undefined,
         messages: serializedMessages,
         messagePayloads,
+        stagedFiles: stagedFiles.length > 0 ? stagedFiles : undefined,
       });
 
       console.log("✅ Conversation saved successfully");
@@ -2114,8 +2133,8 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
           onClose={() => setShowSaveModal(false)}
           onSave={handleSaveConversation}
           domain={domain}
-          defaultTitle={currentSession?.title}
-          userSub="user-1"
+          defaultTitle={currentSession?.title || ""}
+          userSub="test-user-1"
         />
       </div>
     </div>

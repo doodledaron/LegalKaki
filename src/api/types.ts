@@ -629,8 +629,15 @@ export interface ConversationListItem {
   preview?: string
 }
 
+export interface StagedFile {
+  filename: string
+  fileContent: number[] // Byte array from ArrayBuffer
+  fileType: string
+  fileSize: number
+}
+
 export interface SaveConversationRequest {
-  collection_id: number
+  collection_id?: number // Optional - will create new collection if not provided
   chat_id: number
   user_sub: string
   title?: string
@@ -645,6 +652,7 @@ export interface SaveConversationRequest {
     type?: string
   }>
   messagePayloads: Record<string, any>
+  stagedFiles?: StagedFile[] // Files to upload to S3
 }
 
 // Action Items Types
