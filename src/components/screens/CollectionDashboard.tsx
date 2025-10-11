@@ -830,6 +830,17 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
           onNodeClick={handleNodeClick}
         />
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmDeleteModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDeleteCollection}
+        title="Delete Collection"
+        message="Are you sure you want to delete this collection? This action cannot be undone and will permanently remove:"
+        itemName={collectionData.title}
+        isDeleting={isDeleting}
+      />
     </div>
   )
 }
