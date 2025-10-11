@@ -49,8 +49,20 @@ export function getEnvConfig(): EnvConfig {
     backendUrl = "http://localhost:8000";
     console.log('🔧 [EnvConfig] Using dev mode (localhost):', backendUrl);
   } else {
-    backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://43.217.199.206:8000";
-    console.log('🔧 [EnvConfig] Using production URL:', backendUrl);
+    // In production, use proxy to avoid mixed content issues (HTTPS -> HTTP)
+    // Check if we're in browser and on HTTPS
+    const isBrowser = typeof window !== 'undefined';
+    const isHttps = isBrowser && window.location.protocol === 'https:';
+
+    if (isHttps) {
+      // Use Next.js API proxy to avoid mixed content
+      backendUrl = '/api/proxy';
+      console.log('🔧 [EnvConfig] Using HTTPS proxy to avoid mixed content:', backendUrl);
+    } else {
+      // Direct connection (local dev or HTTP deployment)
+      backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://43.217.199.206:8000";
+      console.log('🔧 [EnvConfig] Using direct backend URL:', backendUrl);
+    }
   }
   
   const apiToken = process.env.NEXT_PUBLIC_API_TOKEN || "ragflow-E1YWMxNmU4OTZkNTExZjBiNzUwMDI0Mm";
