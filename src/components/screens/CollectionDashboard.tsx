@@ -10,8 +10,7 @@ import { PDFViewer } from '@/components/ui/PDFViewer'
 import { MindMapViewer } from '@/components/ui/MindMapViewer'
 import { ActionItem, Document } from '@/types'
 import { generateMindMapCode, createMindMapDataFromCollection, generateEnhancedMindMap, EnhancedMindMapData, InteractiveMindMapNode } from '@/lib/mindMapGenerator'
-// TODO: Uncomment when API is ready
-// import { collectionsApi, useApiCall } from '@/api'
+import { collectionsApi, useApiCall } from '@/api'
 
 interface CollectionDashboardProps {
   collectionId: string
@@ -29,121 +28,50 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
   const [enhancedMindMapData, setEnhancedMindMapData] = useState<EnhancedMindMapData | null>(null)
   const [isGeneratingMindMap, setIsGeneratingMindMap] = useState(false)
 
-  // TODO: Replace with API call when backend is ready
-  // const { 
-  //   data: dashboardData, 
-  //   loading: dashboardLoading, 
-  //   error: dashboardError 
-  // } = useApiCall(() => collectionsApi.getCollectionDashboard(collectionId), [collectionId])
+  const { 
+    data: dashboardData, 
+    loading: dashboardLoading, 
+    error: dashboardError 
+  } = useApiCall(() => collectionsApi.getCollectionDashboard(collectionId), [collectionId])
 
-  // Mock data for development - TODO: Remove when API is ready
-  const dashboardLoading = false
-  const dashboardError = null
-  const collectionData = {
+  // Use API data or fallback to empty data
+  const collectionData = dashboardData?.collection || {
     id: collectionId,
-    title: 'Employment Contract Review',
-    domain: 'employment',
-    summary: 'Comprehensive review of employment contract terms, salary compliance analysis, and identification of potentially problematic clauses requiring immediate legal attention.',
+    title: 'Loading...',
+    domain: 'general' as const,
+    summary: 'Loading collection data...',
     status: 'active' as const,
-    createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 1 week ago
-    updatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    itemCount: 0,
+    messageCount: 0,
+    documentCount: 0,
+    actionItemsCount: 0,
+    urgentActionsCount: 0,
+    tags: []
   }
 
-  const documents: Document[] = [
-    {
-      id: '550e8400-e29b-41d4-a716-446655440001',
-      originalFilename: 'Employment_Contract_2024.pdf',
-      storedFilename: '550e8400-e29b-41d4-a716-446655440001.pdf',
-      fileType: 'application/pdf',
-      fileSize: 245760, // ~240KB
-      s3Bucket: 'legalkaki-documents',
-      s3Key: 'documents/user-1/550e8400-e29b-41d4-a716-446655440001.pdf',
-      uploadDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
-      analysisStatus: 'completed',
-      contentSummary: 'Standard employment contract outlining terms of employment, salary structure, working hours, and employee benefits. Contains standard clauses for annual leave, sick leave, and termination procedures.',
-      collectionId: collectionId,
-      metadata: {
-        pages: 5,
-        language: 'en',
-        wordCount: 1250
-      }
-    },
-    {
-      id: '550e8400-e29b-41d4-a716-446655440002',
-      originalFilename: 'Business_Plan_Draft.docx',
-      storedFilename: '550e8400-e29b-41d4-a716-446655440002.docx',
-      fileType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      fileSize: 1048576, // 1MB
-      s3Bucket: 'legalkaki-documents',
-      s3Key: 'documents/user-1/550e8400-e29b-41d4-a716-446655440002.docx',
-      uploadDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
-      analysisStatus: 'processing',
-      contentSummary: 'Comprehensive business plan draft covering market analysis, financial projections, operational strategies, and growth plans for a new startup venture in the technology sector.',
-      collectionId: collectionId,
-      metadata: {
-        pages: 12,
-        language: 'en',
-        wordCount: 3500
-      }
-    }
-  ]
-
-  const actionItems: ActionItem[] = [
-    {
-      id: '1',
-      title: 'Seek legal advice immediately',
-      description: 'Contract contains potentially illegal clauses that need immediate attention',
-      priority: 'urgent',
-      status: 'pending',
-      dueDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // 2 days from now
-      externalLinks: [
-        { text: 'Find Legal Aid', url: 'https://www.legalaid.gov.my', icon: ExternalLink } // TODO: Replace with LegalKaki resource URL
-      ],
-      sourceConversation: 'Employment Contract Review'
-    },
-    {
-      id: '2',
-      title: 'Review salary compliance with minimum wage',
-      description: 'Ensure your salary meets the current minimum wage requirements',
-      priority: 'important',
-      status: 'pending',
-      dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 1 week from now
-      externalLinks: [
-        { text: 'Check Minimum Wage Rates', url: 'https://www.mohr.gov.my', icon: ExternalLink } // TODO: Replace with LegalKaki resource URL
-      ],
-      sourceConversation: 'Employment Contract Review'
-    },
-    {
-      id: '3',
-      title: 'Submit SSM registration form',
-      description: 'Complete business registration with Companies Commission of Malaysia',
-      priority: 'normal',
-      status: 'completed',
-      externalLinks: [
-        { text: 'SSM Portal', url: 'https://www.ssm.com.my', icon: ExternalLink } // TODO: Replace with LegalKaki resource URL
-      ],
-      sourceConversation: 'Business Registration Inquiry'
-    }
-  ]
-
-  const conversations = [
-    {
-      id: '1',
-      domain: 'employment' as const,
-      title: 'Employment Contract Review',
-      messages: [],
-      createdAt: new Date(Date.now() - 60 * 60 * 1000),
-      updatedAt: new Date(Date.now() - 50 * 60 * 1000),
-      collectionId: collectionId
-    }
-  ]
-
-  const stats = {
-    totalConversations: conversations.length,
-    totalDocuments: documents.length,
+  const documents: Document[] = dashboardData?.documents || []
+  const actionItems: ActionItem[] = dashboardData?.actionItems || []
+  
+  // Debug: Log action items to see what data we're getting
+  console.log('🔍 Action Items Debug:', {
     totalActions: actionItems.length,
-    urgentActions: actionItems.filter(a => a.priority === 'urgent' && a.status !== 'completed').length,
-    completedActions: actionItems.filter(a => a.status === 'completed').length
+    actionItems: actionItems.map(action => ({
+      id: action.id,
+      title: action.title,
+      description: action.description,
+      externalLinksCount: action.externalLinks?.length || 0,
+      hasViewResourceButton: action.externalLinks?.some(link => link.text === 'View Resource')
+    }))
+  })
+  const conversations = dashboardData?.conversations || []
+  const stats = dashboardData?.stats || {
+    totalConversations: 0,
+    totalDocuments: 0,
+    totalActions: 0,
+    urgentActions: 0,
+    completedActions: 0
   }
 
   // Filter action items based on active filter
@@ -231,7 +159,10 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
       // Create mind map data from current collection data
       const mindMapData = createMindMapDataFromCollection(
         collectionData,
-        conversations,
+        conversations.map(conv => ({
+          ...conv,
+          title: conv.title || 'Untitled Chat'
+        })),
         documents,
         actionItems
       )
@@ -261,7 +192,10 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
         console.log('🔄 Falling back to basic mind map...')
         const mindMapData = createMindMapDataFromCollection(
           collectionData,
-          conversations,
+          conversations.map(conv => ({
+            ...conv,
+            title: conv.title || 'Untitled Chat'
+          })),
           documents,
           actionItems
         )
@@ -311,59 +245,57 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
     }
   }
 
-  // TODO: Uncomment when API is ready
   // Loading state
-  // if (dashboardLoading) {
-  //   return (
-  //     <div className="min-h-screen bg-background p-4 pb-nav">
-  //       <div className="max-w-6xl mx-auto">
-  //         <div className="text-center py-12">
-  //           <Loader2 className="w-12 h-12 animate-spin mx-auto text-purple-primary mb-4" />
-  //           <p className="body-regular text-text-secondary">Loading collection dashboard...</p>
-  //         </div>
-  //       </div>
-  //     </div>
-  //   )
-  // }
+  if (dashboardLoading) {
+    return (
+      <div className="min-h-screen bg-background p-4 pb-nav">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center py-12">
+            <Loader2 className="w-12 h-12 animate-spin mx-auto text-purple-primary mb-4" />
+            <p className="body-regular text-text-secondary">Loading collection dashboard...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
-  // TODO: Uncomment when API is ready
   // Error state
-  // if (dashboardError || !collectionData) {
-  //   return (
-  //     <div className="min-h-screen bg-background p-4 pb-nav">
-  //       <div className="max-w-6xl mx-auto">
-  //         <div className="flex items-center justify-between mb-4">
-  //           <Button
-  //             variant="ghost"
-  //             size="small"
-  //             onClick={onBack}
-  //             leftIcon={<ArrowLeft className="w-4 h-4" />}
-  //           >
-  //             Back
-  //           </Button>
-  //         </div>
-  //         <Card className="text-center py-12 border-red-200 bg-red-50">
-  //           <CardContent>
-  //             <div className="mb-4 flex justify-center">
-  //               <AlertTriangle className="w-16 h-16 text-red-500" />
-  //             </div>
-  //             <h3 className="heading-3 mb-2 text-red-700">Error Loading Collection</h3>
-  //             <p className="body-regular text-red-600 mb-4">
-  //               {dashboardError || 'Collection not found'}
-  //             </p>
-  //             <Button 
-  //               onClick={onBack} 
-  //               variant="secondary"
-  //               className="border-red-300 text-red-700 hover:bg-red-100"
-  //             >
-  //               Go Back
-  //             </Button>
-  //           </CardContent>
-  //         </Card>
-  //       </div>
-  //     </div>
-  //   )
-  // }
+  if (dashboardError || !dashboardData) {
+    return (
+      <div className="min-h-screen bg-background p-4 pb-nav">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex items-center justify-between mb-4">
+            <Button
+              variant="ghost"
+              size="small"
+              onClick={onBack}
+              leftIcon={<ArrowLeft className="w-4 h-4" />}
+            >
+              Back
+            </Button>
+          </div>
+          <Card className="text-center py-12 border-red-200 bg-red-50">
+            <CardContent>
+              <div className="mb-4 flex justify-center">
+                <AlertTriangle className="w-16 h-16 text-red-500" />
+              </div>
+              <h3 className="heading-3 mb-2 text-red-700">Error Loading Collection</h3>
+              <p className="body-regular text-red-600 mb-4">
+                {dashboardError || 'Collection not found'}
+              </p>
+              <Button 
+                onClick={onBack} 
+                variant="secondary"
+                className="border-red-300 text-red-700 hover:bg-red-100"
+              >
+                Go Back
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-background p-4 pb-nav">
@@ -420,7 +352,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
           </div>
 
           {/* Stats Row */}
-          <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-2 gap-4 mb-6">
           <motion.div 
               className="text-center p-4 bg-surface-white rounded-lg border border-gray-200"
               whileHover={{ scale: 1.02 }}
@@ -438,14 +370,14 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
               <div className="body-small text-text-secondary">Total Actions</div>
             </motion.div>
 
-            <motion.div 
+            {/* <motion.div 
               className="text-center p-4 bg-surface-white rounded-lg border border-gray-200"
               whileHover={{ scale: 1.02 }}
               transition={{ duration: 0.2 }}
             >
               <div className="text-2xl font-bold text-purple-primary">{stats.totalConversations}</div>
               <div className="body-small text-text-secondary">Conversations</div>
-            </motion.div>
+            </motion.div> */}
           </div>
         </motion.div>
 
@@ -604,12 +536,12 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
           ) : (
             <div className="space-y-3">
               {filteredActions.map((action, index) => (
-                <motion.div
-                  key={action.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.3, delay: index * 0.1 }}
-                >
+                  <motion.div
+                    key={action.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3, delay: index * 0.1 }}
+                  >
                   <Card className="hover:shadow-md transition-shadow duration-200">
                     <CardContent className="p-4">
                       <div className="flex items-start space-x-3">
@@ -623,9 +555,12 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
                               <h4 className="body-regular font-medium text-text-primary mb-1">
                                 {action.title}
                               </h4>
-                              <p className="body-small text-text-secondary mb-2">
-                                {action.description}
-                              </p>
+                              {/* Always show description for debugging - remove condition temporarily */}
+                              {action.description && (
+                                <p className="body-small text-text-secondary mb-2">
+                                  {action.description}
+                                </p>
+                              )}
                             </div>
                             
                             <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getPriorityColor(action.priority)}`}>
@@ -633,7 +568,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
                             </span>
                           </div>
                           
-                          <div className="flex items-center justify-end">
+                          <div className="flex items-center justify-between mt-2">
                             <div className="flex space-x-2">
                               {action.externalLinks?.map((link, linkIndex) => (
                                 <Button
@@ -642,7 +577,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
                                   size="small"
                                   rightIcon={<ExternalLink className="w-3 h-3" />}
                                   onClick={() => {
-                                    // TODO: Replace with actual LegalKaki resource URLs
+                                    console.log('🔗 Opening external link:', link.url)
                                     window.open(link.url, '_blank')
                                   }}
                                 >
@@ -729,9 +664,9 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat }: Co
       {/* PDF Viewer Modal */}
       {selectedDocument && (
         <PDFViewer
-          documentId={selectedDocument.id}
-          filename={selectedDocument.originalFilename}
+          document={selectedDocument}
           onClose={() => setSelectedDocument(null)}
+          collectionId={collectionId}
         />
       )}
 

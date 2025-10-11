@@ -4,8 +4,12 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/Button'
 import { Eye, EyeOff, ZoomIn, ZoomOut, Download, X, Lightbulb, AlertCircle, Loader2 } from 'lucide-react'
-import { Document, Page, pdfjs } from 'react-pdf'
+import { Document as PDFDocument, Page, pdfjs } from 'react-pdf'
 import { bedrockService } from '@/api/bedrockService'
+import { documentsApi, api } from '@/api'
+import { Document as DocumentType } from '@/types'
+import { collectionApiClient } from '@/api/realApi'
+import { getDocumentPresignedUrl, testPresignedUrl } from '@/lib/presignedUrlService'
 
 // Configure PDF.js worker for react-pdf v9
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -28,12 +32,12 @@ interface Tooltip {
 }
 
 interface PDFViewerProps {
-  documentId: string
-  filename: string
+  document: DocumentType
   onClose?: () => void
+  collectionId?: string // Optional collection ID for fetching document details
 }
 
-export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
+export function PDFViewer({ document, onClose, collectionId }: PDFViewerProps) {
   const [isHighlightMode, setIsHighlightMode] = useState(false)
   const [zoom, setZoom] = useState(1.0)
   const [tooltip, setTooltip] = useState<Tooltip>({ 
@@ -58,14 +62,130 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
     const loadPdfUrl = async () => {
       try {
         setPdfLoading(true)
-        // For hackathon: use direct PDF path (replace with actual document path)
-        const response = { success: true, data: { url: '/partnership.pdf' } }
+        console.log('📄 Loading PDF for document:', {
+          id: document.id,
+          filename: document.originalFilename,
+          s3Bucket: document.s3Bucket,
+          s3Key: document.s3Key,
+          fileType: document.fileType
+        })
         
-        if (response.success) {
-          setPdfUrl(response.data.url)
-        } else {
-          setPdfError('Failed to load document URL')
+        // Get document details from collection endpoint
+        try {
+          console.log('🔄 Getting document details from collection endpoint...')
+          
+          // Use collectionId prop or document.collectionId, with fallback
+          const collectionIdToUse = collectionId || document.collectionId || '7' // Fallback to '7' as seen in logs
+          
+          console.log(`📋 Fetching collection ${collectionIdToUse} details for document ${document.id}`)
+          const collectionDetails = await collectionApiClient.getCollectionDetails(parseInt(collectionIdToUse))
+          
+          // Find the specific document in the collection
+          console.log(`🔍 Searching for document ${document.id} in collection documents:`, collectionDetails.documents.map(d => ({ id: d.document_id, title: d.title })))
+          
+          const collectionDocument = collectionDetails.documents.find(doc => 
+            doc.document_id.toString() === document.id
+          )
+          
+          if (collectionDocument && collectionDocument.s3_bucket && collectionDocument.s3_key) {
+            console.log('✅ Found document in collection details')
+            console.log('📄 Document S3 info:', { 
+              bucket: collectionDocument.s3_bucket, 
+              key: collectionDocument.s3_key,
+              region: 'ap-southeast-5'
+            })
+            
+            // Get presigned URL for the document
+            try {
+              console.log('🔄 Getting presigned URL for document...')
+              const presignedResult = await getDocumentPresignedUrl(
+                collectionDocument.s3_bucket,
+                collectionDocument.s3_key
+              )
+              
+              if (presignedResult.success && presignedResult.url) {
+                console.log('✅ Presigned URL generated successfully')
+                
+                // Test if the presigned URL is accessible
+                const isAccessible = await testPresignedUrl(presignedResult.url)
+                
+                if (isAccessible) {
+                  console.log('✅ Presigned URL is accessible, using for PDF viewer')
+                  console.log('📄 Setting PDF URL:', presignedResult.url.substring(0, 100) + '...')
+                  setPdfUrl(presignedResult.url)
+                  return
+                } else {
+                  console.error('❌ Presigned URL not accessible')
+                  // Still try to use it - the validation might be too strict
+                  console.log('⚠️ Attempting to use presigned URL despite validation failure')
+                  setPdfUrl(presignedResult.url)
+                  return
+                }
+              } else {
+                console.error('❌ Failed to generate presigned URL:', presignedResult.error)
+              }
+            } catch (presignedError) {
+              console.error('❌ Error getting presigned URL:', presignedError)
+            }
+          } else {
+            console.warn('⚠️ Document not found in collection details or missing S3 info')
+          }
+        } catch (collectionError) {
+          console.error('❌ Collection endpoint failed:', collectionError)
         }
+        
+        // Fallback: try presigned URL with document's own S3 info
+        if (document.s3Bucket && document.s3Key) {
+          console.log('⚠️ Collection endpoint failed, trying presigned URL with document info')
+          console.log('📄 Document S3 info:', { 
+            bucket: document.s3Bucket, 
+            key: document.s3Key,
+            region: 'ap-southeast-5'
+          })
+          
+          // Get presigned URL for the document
+          try {
+            console.log('🔄 Getting presigned URL for document (fallback)...')
+            const presignedResult = await getDocumentPresignedUrl(
+              document.s3Bucket,
+              document.s3Key
+            )
+            
+            if (presignedResult.success && presignedResult.url) {
+              console.log('✅ Presigned URL generated successfully (fallback)')
+              
+              // Test if the presigned URL is accessible
+              const isAccessible = await testPresignedUrl(presignedResult.url)
+              
+              if (isAccessible) {
+                console.log('✅ Presigned URL is accessible (fallback), using for PDF viewer')
+                console.log('📄 Setting PDF URL (fallback):', presignedResult.url.substring(0, 100) + '...')
+                setPdfUrl(presignedResult.url)
+                return
+              } else {
+                console.error('❌ Presigned URL not accessible (fallback)')
+                // Still try to use it - the validation might be too strict
+                console.log('⚠️ Attempting to use presigned URL despite validation failure (fallback)')
+                setPdfUrl(presignedResult.url)
+                return
+              }
+            } else {
+              console.error('❌ Failed to generate presigned URL (fallback):', presignedResult.error)
+            }
+          } catch (presignedError) {
+            console.error('❌ Error getting presigned URL (fallback):', presignedError)
+          }
+        }
+        
+        // Final fallback to static file
+        setPdfUrl('/partnership.pdf')
+        console.log('⚠️ Using fallback static PDF - S3 access failed')
+        console.log('📄 Document info:', {
+          hasS3Bucket: !!document.s3Bucket,
+          hasS3Key: !!document.s3Key,
+          s3Bucket: document.s3Bucket,
+          s3Key: document.s3Key
+        })
       } catch (error) {
         console.error('Error loading PDF URL:', error)
         setPdfError('Failed to load document')
@@ -75,7 +195,7 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
     }
 
     loadPdfUrl()
-  }, [documentId])
+  }, [document])
 
   // PDF loading handlers
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
@@ -86,7 +206,16 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
 
   const onDocumentLoadError = (error: Error) => {
     console.error('PDF load error:', error)
-    setPdfError('Failed to load PDF document')
+    
+    // Check if it's a CORS or 403 error
+    if (error.message.includes('Failed to fetch') || error.message.includes('CORS')) {
+      setPdfError('Document access blocked by CORS policy. Backend proxy needed to access S3 documents.')
+    } else if (error.message.includes('403')) {
+      setPdfError('Access forbidden. Document requires authentication or signed URL.')
+    } else {
+      setPdfError('Failed to load PDF document')
+    }
+    
     setPdfLoading(false)
   }
 
@@ -112,27 +241,27 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
     if (viewerRect && selectedText) {
       setIsGeneratingExplanation(true)
       
+      // Get surrounding context for better analysis
+      const context = getSelectionContext(selectedText, range)
+      
       try {
-        // Get surrounding context for better analysis
-        const context = getSelectionContext(selectedText, range)
+        // Call backend API for explanation
+        const backendResponse = await api.explain.explainSentence(selectedText)
         
-        // Call Bedrock directly for AI explanation (hackathon direct access)
-        const response = await bedrockService.analyzeText({
-          selectedText,
-          context,
-          pageNumber: currentPage
-        })
+        console.log('Backend Response:', backendResponse.explanation) // Debug log
         
-        // bedrockService returns the response directly, not wrapped in success/error
-        console.log('AI Response:', response.explanation) // Debug log
+        // Convert backend response to tooltip format
+        // The backend returns markdown format, so we need to convert it to HTML
+        const htmlExplanation = convertMarkdownToHtml(backendResponse.explanation)
+        
         setTooltip({
-          content: response.explanation,
+          content: htmlExplanation,
           x: rect.left - viewerRect.left + rect.width / 2,
           y: rect.top - viewerRect.top - 10,
           visible: true,
-          category: response.category,
+          category: 'general', // Backend doesn't provide category, default to general
           selectedText: selectedText,
-          confidence: response.confidence
+          confidence: 85 // Backend provides high-quality explanations
         })
         
         // Add to highlighted terms
@@ -141,21 +270,60 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
       } catch (error) {
         console.error('Failed to analyze text:', error)
         
-        // Fallback explanation
-        setTooltip({
-          content: `"${selectedText}" - This text requires professional interpretation. The AI analysis service is currently unavailable.`,
-          x: rect.left - viewerRect.left + rect.width / 2,
-          y: rect.top - viewerRect.top - 10,
-          visible: true,
-          category: 'general',
-          selectedText: selectedText,
-          confidence: 0
-        })
+        // Try fallback to Bedrock service if backend fails
+        try {
+          console.log('Backend failed, trying Bedrock fallback...')
+          const bedrockResponse = await bedrockService.analyzeText({
+            selectedText,
+            context: context,
+            pageNumber: currentPage
+          })
+          
+          setTooltip({
+            content: bedrockResponse.explanation,
+            x: rect.left - viewerRect.left + rect.width / 2,
+            y: rect.top - viewerRect.top - 10,
+            visible: true,
+            category: bedrockResponse.category,
+            selectedText: selectedText,
+            confidence: bedrockResponse.confidence
+          })
+        } catch (fallbackError) {
+          console.error('Bedrock fallback also failed:', fallbackError)
+          
+          // Final fallback explanation
+          setTooltip({
+            content: `"${selectedText}" - This text requires professional interpretation. The AI analysis service is currently unavailable.`,
+            x: rect.left - viewerRect.left + rect.width / 2,
+            y: rect.top - viewerRect.top - 10,
+            visible: true,
+            category: 'general',
+            selectedText: selectedText,
+            confidence: 0
+          })
+        }
       } finally {
         setIsGeneratingExplanation(false)
       }
     }
   }, [isHighlightMode, currentPage])
+
+  // Convert markdown to HTML for display
+  const convertMarkdownToHtml = (markdown: string): string => {
+    return markdown
+      // Convert headers to bold text
+      .replace(/^# (.+)$/gm, '<strong>$1</strong>')
+      .replace(/^## (.+)$/gm, '<strong>$1</strong>')
+      .replace(/^### (.+)$/gm, '<strong>$1</strong>')
+      // Convert bold text
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      // Convert bullet points to HTML list
+      .replace(/^- (.+)$/gm, '• $1')
+      // Convert line breaks
+      .replace(/\n/g, '<br>')
+      // Clean up multiple line breaks
+      .replace(/<br><br>/g, '<br>')
+  }
 
   // Get context around the selected text
   const getSelectionContext = (selectedText: string, range: Range): string => {
@@ -205,7 +373,7 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
   // Text selection event listeners
   useEffect(() => {
     const handleClickOutside = () => closeTooltip()
-    document.addEventListener('click', handleClickOutside)
+    globalThis.document.addEventListener('click', handleClickOutside)
     
     // Add text selection listener
     const handleSelectionChange = () => {
@@ -215,13 +383,13 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
       }
     }
     
-    document.addEventListener('mouseup', handleSelectionChange)
-    document.addEventListener('touchend', handleSelectionChange)
+    globalThis.document.addEventListener('mouseup', handleSelectionChange)
+    globalThis.document.addEventListener('touchend', handleSelectionChange)
     
     return () => {
-      document.removeEventListener('click', handleClickOutside)
-      document.removeEventListener('mouseup', handleSelectionChange)
-      document.removeEventListener('touchend', handleSelectionChange)
+      globalThis.document.removeEventListener('click', handleClickOutside)
+      globalThis.document.removeEventListener('mouseup', handleSelectionChange)
+      globalThis.document.removeEventListener('touchend', handleSelectionChange)
     }
   }, [isHighlightMode, handleTextSelection])
 
@@ -240,8 +408,8 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
               <span className="text-red-600 text-xs font-bold">PDF</span>
             </div>
             <div>
-              <h3 className="body-regular font-medium text-text-primary">{filename}</h3>
-              <p className="caption text-text-secondary">Document ID: {documentId}</p>
+              <h3 className="body-regular font-medium text-text-primary">{document.originalFilename}</h3>
+              <p className="caption text-text-secondary">Document ID: {document.id}</p>
             </div>
           </div>
 
@@ -357,7 +525,7 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
                 }`}
                 style={{ userSelect: isHighlightMode ? 'text' : 'none' }}
               >
-                <Document
+                <PDFDocument
                   file={pdfUrl}
                   onLoadSuccess={onDocumentLoadSuccess}
                   onLoadError={onDocumentLoadError}
@@ -380,7 +548,7 @@ export function PDFViewer({ documentId, filename, onClose }: PDFViewerProps) {
                     renderAnnotationLayer={true}
                     className="shadow-sm"
                   />
-                </Document>
+                </PDFDocument>
                 
                 {/* Page Navigation */}
                 {numPages && numPages > 1 && (

@@ -2,6 +2,19 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { SideNavigation } from '@/components/layout/SideNavigation'
 
+// Polyfill for Promise.withResolvers (for PDF.js compatibility)
+if (!Promise.withResolvers) {
+  Promise.withResolvers = function <T>() {
+    let resolve: (value: T | PromiseLike<T>) => void;
+    let reject: (reason?: any) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve: resolve!, reject: reject! };
+  };
+}
+
 export const metadata: Metadata = {
   title: "LegalKaki - Legal Information for Every Rakyat",
   description: "Making legal information accessible, understandable, and actionable for every rakyat",
