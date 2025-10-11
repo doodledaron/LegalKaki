@@ -65,6 +65,9 @@ import { mockAnalysisResult, mockDraftResult } from "@/api/mockData";
 interface ChatbotScreenProps {
   domain: LegalDomain;
   onBack: () => void;
+  initialSession?: ChatSession; // For resuming from collection
+  collectionId?: string; // To show which collection this belongs to
+  collectionName?: string;
 }
 
 // Removed unused mock data
@@ -751,10 +754,10 @@ const RegularMessageBubble = memo(({ message }: { message: Message }) => (
 
 RegularMessageBubble.displayName = "RegularMessageBubble";
 
-export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
-  const [showDocumentPrompt, setShowDocumentPrompt] = useState(true);
+export function ChatbotScreen({ domain, onBack, initialSession, collectionId, collectionName }: ChatbotScreenProps) {
+  const [showDocumentPrompt, setShowDocumentPrompt] = useState(!initialSession); // Hide prompt if resuming
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(
-    null
+    initialSession || null
   );
   const [inputValue, setInputValue] = useState("");
   const [isDraftMode, setIsDraftMode] = useState(false);
@@ -1572,6 +1575,16 @@ export function ChatbotScreen({ domain, onBack }: ChatbotScreenProps) {
                     {LEGAL_DOMAINS[domain]?.title || "General"}
                   </span>
                 </div>
+
+                {/* Collection Badge */}
+                {collectionId && collectionName && (
+                  <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full flex items-center space-x-2">
+                    <Bookmark className="w-3 h-3" />
+                    <span className="body-small font-medium">
+                      {collectionName}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Document Edit Mode Dropdown */}
