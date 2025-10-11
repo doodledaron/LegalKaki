@@ -18,9 +18,10 @@ import {
   mockAnalysisResult,
   mockDraftResult,
 } from "./mockData";
+import { getBackendUrl, getEnvConfig } from "@/lib/envConfig";
 
-// Backend API service for highlight explainer
-const BACKEND_BASE_URL = "http://43.217.199.206:8000";
+// Backend URL from environment configuration
+const BACKEND_BASE_URL = getBackendUrl();
 
 export interface BackendExplainRequest {
   sentence: string;
@@ -581,169 +582,168 @@ export const chatApi = {
     request: SendMessageRequest,
     onProgress?: (stage: string, progress: number) => void
   ): Promise<ApiResponse<SendMessageResponse> | ApiError> {
-    try {
-      // Try supervisor endpoint first (structured response with tabs)
+    // Check if we should use real API or mock based on environment
+    const envConfig = getEnvConfig();
+    const shouldUseRealApi = envConfig.isDevMode; // Use real API in dev mode
+
+    console.log("[ChatAPI] Environment config:", {
+      isDevMode: envConfig.isDevMode,
+      backendUrl: envConfig.backendUrl,
+      shouldUseRealApi
+    });
+
+    if (shouldUseRealApi) {
+      console.log("[ChatAPI] 🚀 Using real API - connecting to backend at", envConfig.backendUrl);
+      
       try {
-        const chatId = parseInt(sessionId.replace("session_", "")) || Date.now();
-
-        // Prepare uploaded files if any documents are attached
-        let uploadedFiles: Array<{ name: string; type: string; size: number; content: ArrayBuffer }> | undefined;
-
-        if (request.uploadedDocuments && request.uploadedDocuments.length > 0) {
-          uploadedFiles = request.uploadedDocuments
-            .filter(doc => doc._fileContent) // Only include documents with content
-            .map(doc => ({
-              name: doc._fileName || doc.originalFilename,
-              type: doc._fileType || doc.fileType,
-              size: doc._fileSize || doc.fileSize,
-              content: doc._fileContent as ArrayBuffer
-            }));
-
-          console.log(`[ChatAPI] Sending ${uploadedFiles.length} files to supervisor`,
-            uploadedFiles.map(f => ({ name: f.name, size: f.size })));
-        }
-
-        const supervisorResponse = await realApiClient.sendSupervisorMessage(
-          chatId,
-          request.content,
-          uploadedFiles,
-          onProgress,
-          request.domain
-        );
-
-        return {
-          success: true,
-          data: supervisorResponse,
-          timestamp: new Date().toISOString(),
-          message: "Message sent successfully (supervisor)",
-        };
-      } catch (supervisorError) {
-        console.warn("Supervisor endpoint failed, trying legacy streaming:", supervisorError);
-
-        // Fallback to legacy streaming chat
-        let streamingContent = "";
-
-        const realResponse = await realApiClient.sendMessage(
-          request.content,
-          request.messageType || "text",
-          (content) => {
-            streamingContent = content;
-            if (onProgress) {
-              const progress = Math.min(95, content.length / 10);
-              onProgress("Receiving response...", progress);
-            }
-          }
-        );
-
-        if (onProgress) {
-          onProgress("Processing complete", 100);
-        }
-
-        return {
-          success: true,
-          data: realResponse,
-          timestamp: new Date().toISOString(),
-          message: "Message sent successfully",
-        };
-      }
-    } catch (error) {
-      console.error("Real API chat failed, falling back to mock:", error);
-
-      // Fallback to mock implementation
-      return mockClient.request(
-        async () => {
-          const messageId = `msg_${Date.now()}_${Math.random()
-            .toString(36)
-            .substr(2, 9)}`;
-          const now = new Date();
-
-          // Create user message
-          const userMessage: Message = {
-            id: messageId,
-            content: request.content,
-            sender: "user",
-            timestamp: now,
-            attachments: request.attachments?.map((id) => ({
-              id,
-              filename: "attached_file.pdf",
-              fileType: "application/pdf",
-              fileSize: 245760,
-              url: "#",
+        // Use the supervisor endpoint for structured responses
+        const chatIdNum = parseInt(sessionId.replace('session_', ''));
+        if (isNaN(chatIdNum)) {
+          // If session ID is not a number, use current timestamp as chat ID
+          const fallbackChatId = Date.now();
+          const response = await realApiClient.sendSupervisorMessage(
+            fallbackChatId,
+            request.content,
+            request.attachments?.map(att => ({
+              name: att.filename || "file.pdf",
+              type: att.fileType || "application/pdf",
+              size: att.fileSize || 0,
+              content: new ArrayBuffer(0) // Empty content for now
             })),
-          };
-
-          let aiResponse: Message | undefined;
-          let analysisResult: AnalysisResult | undefined;
-          let draftResult: DraftResult | undefined;
-
-          // Simulate AI processing
-          if (onProgress) {
-            onProgress("Processing your message...", 25);
-            await new Promise((resolve) => setTimeout(resolve, 500));
-            onProgress("Analyzing content...", 50);
-            await new Promise((resolve) => setTimeout(resolve, 500));
-            onProgress("Generating response...", 75);
-            await new Promise((resolve) => setTimeout(resolve, 500));
-            onProgress("Finalizing...", 100);
-          }
-
-          // Generate AI response based on message type
-          if (request.messageType === "analysis_request") {
-            analysisResult = {
-              ...mockAnalysisResult,
-              id: `analysis_${Date.now()}`,
-            };
-
-            aiResponse = {
-              id: `msg_${Date.now() + 1}`,
-              content: "Here's my detailed analysis:",
-              sender: "assistant",
-              timestamp: new Date(now.getTime() + 2000),
-              type: "analysis",
-            };
-          } else if (request.messageType === "draft_request") {
-            draftResult = {
-              ...mockDraftResult,
-              id: `draft_${Date.now()}`,
-            };
-
-            aiResponse = {
-              id: `msg_${Date.now() + 1}`,
-              content: "Here's your document draft:",
-              sender: "assistant",
-              timestamp: new Date(now.getTime() + 2000),
-              type: "draft",
-            };
-          } else {
-            // Regular text response
-            aiResponse = {
-              id: `msg_${Date.now() + 1}`,
-              content: `I understand you're asking about "${request.content}". Let me help you with that.`,
-              sender: "assistant",
-              timestamp: new Date(now.getTime() + 1500),
-              type: "text",
-            };
-          }
-
+            onProgress,
+            request.domain
+          );
+          
           return {
-            message: userMessage,
-            aiResponse,
-            analysisResult,
-            draftResult,
+            success: true,
+            data: response,
+            timestamp: new Date().toISOString(),
+            message: "Message sent successfully via real API",
           };
-        },
-        "ai",
-        {
-          progressId: "send_message",
-          progressSteps: [
-            "Processing message...",
-            "Analyzing content...",
-            "Generating response...",
-            "Finalizing...",
-          ],
+        } else {
+          const response = await realApiClient.sendSupervisorMessage(
+            chatIdNum,
+            request.content,
+            request.attachments?.map(att => ({
+              name: att.filename || "file.pdf",
+              type: att.fileType || "application/pdf",
+              size: att.fileSize || 0,
+              content: new ArrayBuffer(0) // Empty content for now
+            })),
+            onProgress,
+            request.domain
+          );
+          
+          return {
+            success: true,
+            data: response,
+            timestamp: new Date().toISOString(),
+            message: "Message sent successfully via real API",
+          };
         }
-      );
+      } catch (error) {
+        console.error("[ChatAPI] Real API failed, falling back to mock:", error);
+        // Fall back to mock implementation
+      }
     }
+
+    // Mock implementation (fallback or when not in dev mode)
+    console.log("[ChatAPI] Using mock mode - messages are in-memory only until saved to collection");
+
+    // Mock implementation
+    return mockClient.request(
+      async () => {
+        const messageId = `msg_${Date.now()}_${Math.random()
+          .toString(36)
+          .substr(2, 9)}`;
+        const now = new Date();
+
+        // Create user message
+        const userMessage: Message = {
+          id: messageId,
+          content: request.content,
+          sender: "user",
+          timestamp: now,
+          attachments: request.attachments?.map((id) => ({
+            id,
+            filename: "attached_file.pdf",
+            fileType: "application/pdf",
+            fileSize: 245760,
+            url: "#",
+          })),
+        };
+
+        let aiResponse: Message | undefined;
+        let analysisResult: AnalysisResult | undefined;
+        let draftResult: DraftResult | undefined;
+
+        // Simulate AI processing
+        if (onProgress) {
+          onProgress("Processing your message...", 25);
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          onProgress("Analyzing content...", 50);
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          onProgress("Generating response...", 75);
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          onProgress("Finalizing...", 100);
+        }
+
+        // Generate AI response based on message type
+        if (request.messageType === "analysis_request") {
+          analysisResult = {
+            ...mockAnalysisResult,
+            id: `analysis_${Date.now()}`,
+          };
+
+          aiResponse = {
+            id: `msg_${Date.now() + 1}`,
+            content: "Here's my detailed analysis:",
+            sender: "assistant",
+            timestamp: new Date(now.getTime() + 2000),
+            type: "analysis",
+          };
+        } else if (request.messageType === "draft_request") {
+          draftResult = {
+            ...mockDraftResult,
+            id: `draft_${Date.now()}`,
+          };
+
+          aiResponse = {
+            id: `msg_${Date.now() + 1}`,
+            content: "Here's your document draft:",
+            sender: "assistant",
+            timestamp: new Date(now.getTime() + 2000),
+            type: "draft",
+          };
+        } else {
+          // Regular text response
+          aiResponse = {
+            id: `msg_${Date.now() + 1}`,
+            content: `I understand you're asking about "${request.content}". Let me help you with that.`,
+            sender: "assistant",
+            timestamp: new Date(now.getTime() + 1500),
+            type: "text",
+          };
+        }
+
+        return {
+          message: userMessage,
+          aiResponse,
+          analysisResult,
+          draftResult,
+        };
+      },
+      "ai",
+      {
+        progressId: "send_message",
+        progressSteps: [
+          "Processing message...",
+          "Analyzing content...",
+          "Generating response...",
+          "Finalizing...",
+        ],
+      }
+    );
   },
 
   async getSessions(
@@ -877,10 +877,10 @@ export const documentsApi = {
     try {
       // Try multiple backend endpoints for document access
       const endpoints = [
-        `http://43.217.199.206:8000/documents/${documentId}/proxy`,
-        `http://43.217.199.206:8000/documents/${documentId}/signed-url`,
-        `http://43.217.199.206:8000/documents/${documentId}/download`,
-        `http://43.217.199.206:8000/documents/${documentId}/stream`
+        `${BACKEND_BASE_URL}/documents/${documentId}/proxy`,
+        `${BACKEND_BASE_URL}/documents/${documentId}/signed-url`,
+        `${BACKEND_BASE_URL}/documents/${documentId}/download`,
+        `${BACKEND_BASE_URL}/documents/${documentId}/stream`
       ];
 
       for (const endpoint of endpoints) {

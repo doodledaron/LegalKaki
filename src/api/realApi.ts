@@ -13,6 +13,7 @@ import {
 } from "./types";
 import { Document } from "@/types";
 import { mockClient } from "./mockClient";
+import { getEnvConfig } from "@/lib/envConfig";
 
 // Structured response interface for mode detection
 interface StructuredResponse {
@@ -33,27 +34,34 @@ interface ModeSwitch {
   structuredData?: StructuredResponse;
 }
 
-// Backend API configuration
-const BACKEND_CONFIG = {
-  baseUrl: "http://43.217.199.206:8000",
-  endpoints: {
-    uploadDocument:
-      "/api/v1/datasets/1e99cdde96d611f08ce90242ac120005/documents",
-    chatCompletions:
-      "/api/v1/chats_openai/13dfe97696dd11f0a6b70242ac130005/chat/completions",
-    // New supervisor endpoint
-    supervisorMessage: "/messages/supervisor",
-  },
-  auth: {
-    token: "ragflow-E1YWMxNmU4OTZkNTExZjBiNzUwMDI0Mm", // Backend authorization token
-  },
-  // Connection timeout settings
-  timeout: {
-    upload: 30000, // 30 seconds for uploads
-    chat: 60000, // 60 seconds for chat completion
-    connection: 10000, // 10 seconds for initial connection
-  },
+// Backend configuration using centralized environment config
+const getBackendConfig = () => {
+  const envConfig = getEnvConfig();
+  
+  return {
+    baseUrl: envConfig.backendUrl,
+    endpoints: {
+      uploadDocument:
+        "/api/v1/datasets/1e99cdde96d611f08ce90242ac120005/documents",
+      chatCompletions:
+        "/api/v1/chats_openai/13dfe97696dd11f0a6b70242ac130005/chat/completions",
+      // New supervisor endpoint
+      supervisorMessage: "/messages/supervisor",
+    },
+    auth: {
+      token: envConfig.apiToken,
+    },
+    // Connection timeout settings
+    timeout: {
+      upload: 30000, // 30 seconds for uploads
+      chat: 60000, // 60 seconds for chat completion
+      connection: 10000, // 10 seconds for initial connection
+    },
+    isDevMode: envConfig.isDevMode,
+  };
 };
+
+const BACKEND_CONFIG = getBackendConfig();
 
 // Document upload API response type from backend
 interface BackendUploadResponse {
@@ -104,22 +112,31 @@ interface ChatCompletionChunk {
 export class RealApiClient {
   private baseUrl: string;
   private authToken: string;
+  private isDevMode: boolean;
 
   constructor() {
-    this.baseUrl = BACKEND_CONFIG.baseUrl;
-    this.authToken = BACKEND_CONFIG.auth.token;
+    // Refresh config in case environment changed
+    const config = getBackendConfig();
+    this.baseUrl = config.baseUrl;
+    this.authToken = config.auth.token;
+    this.isDevMode = config.isDevMode;
 
     // Log configuration for debugging
-    console.log("RealApiClient initialized with:");
-    console.log("Base URL:", this.baseUrl);
-    console.log("Auth token:", this.authToken);
+    console.log("🔗 RealApiClient initialized:");
+    console.log("   Base URL:", this.baseUrl);
+    console.log("   Auth token:", this.authToken.substring(0, 10) + "...");
+    console.log("   Dev Mode:", this.isDevMode);
     console.log(
-      "Upload endpoint:",
+      "   Upload endpoint:",
       `${this.baseUrl}${BACKEND_CONFIG.endpoints.uploadDocument}`
     );
     console.log(
-      "Chat endpoint:",
+      "   Chat endpoint:",
       `${this.baseUrl}${BACKEND_CONFIG.endpoints.chatCompletions}`
+    );
+    console.log(
+      "   Supervisor endpoint:",
+      `${this.baseUrl}${BACKEND_CONFIG.endpoints.supervisorMessage}`
     );
   }
 
@@ -505,8 +522,8 @@ export class RealApiClient {
     domain?: string
   ): Promise<SendMessageResponse> {
     try {
-      const supervisorUrl = `${BACKEND_CONFIG.legalKakiBaseUrl}${BACKEND_CONFIG.endpoints.supervisorMessage}`;
-      console.log("Sending supervisor request to:", supervisorUrl);
+      const supervisorUrl = `${this.baseUrl}${BACKEND_CONFIG.endpoints.supervisorMessage}`;
+      console.log("📤 Sending supervisor request to:", supervisorUrl);
 
       // Prepare the request body
       const requestBody = {
@@ -1279,7 +1296,7 @@ export class RealApiClient {
 
   // Conversation Snapshot Methods
   async saveConversationToCollection(request: SaveConversationRequest): Promise<{ success: boolean; data: ConversationSnapshot }> {
-    const url = `${BACKEND_CONFIG.legalKakiBaseUrl}/conversations/save`;
+    const url = `${this.baseUrl}/conversations/save`;
 
     console.log("🔍 Saving conversation with request:", JSON.stringify(request, null, 2));
 
@@ -1302,7 +1319,7 @@ export class RealApiClient {
   }
 
   async getCollectionConversations(collectionId: number, userSub: string): Promise<{ success: boolean; data: ConversationListItem[] }> {
-    const url = `${BACKEND_CONFIG.legalKakiBaseUrl}/conversations/collection/${collectionId}?user_sub=${encodeURIComponent(userSub)}`;
+    const url = `${this.baseUrl}/conversations/collection/${collectionId}?user_sub=${encodeURIComponent(userSub)}`;
 
     const response = await fetch(url, {
       method: "GET",
@@ -1320,7 +1337,7 @@ export class RealApiClient {
   }
 
   async getConversationSnapshot(snapshotId: string, userSub: string): Promise<{ success: boolean; data: ConversationSnapshot }> {
-    const url = `${BACKEND_CONFIG.legalKakiBaseUrl}/conversations/${snapshotId}?user_sub=${encodeURIComponent(userSub)}`;
+    const url = `${this.baseUrl}/conversations/${snapshotId}?user_sub=${encodeURIComponent(userSub)}`;
 
     const response = await fetch(url, {
       method: "GET",
@@ -1338,7 +1355,7 @@ export class RealApiClient {
   }
 
   async deleteConversationFromCollection(snapshotId: string, userSub: string): Promise<{ success: boolean; data: null }> {
-    const url = `${BACKEND_CONFIG.legalKakiBaseUrl}/conversations/${snapshotId}?user_sub=${encodeURIComponent(userSub)}`;
+    const url = `${this.baseUrl}/conversations/${snapshotId}?user_sub=${encodeURIComponent(userSub)}`;
 
     const response = await fetch(url, {
       method: "DELETE",
