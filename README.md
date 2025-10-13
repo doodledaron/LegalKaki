@@ -91,7 +91,7 @@ The Bedrock Agent (**AWS Nova Premier**) combines retrieved chunks with its reas
   - Educator, Analyst, Advisor, and Drafting Agent
 - Enables professional-grade document drafting
 - ⚠️ This setup produces higher-quality results but currently takes a few minutes per query — unsuitable for real-time hackathon use.
-
+![Complete Agents Implementation  Diagram](./Full_bedrock_implementation.png)
 ---
 
 ## 🧩 System Architecture
@@ -107,7 +107,7 @@ Lambda → OpenSearch → S3
         ↓
 Bedrock Agent (Nova Premier)
 ```
-![System Architecture Diagram](./'Full Architecture Diagram.png')
+![System Architecture Diagram](./Full_Architecture_Diagram.png)
 ### Key AWS Services Used
 
 - **Amplify** → Hosts the Next.js frontend (CI/CD + auto-deploy)
