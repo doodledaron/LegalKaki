@@ -36,7 +36,7 @@ This creates a sustainable ecosystem where:
 
 LegalKaki uses an advanced Retrieval-Augmented Generation (RAG) architecture for document understanding.
 
-![RAG Architecture Diagram](./assets/rag-architecture.png)
+![RAG Architecture Diagram](./RAG_system.png)
 
 ### 1. Upload & Chunking
 
