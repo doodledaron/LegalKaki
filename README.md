@@ -1,9 +1,6 @@
-# ⚖️ LegalKaki Frontend
+# ⚖️ LegalKaki: AI legal assistant built for the rakyat and SMEs. 
 
-LegalKaki is a people-friendly legal document comprehension platform built with Next.js 15, TypeScript, and Tailwind CSS, powered by AWS Bedrock Agents and OpenSearch Serverless.
-
-> **"Accessible. Understandable. Actionable."**  
-> Helping every rakyat understand their own legal documents — clearly, quickly, and affordably.
+Our goal is simple: make legal documents accessible, understandable, and actionable.
 
 ---
 
@@ -17,7 +14,7 @@ LegalKaki bridges the gap between legal complexity and public understanding.
 
 ### 🤝 Our Philosophy: Empowering, Not Replacing
 
-**LegalKaki is not about replacing lawyers** — it's about empowering people to understand their legal needs *before* seeking professional help.
+**LegalKaki is not about replacing lawyers**: it's about empowering people to understand their legal needs *before* seeking professional help.
 
 We believe that informed clients make better decisions and save everyone time. Our approach:
 
@@ -278,12 +275,6 @@ Each example shows the same pattern:
 
 ---
 
-## 🌐 Deployment
-
-Deployed via **Vercel** for frontend and **AWS Amplify + Fargate** for backend.  
-See [Next.js Deployment Docs](https://nextjs.org/docs/deployment) for more details.
-
----
 
 ## 🧱 Credits
 
@@ -293,10 +284,5 @@ See [Next.js Deployment Docs](https://nextjs.org/docs/deployment) for more detai
 
 ---
 
-## 📄 License
-
-[Add your license here]
-
-## 🤝 Contributing
-
-[Add contribution guidelines here]
+## Backend Implementation 
+See [LegalKaki Backend](https://github.com/alpha031117/legalkaki_backend) for more details.
