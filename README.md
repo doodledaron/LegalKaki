@@ -107,7 +107,7 @@ Lambda → OpenSearch → S3
         ↓
 Bedrock Agent (Nova Premier)
 ```
-![System Architecture Diagram](./RAG_system.png)
+![System Architecture Diagram](./'Full Architecture Diagram.png')
 ### Key AWS Services Used
 
 - **Amplify** → Hosts the Next.js frontend (CI/CD + auto-deploy)
