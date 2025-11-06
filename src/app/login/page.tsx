@@ -1,58 +1,24 @@
 'use client'
 
-import { LoginScreen } from '@/components/screens/LoginScreen'
-import { useRouter } from 'next/navigation'
-import { useAuth } from '@/contexts/AuthContext'
 import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
+// POC Mode: Login page redirects to /domains (authentication is bypassed)
 export default function LoginPage() {
   const router = useRouter()
-  const { login, isAuthenticated } = useAuth()
 
-  // Redirect if already authenticated
   useEffect(() => {
-    if (isAuthenticated) {
-      router.push('/')
-    }
-  }, [isAuthenticated, router])
+    // Auto-redirect to domains page in POC mode
+    router.push('/domains')
+  }, [router])
 
-  // Don't render anything if already authenticated
-  if (isAuthenticated) {
-    return null
-  }
-
-  const handleLogin = async (email: string, password: string) => {
-    try {
-      console.log('Login attempt:', { email, password })
-      
-      // Use the auth context login method
-      await login({
-        email: email,
-        password: password,
-      })
-      
-      // Login successful, redirect to home
-      router.push('/')
-    } catch (error) {
-      console.error('Login error:', error)
-      throw error
-    }
-  }
-
-  const handleSignUpRedirect = () => {
-    router.push('/signup')
-  }
-
-  const handleForgotPassword = () => {
-    // TODO: Implement forgot password functionality
-    console.log('Forgot password clicked')
-  }
-
+  // Show a simple loading state during redirect
   return (
-    <LoginScreen 
-      onLogin={handleLogin}
-      onSignUpRedirect={handleSignUpRedirect}
-      onForgotPassword={handleForgotPassword}
-    />
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-2 border-purple-primary border-t-transparent mx-auto mb-4"></div>
+        <p className="body-regular text-text-secondary">Redirecting to LegalKaki...</p>
+      </div>
+    </div>
   )
 }

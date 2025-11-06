@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { mockClient } from "./mockClient";
 import {
-  bedrockService,
+  geminiService,
   TextAnalysisRequest,
   MindMapAnalysisRequest,
-} from "./bedrockService";
+} from "./geminiService";
 import { realApiClient, collectionApiClient } from "./realApi";
 import {
   mockUser,
@@ -1935,7 +1935,7 @@ export const toolsApi = {
           actionItems: request.actionItems,
         };
 
-        const result = await bedrockService.generateMindMapInsights(
+        const result = await geminiService.generateMindMapInsights(
           analysisRequest
         );
         return result;
@@ -1999,7 +1999,7 @@ export const pdfApi = {
           pageNumber: request.pageNumber,
         };
 
-        const result = await bedrockService.analyzeText(analysisRequest);
+        const result = await geminiService.analyzeText(analysisRequest);
         return result;
       },
       "ai",

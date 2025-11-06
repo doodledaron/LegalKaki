@@ -21,6 +21,7 @@ import {
   ClipboardList,
   AlertTriangle,
   CheckCircle,
+  CheckCircle2,
   ExternalLink as ExternalLinkIcon,
   PanelLeftOpen,
   PanelLeftClose,
@@ -66,6 +67,7 @@ import { LEGAL_DOMAINS } from "@/constants/domains";
 import { documentsApi, chatApi, collectionsApi, useApiCall, useApiMutation } from "@/api";
 import { mockAnalysisResult, mockDraftResult } from "@/api/mockData";
 import { getEnvConfig } from "@/lib/envConfig";
+import { chatService } from "@/api/chatService";
 
 interface ChatbotScreenProps {
   domain: LegalDomain;
@@ -442,11 +444,165 @@ const CombinedMessageBubble = memo(
 
 CombinedMessageBubble.displayName = "CombinedMessageBubble";
 
+// Simplified Supervisor Bubble - for simplified 3-tab structure
+const SimplifiedSupervisorBubble = memo(({ supervisorData }: { supervisorData: Record<string, unknown> }) => {
+  const { explanation, analysis, actions } = supervisorData;
+
+  const explanationData = explanation as { text?: string };
+  const analysisData = analysis as { risks?: Array<{ severity: string; title: string; description: string }>; key_points?: string[] };
+  const actionsData = actions as Array<{ title: string; description: string; priority: string; link_text?: string; link_url?: string }>;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex justify-start mb-4 w-full"
+    >
+      <div className="w-[70%] bg-surface-white border-2 border-indigo-200/50 rounded-2xl rounded-bl-sm shadow-md overflow-hidden">
+        <Tabs defaultValue="explanation" className="w-full">
+          <TabsList className="w-full grid grid-cols-3 bg-gray-50 border-b border-gray-200">
+            <TabsTrigger value="explanation" className="data-[state=active]:bg-white data-[state=active]:text-purple-primary data-[state=active]:border-b-2 data-[state=active]:border-purple-primary">
+              <BookOpen className="w-4 h-4 mr-2" />
+              <span>Explanation</span>
+            </TabsTrigger>
+            <TabsTrigger value="analysis" className="data-[state=active]:bg-white data-[state=active]:text-purple-primary data-[state=active]:border-b-2 data-[state=active]:border-purple-primary">
+              <Search className="w-4 h-4 mr-2" />
+              <span>Analysis</span>
+            </TabsTrigger>
+            <TabsTrigger value="actions" className="data-[state=active]:bg-white data-[state=active]:text-purple-primary data-[state=active]:border-b-2 data-[state=active]:border-purple-primary">
+              <ClipboardList className="w-4 h-4 mr-2" />
+              <span>Actions</span>
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Explanation Tab */}
+          <TabsContent value="explanation" className="p-0 max-h-96 overflow-y-auto">
+            <div className="p-4 space-y-3">
+              <div className="flex items-start gap-3 bg-purple-50 p-3 rounded-lg">
+                <Lightbulb className="w-5 h-5 text-purple-600 mt-1" />
+                <p className="body-regular text-text-primary">
+                  {explanationData?.text || 'No explanation available'}
+                </p>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* Analysis Tab */}
+          <TabsContent value="analysis" className="p-0 max-h-96 overflow-y-auto">
+            <div className="p-4 space-y-4">
+              {/* Risks */}
+              {analysisData?.risks && analysisData.risks.length > 0 && (
+                <div>
+                  <h4 className="body-semibold text-text-primary mb-3 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4" />
+                    Risk Assessment
+                  </h4>
+                  <div className="space-y-2">
+                    {analysisData.risks.map((risk, idx) => (
+                      <div key={idx} className={`p-3 rounded-lg border-l-4 ${
+                        risk.severity === 'HIGH' ? 'bg-red-50 border-red-500' :
+                        risk.severity === 'MEDIUM' ? 'bg-yellow-50 border-yellow-500' :
+                        'bg-green-50 border-green-500'
+                      }`}>
+                        <div className="flex items-start gap-2">
+                          <span className={`caption font-bold px-2 py-0.5 rounded ${
+                            risk.severity === 'HIGH' ? 'bg-red-100 text-red-700' :
+                            risk.severity === 'MEDIUM' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-green-100 text-green-700'
+                          }`}>
+                            {risk.severity}
+                          </span>
+                          <div className="flex-1">
+                            <p className="body-semibold text-text-primary">{risk.title}</p>
+                            <p className="body-small text-text-secondary mt-1">{risk.description}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Key Points */}
+              {analysisData?.key_points && analysisData.key_points.length > 0 && (
+                <div>
+                  <h4 className="body-semibold text-text-primary mb-3 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4" />
+                    Key Points
+                  </h4>
+                  <ul className="space-y-2">
+                    {analysisData.key_points.map((point, idx) => (
+                      <li key={idx} className="flex items-start gap-2">
+                        <span className="text-purple-primary mt-1">•</span>
+                        <span className="body-regular text-text-primary">{point}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* Actions Tab */}
+          <TabsContent value="actions" className="p-0 max-h-96 overflow-y-auto">
+            <div className="p-4 space-y-3">
+              {actionsData && actionsData.length > 0 ? (
+                actionsData.map((action, idx) => (
+                  <div key={idx} className="border border-gray-200 rounded-lg p-4 hover:border-purple-primary transition-colors">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <input type="checkbox" className="mt-1" />
+                        <h5 className="body-semibold text-text-primary">{action.title}</h5>
+                      </div>
+                      <span className={`caption font-bold px-2 py-1 rounded ${
+                        action.priority === 'URGENT' ? 'bg-red-100 text-red-700' :
+                        action.priority === 'IMPORTANT' ? 'bg-yellow-100 text-yellow-700' :
+                        'bg-blue-100 text-blue-700'
+                      }`}>
+                        {action.priority}
+                      </span>
+                    </div>
+                    <p className="body-small text-text-secondary mb-3 ml-6">{action.description}</p>
+                    {action.link_url && (
+                      <a
+                        href={action.link_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-6 inline-flex items-center gap-1 text-purple-primary hover:text-purple-600 body-small font-medium"
+                      >
+                        <ExternalLinkIcon className="w-3 h-3" />
+                        {action.link_text || 'Learn More'}
+                      </a>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <p className="body-regular text-text-secondary text-center py-4">No actions available</p>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </motion.div>
+  );
+});
+
+SimplifiedSupervisorBubble.displayName = "SimplifiedSupervisorBubble";
+
 // Supervisor Message Bubble Component - renders tabs from supervisor response with structured UI
 const SupervisorMessageBubble = memo(({ supervisorData }: { supervisorData: Record<string, unknown> }) => {
-  const { explanation_tab, analysis_tab, action_tab, extractedData, response_type, conversation_context } = supervisorData;
+  const { explanation_tab, analysis_tab, action_tab, extractedData, response_type, conversation_context,
+          explanation, analysis, actions } = supervisorData;
 
-  // Determine which tabs are active
+  // Check if we have simplified structure (new format)
+  const hasSimplifiedStructure = explanation || analysis || actions;
+
+  // If simplified structure, use simplified rendering
+  if (hasSimplifiedStructure && response_type === 'final') {
+    return <SimplifiedSupervisorBubble supervisorData={supervisorData} />;
+  }
+
+  // Determine which tabs are active (legacy format)
   const activeTabs = {
     explanation: (explanation_tab as { status?: string })?.status === "active",
     analysis: (analysis_tab as { status?: string })?.status === "active",
@@ -1098,41 +1254,21 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
       const titleMatch = prompt.match(/(?:draft|create|generate)\s+(?:a|an)?\s+(.+?)(?:\s+for|\s+with|$)/i);
       const title = titleMatch ? titleMatch[1].trim() : "Generated Document";
 
-      console.log(`🎯 Calling draft generation API: chatId=${chatId}, prompt="${prompt}"`);
+      console.log(`🎯 [POC] Calling draft generation: chatId=${chatId}, prompt="${prompt}"`);
 
-      // Call API to generate draft
-      const result = await documentsApi.generateDraft(
-        getUserId(),
-        chatId,
-        prompt,
-        title
-      );
+      // POC: Generate draft using Gemini
+      const result = await chatService.generateDraft(prompt, title, domain);
 
-      if (result.success) {
-        const doc = result.data;
+      if (result.success && result.document) {
+        const doc = result.document;
 
         // Add to chat documents so it appears in dropdown
         setChatDocuments(prev => [...prev, doc]);
 
-        // Get presigned URL for the newly generated document
-        const authenticatedUserId = getUserId();
-        let downloadUrl = '';
-        try {
-          const presignResponse = await fetch(
-            `${getEnvConfig().backendUrl}/documents/${doc.id}/presign?owner_sub=${authenticatedUserId}`
-          );
-          if (presignResponse.ok) {
-            const { url } = await presignResponse.json();
-            downloadUrl = url;
-          }
-        } catch (error) {
-          console.warn('Failed to get presigned URL for generated document:', error);
-        }
-
-        // Add success message with download link
+        // Add success message
         const successMessage: Message = {
           id: `doc_${Date.now()}`,
-          content: `✅ **Document Generated Successfully!**\n\n${downloadUrl ? `📄 [**${doc.originalFilename}**](${downloadUrl})` : `**${doc.originalFilename}**`}\n\nSize: ${(doc.fileSize / 1024).toFixed(1)} KB\n\n${downloadUrl ? 'Click the document name above to view it, or' : 'The document can be'} access${downloadUrl ? 'ed' : 'ed'} from the Analysis Mode dropdown.`,
+          content: `✅ **Document Generated Successfully!**\n\n📄 **${doc.originalFilename}**\n\nSize: ${(doc.fileSize / 1024).toFixed(1)} KB\n\nThe document has been saved and can be accessed from your documents list.`,
           sender: "assistant",
           timestamp: new Date(),
           domain,
@@ -1144,15 +1280,9 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
           messages: [...prev!.messages.filter(m => m.id !== generatingMessage.id), successMessage],
         }));
 
-        // Refresh documents list
-        const refreshResult = await documentsApi.getChatDocuments(getUserId(), chatId);
-        if (refreshResult.success) {
-          setChatDocuments(refreshResult.data);
-        }
-
         console.log(`✅ Document generated: ${doc.id} - ${doc.originalFilename}`);
       } else {
-        throw new Error(('error' in result ? result.error : 'Failed to generate document') || 'Failed to generate document');
+        throw new Error(result.error || 'Failed to generate document');
       }
     } catch (error) {
       console.error('❌ Error generating draft:', error);
@@ -1176,50 +1306,25 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
   // Handle document editing
   const handleDocumentEdit = async (document: Document, changes: string, chatId: number) => {
     try {
-      // Fetch the document file content first
-      console.log(`📄 Fetching document content for: ${document.id}`);
+      console.log(`📄 [POC] Editing document: ${document.id}`);
 
-      // Get presigned URL for the document
-      const authenticatedUserId = getUserId(); // Get the authenticated user ID
-      const presignResponse = await fetch(
-        `${getEnvConfig().backendUrl}/documents/${document.id}/presign?owner_sub=${authenticatedUserId}`
-      );
+      // POC: Get document content from localStorage
+      const documentText = chatService.getDocumentText(document.id) || document.contentText || '';
 
-      if (!presignResponse.ok) {
-        throw new Error(`Failed to get document URL: ${presignResponse.statusText}`);
+      if (!documentText) {
+        throw new Error('Document content not found');
       }
 
-      const { url: documentUrl } = await presignResponse.json();
+      console.log(`✅ Document content loaded (${documentText.length} characters)`);
 
-      // Download the document content
-      const docResponse = await fetch(documentUrl);
-      if (!docResponse.ok) {
-        throw new Error(`Failed to download document: ${docResponse.statusText}`);
-      }
+      // Create edit prompt with the original document content
+      const editPrompt = `I have a document titled "${document.originalFilename}". Here is its current content:
 
-      const documentBlob = await docResponse.blob();
-      const documentFile = new File([documentBlob], document.originalFilename || 'document.pdf', {
-        type: document.fileType || 'application/pdf'
-      });
+--- ORIGINAL DOCUMENT ---
+${documentText.substring(0, 10000)}
+--- END OF ORIGINAL DOCUMENT ---
 
-      console.log(`✅ Document fetched: ${documentFile.name} (${documentFile.size} bytes)`);
-
-      // Upload the document to the chat context for the draft agent
-      console.log(`📤 Uploading document to chat context...`);
-      const uploadResult = await documentsApi.upload(
-        { file: documentFile },
-        undefined,
-        chatId
-      );
-
-      if (!uploadResult.success) {
-        throw new Error('Failed to upload document to chat context');
-      }
-
-      console.log(`✅ Document uploaded to chat context`);
-
-      // Create edit prompt that references the uploaded document
-      const editPrompt = `I have uploaded the document "${document.originalFilename}". Please edit this document with the following changes:
+Please edit this document with the following changes:
 
 ${changes}
 
@@ -1278,45 +1383,7 @@ Generate a complete, updated version of the document incorporating all the reque
     const messageType = "analysis_request";
     setInputValue("");
 
-    // Upload any staged files before sending message
-    const stagedDocs = sessionDocuments.filter((doc: StagedDocument) => doc._staged);
-
-    setUploading(true);
-
-    try {
-      for (const stagedDoc of stagedDocs) {
-        if (stagedDoc._file) {
-          console.log(`Uploading staged file: ${stagedDoc.originalFilename} to chat ${chatId}`);
-          const uploadResponse = await documentsApi.upload(
-            { file: stagedDoc._file },
-            (progress) => console.log(`Upload progress: ${progress}%`),
-            chatId
-          );
-
-          if (uploadResponse.success) {
-            // Update the staged doc with S3 info
-            stagedDoc.s3Bucket = uploadResponse.data.document.s3Bucket;
-            stagedDoc.s3Key = uploadResponse.data.document.s3Key;
-            stagedDoc._staged = false;
-            delete stagedDoc._file; // Clean up file reference
-            console.log(`Uploaded: ${stagedDoc.originalFilename}`);
-          }
-        }
-      }
-
-      // Refresh documents list after upload
-      if (stagedDocs.length > 0) {
-        const refreshResult = await documentsApi.getChatDocuments(getUserId(), chatId);
-        if (refreshResult.success) {
-          setChatDocuments(refreshResult.data);
-          console.log(`Refreshed documents list: ${refreshResult.data.length} documents`);
-        }
-      }
-    } catch (error) {
-      console.error("File upload error:", error);
-    } finally {
-      setUploading(false);
-    }
+    // POC: Files are already uploaded, no staging needed
 
     // Create user message with file attachments if any
     const userMessage: Message = {
@@ -1325,8 +1392,8 @@ Generate a complete, updated version of the document incorporating all the reque
       sender: "user",
       timestamp: new Date(),
       domain,
-      attachments: stagedDocs.length > 0
-        ? stagedDocs.map((doc: StagedDocument) => ({
+      attachments: sessionDocuments.length > 0
+        ? sessionDocuments.map((doc: any) => ({
             id: doc.id,
             filename: doc.originalFilename,
             fileType: doc.fileType,
@@ -1344,97 +1411,83 @@ Generate a complete, updated version of the document incorporating all the reque
     });
 
     try {
-      // Log file information being sent
+      console.log('[POC Chat] Sending message with', sessionDocuments.length, 'documents');
+
+      // POC: Get document text from localStorage
+      let documentText = '';
       if (sessionDocuments.length > 0) {
-        console.log(`[Chat] Sending message with ${sessionDocuments.length} documents:`);
-        sessionDocuments.forEach((doc: StagedDocument) => {
-          console.log(`  - ${doc.originalFilename} (${doc.fileSize} bytes, has content: ${!!doc._fileContent})`);
-        });
+        const docId = sessionDocuments[0].id;
+        documentText = chatService.getDocumentText(docId) || '';
+        console.log('[POC Chat] Document text length:', documentText.length);
       }
 
-      const response = await sendMessage(currentSession.id, {
-        content: messageContent,
-        messageType: messageType,
-        domain: domain, // Pass domain for specialized context
-        attachments: selectedDocumentForEdit
-          ? [(selectedDocumentForEdit as Document).id]
-          : undefined,
-        uploadedDocuments: sessionDocuments.length > 0 ? sessionDocuments as any[] : undefined,
-      });
+      // Send message via chatService
+      const response = await chatService.sendMessage(
+        {
+          content: messageContent,
+          domain: domain,
+          uploadedDocuments: sessionDocuments.map((doc: any) => ({
+            id: doc.id,
+            originalFilename: doc.originalFilename,
+            fileType: doc.fileType,
+            fileSize: doc.fileSize,
+          })),
+        },
+        currentSession.messages,
+        documentText
+      );
 
-      if (response && response.success) {
-        const responseData = response.data;
-        console.log("[Chat] sendMessage response:", {
-          success: response.success,
-          aiType: responseData.aiResponse?.type,
-          modeSwitch: responseData.modeSwitch || null,
-          hasAnalysis: Boolean(responseData.analysisResult),
-          hasDraft: Boolean(responseData.draftResult),
-          aiPreview: responseData.aiResponse?.content?.slice(0, 200),
+      // Handle response from chatService
+      if (response && response.aiResponse) {
+        console.log("[POC Chat] Got AI response");
+
+        // Add AI message
+        const updatedMessages = [...newMessages, response.aiResponse];
+        setCurrentSession({
+          ...currentSession,
+          messages: updatedMessages,
         });
 
-        // Add AI response if provided
-        if (responseData.aiResponse) {
-          const aiMsg = responseData.aiResponse as Message;
-          const updatedMessages = [...newMessages, aiMsg];
-
-          // Use real supervisor data if available, store it for rendering
-          if (responseData.supervisorData) {
-            console.log("[Chat] Using real supervisor data for message", aiMsg.id, responseData.supervisorData);
-            setMessagePayloads((prev) => ({
-              ...prev,
-              [aiMsg.id]: {
-                supervisor: responseData.supervisorData,
-              },
-            }));
-          } else {
-            // Only attach mock payloads if no supervisor data (legacy fallback)
-            setMessagePayloads((prev) => ({
-              ...prev,
-              [aiMsg.id]: {
-                analysis: { ...mockAnalysisResult, id: `analysis_${Date.now()}` },
-                draft: { ...mockDraftResult, id: `draft_${Date.now()}` },
-              },
-            }));
-            console.log("[Chat] stored mock payloads for message", aiMsg.id, {
-              type: aiMsg.type,
-              hasAnalysis: Boolean(responseData.analysisResult),
-              hasDraft: Boolean(responseData.draftResult),
-            });
-          }
-
-          // If backend indicates a mode switch, toggle UI mode and append a small system message
-          if (responseData.modeSwitch?.detected) {
-            const switchingToDraft = responseData.modeSwitch.toDraftMode;
-            setIsDraftMode(switchingToDraft);
-            console.log(
-              "[Chat] mode switch detected:",
-              responseData.modeSwitch
-            );
-
-            const modeMessage: Message = {
-              id: `mode_${Date.now()}`,
-              content: switchingToDraft
-                ? "🔁 Switched to Draft Mode based on AI response (Mode C)"
-                : "🔁 Staying in Analysis Mode based on AI response (Mode A/B)",
-              sender: "assistant",
-              timestamp: new Date(),
-              domain,
-            };
-            updatedMessages.push(modeMessage);
-          }
-
-          setCurrentSession({
-            ...currentSession,
-            messages: updatedMessages,
-          });
+        // Store analysis result if available
+        if (response.analysisResult && response.aiResponse) {
+          console.log("[POC Chat] Got analysis result");
+          setMessagePayloads((prev) => ({
+            ...prev,
+            [response.aiResponse!.id]: {
+              analysis: response.analysisResult,
+            },
+          }));
         }
 
-        // (Per-message payloads are already attached above)
+        // Store supervisor data if available (for 3-tab display)
+        if (response.supervisorData && response.aiResponse) {
+          console.log("[POC Chat] Got supervisor data (3-tab response)");
+          console.log("[POC Chat] Supervisor response type:", response.supervisorData.response_type);
+          setMessagePayloads((prev) => ({
+            ...prev,
+            [response.aiResponse!.id]: {
+              ...prev[response.aiResponse!.id],
+              supervisor: response.supervisorData,
+            },
+          }));
+        }
       }
     } catch (error) {
-      console.error("Failed to send message:", error);
-      // Could add error handling UI here
+      console.error('[POC Chat] Error sending message:', error);
+      // Add error message
+      const errorMessage: Message = {
+        id: `msg_${Date.now()}`,
+        content: 'Sorry, I encountered an error. Please try again.',
+        sender: 'assistant',
+        timestamp: new Date(),
+        domain,
+        type: 'text',
+      };
+      const updatedMessages = [...newMessages, errorMessage];
+      setCurrentSession({
+        ...currentSession,
+        messages: updatedMessages,
+      });
     }
   };
 
@@ -1450,41 +1503,36 @@ Generate a complete, updated version of the document incorporating all the reque
       return;
     }
 
+    // Upload immediately using chatService
+    setUploading(true);
+
     try {
-      // Stage files (don't upload to S3 yet - wait for user to send message with prompt)
       for (const file of pdfFiles) {
-        const fileContent = await file.arrayBuffer();
+        console.log('[Chat] Uploading file:', file.name);
 
-        // Store in sessionDocuments for immediate display, but mark as not yet uploaded
-        const stagedDoc = {
-          id: `staged_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          originalFilename: file.name,
-          fileType: file.type,
-          fileSize: file.size,
-          s3Bucket: '', // Will be filled after upload
-          s3Key: '', // Will be filled after upload
-          uploadDate: new Date(),
-          analysisStatus: 'pending' as const,
-          _staged: true, // Mark as staged (not uploaded yet)
-          _file: file, // Store original file for upload later
-          _fileContent: fileContent, // Store content for Bedrock
-        };
+        const result = await chatService.uploadDocument(file, (progress) => {
+          console.log(`[Chat] Upload progress: ${progress}%`);
+        });
 
-        setSessionDocuments((prev) => [...prev, stagedDoc as any]);
-        console.log(`Staged file: ${file.name} (will upload when you send a message)`);
+        if (result.document) {
+          // Add to sessionDocuments
+          setSessionDocuments((prev) => [...prev, result.document as any]);
+          console.log('[POC Chat] Document uploaded:', result.document.id);
+        }
       }
 
-      // If showing document prompt, start the chat session so user can enter their prompt
+      // If showing document prompt, start the chat session
       if (showDocumentPrompt) {
         handleUploadFirst();
       }
-    } catch (error) {
-      console.error("File staging error:", error);
-      alert("Failed to prepare files. Please try again.");
-    }
 
-    // Files are now staged - wait for user to enter prompt and click send
-    // (Removed auto-send logic to match ChatGPT/Claude behavior)
+      alert('PDF uploaded successfully! Ask a question about it.');
+    } catch (error) {
+      console.error("[POC Chat] Upload error:", error);
+      alert("Failed to upload file. Please try again.");
+    } finally {
+      setUploading(false);
+    }
   };
 
 

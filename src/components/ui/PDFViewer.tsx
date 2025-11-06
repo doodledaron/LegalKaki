@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/Button'
 import { Eye, EyeOff, ZoomIn, ZoomOut, Download, X, Lightbulb, AlertCircle, Loader2 } from 'lucide-react'
 import { Document as PDFDocument, Page, pdfjs } from 'react-pdf'
-import { bedrockService } from '@/api/bedrockService'
+import { geminiService } from '@/api/geminiService'
 import { api } from '@/api'
 import { Document as DocumentType } from '@/types'
 import { collectionApiClient } from '@/api/realApi'
@@ -233,26 +233,26 @@ export function PDFViewer({ document, onClose, collectionId }: PDFViewerProps) {
       } catch (error) {
         console.error('Failed to analyze text:', error)
         
-        // Try fallback to Bedrock service if backend fails
+        // Try fallback to Gemini service if backend fails
         try {
-          console.log('Backend failed, trying Bedrock fallback...')
-          const bedrockResponse = await bedrockService.analyzeText({
+          console.log('Backend failed, trying Gemini fallback...')
+          const geminiResponse = await geminiService.analyzeText({
             selectedText,
             context: context,
             pageNumber: currentPage
           })
           
           setTooltip({
-            content: bedrockResponse.explanation,
+            content: geminiResponse.explanation,
             x: rect.left - viewerRect.left + rect.width / 2,
             y: rect.top - viewerRect.top - 10,
             visible: true,
-            category: bedrockResponse.category,
+            category: geminiResponse.category,
             selectedText: selectedText,
-            confidence: bedrockResponse.confidence
+            confidence: geminiResponse.confidence
           })
         } catch (fallbackError) {
-          console.error('Bedrock fallback also failed:', fallbackError)
+          console.error('Gemini fallback also failed:', fallbackError)
           
           // Final fallback explanation
           setTooltip({
@@ -640,7 +640,7 @@ export function PDFViewer({ document, onClose, collectionId }: PDFViewerProps) {
             </div>
             <div className="flex items-center space-x-2">
               <span className="caption text-text-secondary">
-                {isHighlightMode ? 'AI-powered legal analysis by Amazon Bedrock' : 'Legal document viewer'}
+                {isHighlightMode ? 'AI-powered legal analysis' : 'Legal document viewer'}
               </span>
             </div>
           </div>

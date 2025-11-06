@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { User, SignInRequest } from '@/api/types'
-import { authApi, userApi } from '@/api'
+import { mockUser } from '@/api/mockData'
 
 interface AuthContextType {
   user: User | null
@@ -16,105 +16,43 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+// POC Mode: Authentication is bypassed - always returns authenticated mock user
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [token, setToken] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [user] = useState<User | null>(mockUser)
+  const [token] = useState<string | null>('mock-token-poc-version')
+  const [isLoading, setIsLoading] = useState(false) // No loading in POC mode
 
-  // Check if user is authenticated
-  const isAuthenticated = !!user && !!token
+  // Always authenticated in POC mode
+  const isAuthenticated = true
 
-  // Initialize auth state from localStorage
+  // Initialize auth state immediately with mock user
   useEffect(() => {
-    const initializeAuth = async () => {
-      try {
-        const storedToken = localStorage.getItem('authToken')
-        const storedUser = localStorage.getItem('userData')
-
-        if (storedToken && storedUser) {
-          const userData = JSON.parse(storedUser)
-          setToken(storedToken)
-          setUser(userData)
-          
-          // Verify token is still valid by fetching user profile
-          try {
-            await refreshUser()
-          } catch (error) {
-            // Token is invalid, clear auth state
-            clearAuthState()
-          }
-        }
-      } catch (error) {
-        console.error('Auth initialization error:', error)
-        clearAuthState()
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    initializeAuth()
+    // Set loading to false immediately since we're using mock data
+    setIsLoading(false)
+    console.log('[Auth POC] Using mock user - authentication bypassed')
   }, [])
 
-  const clearAuthState = () => {
-    setUser(null)
-    setToken(null)
-    localStorage.removeItem('authToken')
-    localStorage.removeItem('userData')
-  }
-
+  // Placeholder login function (not used in POC)
   const login = async (credentials: SignInRequest) => {
-    try {
-      setIsLoading(true)
-
-      // Clear any existing auth state before login
-      clearAuthState()
-
-      const response = await authApi.signIn(credentials)
-      
-      if (response.success) {
-        const { user: userData, token: authToken } = response.data
-        
-        // Store auth data
-        setUser(userData)
-        setToken(authToken)
-        localStorage.setItem('authToken', authToken)
-        localStorage.setItem('userData', JSON.stringify(userData))
-
-        console.log('[Auth] Login successful, stored user data:', userData)
-      } else {
-        throw new Error('Login failed')
-      }
-    } catch (error) {
-      clearAuthState()
-      throw error
-    } finally {
-      setIsLoading(false)
-    }
+    console.log('[Auth POC] Login called but bypassed in POC mode', credentials)
+    // Do nothing in POC mode - already authenticated
+    return Promise.resolve()
   }
 
+  // Placeholder logout function (redirects to domains instead)
   const logout = () => {
-    clearAuthState()
-    // Redirect to login page
+    console.log('[Auth POC] Logout called but bypassed in POC mode')
+    // Redirect to domains page instead of login
     if (typeof window !== 'undefined') {
-      window.location.href = '/login'
+      window.location.href = '/domains'
     }
   }
 
+  // Placeholder refresh function (not needed in POC)
   const refreshUser = async () => {
-    if (!token) return
-
-    try {
-      const response = await userApi.getProfile()
-      if (response.success) {
-        setUser(response.data)
-        localStorage.setItem('userData', JSON.stringify(response.data))
-      } else {
-        throw new Error('Failed to refresh user data')
-      }
-    } catch (error) {
-      console.error('Failed to refresh user:', error)
-      throw error
-    }
+    console.log('[Auth POC] Refresh user called but bypassed in POC mode')
+    // Do nothing in POC mode
+    return Promise.resolve()
   }
 
   const value: AuthContextType = {

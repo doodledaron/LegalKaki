@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { Document, ActionItem } from '@/types'
-import { bedrockService, MindMapInsights, MindMapAnalysisRequest } from '@/api/bedrockService'
+import { geminiService, MindMapInsights, MindMapAnalysisRequest } from '@/api/geminiService'
 import { MindMapGenerationResponse } from '@/api/types'
 
 export interface CollectionMindMapData {
@@ -58,8 +58,8 @@ export async function generateEnhancedMindMap(data: CollectionMindMapData): Prom
       actionItems: data.actionItems
     }
     
-    // Get AI insights directly from Bedrock (client-side call)
-    const insights = await bedrockService.generateMindMapInsights(analysisRequest)
+    // Get AI insights directly from Gemini
+    const insights = await geminiService.generateMindMapInsights(analysisRequest)
     console.log('✨ AI insights generated:', insights)
     
     // Generate interactive nodes

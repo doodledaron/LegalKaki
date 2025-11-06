@@ -13,8 +13,17 @@ import {
 } from "./types";
 import { Document } from "@/types";
 import { mockClient } from "./mockClient";
-import { getEnvConfig } from "@/lib/envConfig";
+import { getEnvConfig, isPOCMode } from "@/lib/envConfig";
 import { getUserId } from "@/lib/auth-utils";
+
+// POC Mode: Skip all real API calls
+const shouldSkipRealApi = () => {
+  if (isPOCMode()) {
+    console.log('[POC Mode] Skipping real API call - using mock data');
+    return true;
+  }
+  return false;
+};
 
 // Structured response interface for mode detection
 interface StructuredResponse {
@@ -1098,10 +1107,8 @@ export class RealApiClient {
       }
     } catch (error) {
       console.error("Error processing response:", error);
-      // Fallback: clean up the content using existing functions
-      const cleanedContent =
-        bedrockService["cleanupResponse"](accumulatedContent);
-      aiResponse.content = cleanedContent;
+      // POC Mode: Just use accumulated content as-is
+      aiResponse.content = accumulatedContent || "Sorry, I encountered an error processing your request.";
     }
 
     return {
@@ -1162,8 +1169,8 @@ export class RealApiClient {
     const draftMatch = content.match(/\*\*.*DRAFT.*\*\*([\s\S]*?)(?:\*\*|$)/i);
     const draftContent = draftMatch ? draftMatch[1].trim() : content;
 
-    // Clean up the content
-    const cleanedContent = bedrockService["cleanupResponse"](draftContent);
+    // POC Mode: Use content as-is (no cleanup function needed)
+    const cleanedContent = draftContent.replace(/\*\*/g, '').replace(/\*/g, '').trim();
 
     return {
       id: `draft_${Date.now()}`,
@@ -1339,6 +1346,12 @@ export class RealApiClient {
   }
 
   async ensureChatExists(userSub: string, chatId: number): Promise<number> {
+    // POC Mode: Skip real API call
+    if (shouldSkipRealApi()) {
+      console.log(`[POC Mode] Chat ${chatId} assumed to exist (mock mode)`);
+      return chatId;
+    }
+
     try {
       // Check if chat exists by querying chat directly (no timeout - let it take as long as needed)
       const checkResponse = await fetch(
