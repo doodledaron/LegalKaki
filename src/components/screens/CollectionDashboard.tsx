@@ -1,19 +1,21 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
-import { ArrowLeft, Grid, List, CheckCircle, Clock, AlertTriangle, Eye, MoreVertical, ExternalLink, ClipboardList, FileText, Calendar, MessageCircle, Brain, FileIcon, FileSpreadsheet, ImageIcon, Loader2, Trash2, Sparkles } from 'lucide-react'
+import { ArrowLeft, Grid, List, CheckCircle, Clock, AlertTriangle, Eye, ExternalLink, ClipboardList, FileText, Calendar, MessageCircle, Brain, FileIcon, FileSpreadsheet, ImageIcon, Loader2, Trash2, Sparkles } from 'lucide-react'
 import { PDFViewer } from '@/components/ui/PDFViewer'
 import { MindMapViewer } from '@/components/ui/MindMapViewer'
-import { ActionItem, Document } from '@/types'
+import { ActionItem, Document, ChatSession } from '@/types'
 import { generateMindMapCode, createMindMapDataFromCollection, generateEnhancedMindMap, generateMindMapFromBackendResponse, EnhancedMindMapData, InteractiveMindMapNode } from '@/lib/mindMapGenerator'
-import { collectionsApi, useApiCall, useApiMutation, toolsApi } from '@/api'
+import { toolsApi } from '@/api'
 import { ConfirmDeleteModal } from '@/components/modals/ConfirmDeleteModal'
 import { getUserId } from '@/lib/auth-utils'
 import { getEnvConfig } from '@/lib/envConfig'
+import { getCollectionById, getChats, getDocuments, getActions, deleteCollection } from '@/lib/localStorage-utils'
+import { Collection } from '@/api/types'
 
 interface CollectionDashboardProps {
   collectionId: string
@@ -35,55 +37,47 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
   const [mindMapSummary, setMindMapSummary] = useState<string | undefined>(undefined)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [generatingSummaries, setGeneratingSummaries] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
-  const { 
-    data: dashboardData, 
-    loading: dashboardLoading, 
-    error: dashboardError 
-  } = useApiCall(() => collectionsApi.getCollectionDashboard(collectionId), [collectionId])
+  // Load data from localStorage
+  const [collectionData, setCollectionData] = useState<Collection | null>(null)
+  const [documents, setDocuments] = useState<Document[]>([])
+  const [actionItems, setActionItems] = useState<ActionItem[]>([])
+  const [conversations, setConversations] = useState<ChatSession[]>([])
 
-  const { mutate: deleteCollection, loading: isDeleting } = useApiMutation(
-    collectionsApi.deleteCollection
-  )
+  useEffect(() => {
+    // Get collection
+    const collection = getCollectionById(collectionId)
+    setCollectionData(collection || null)
 
-  // Use API data or fallback to empty data
-  const collectionData = dashboardData?.collection || {
-    id: collectionId,
-    title: 'Loading...',
-    domain: 'general' as const,
-    summary: 'Loading collection data...',
-    status: 'active' as const,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    itemCount: 0,
-    messageCount: 0,
-    documentCount: 0,
-    actionItemsCount: 0,
-    urgentActionsCount: 0,
-    tags: []
-  }
+    if (collection) {
+      // Get related documents
+      const allDocuments = getDocuments()
+      const collectionDocs = allDocuments.filter(doc => doc.collectionId === collectionId)
+      setDocuments(collectionDocs)
 
-  const documents: Document[] = dashboardData?.documents || []
-  const actionItems: ActionItem[] = dashboardData?.actionItems || []
-  
-  // Debug: Log action items to see what data we're getting
-  console.log('🔍 Action Items Debug:', {
+      // Get related chats
+      const allChats = getChats()
+      const collectionChats = allChats.filter(chat => chat.collectionId === collectionId)
+      setConversations(collectionChats)
+
+      // Get related actions (actions linked to chats in this collection)
+      const allActions = getActions()
+      const chatIds = collectionChats.map(chat => chat.id)
+      const collectionActions = allActions.filter(action =>
+        action.sourceConversation && chatIds.includes(action.sourceConversation)
+      )
+      setActionItems(collectionActions)
+    }
+  }, [collectionId])
+
+  // Calculate stats
+  const stats = {
+    totalConversations: conversations.length,
+    totalDocuments: documents.length,
     totalActions: actionItems.length,
-    actionItems: actionItems.map(action => ({
-      id: action.id,
-      title: action.title,
-      description: action.description,
-      externalLinksCount: action.externalLinks?.length || 0,
-      hasViewResourceButton: action.externalLinks?.some(link => link.text === 'View Resource')
-    }))
-  })
-  const conversations = dashboardData?.conversations || []
-  const stats = dashboardData?.stats || {
-    totalConversations: 0,
-    totalDocuments: 0,
-    totalActions: 0,
-    urgentActions: 0,
-    completedActions: 0
+    urgentActions: actionItems.filter(a => a.priority === 'urgent' && a.status !== 'completed').length,
+    completedActions: actionItems.filter(a => a.status === 'completed').length
   }
 
   // Filter action items based on active filter
@@ -283,33 +277,15 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
     }
   }
 
-  const handleDeleteCollection = async () => {
-    try {
-      await deleteCollection(collectionId)
-      console.log('✅ Collection deleted successfully')
-      onBack() // Navigate back to collection list after successful deletion
-    } catch (error) {
-      console.error('❌ Failed to delete collection:', error)
-      // Error handling is done by the useApiMutation hook
-    }
+  const handleDeleteCollection = () => {
+    setIsDeleting(true)
+    deleteCollection(collectionId)
+    console.log('✅ Collection deleted successfully')
+    onBack() // Navigate back to collection list
   }
 
-  // Loading state
-  if (dashboardLoading) {
-    return (
-      <div className="min-h-screen bg-background p-4 pb-nav">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center py-12">
-            <Loader2 className="w-12 h-12 animate-spin mx-auto text-purple-primary mb-4" />
-            <p className="body-regular text-text-secondary">Loading collection dashboard...</p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // Error state
-  if (dashboardError || !dashboardData) {
+  // If collection not found
+  if (!collectionData) {
     return (
       <div className="min-h-screen bg-background p-4 pb-nav">
         <div className="max-w-6xl mx-auto">
@@ -328,12 +304,12 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
               <div className="mb-4 flex justify-center">
                 <AlertTriangle className="w-16 h-16 text-red-500" />
               </div>
-              <h3 className="heading-3 mb-2 text-red-700">Error Loading Collection</h3>
+              <h3 className="heading-3 mb-2 text-red-700">Collection Not Found</h3>
               <p className="body-regular text-red-600 mb-4">
-                {dashboardError || 'Collection not found'}
+                This collection does not exist or has been deleted.
               </p>
-              <Button 
-                onClick={onBack} 
+              <Button
+                onClick={onBack}
                 variant="secondary"
                 className="border-red-300 text-red-700 hover:bg-red-100"
               >

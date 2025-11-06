@@ -154,7 +154,7 @@ export const mockCollections: Collection[] = [
 // Mock Action Items Data
 export const mockActionItems: ActionItem[] = [
   {
-    id: "1",
+    id: "action_1",
     title: "Seek legal advice immediately",
     description:
       "Contract contains potentially illegal clauses that need immediate attention",
@@ -162,12 +162,12 @@ export const mockActionItems: ActionItem[] = [
     status: "pending",
     dueDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // 2 days from now
     externalLinks: [
-      { text: "Find Legal Aid", url: "https://www.legalaid.gov.my" }, // TODO: Replace with LegalKaki resource URL
+      { text: "Find Legal Aid", url: "https://www.legalaid.gov.my" },
     ],
-    sourceConversation: "Employment Contract Review",
+    sourceConversation: "chat_1", // Links to Employment Contract Review chat
   },
   {
-    id: "2",
+    id: "action_2",
     title: "Review salary compliance with minimum wage",
     description:
       "Ensure your salary meets the current minimum wage requirements",
@@ -175,41 +175,82 @@ export const mockActionItems: ActionItem[] = [
     status: "pending",
     dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 1 week from now
     externalLinks: [
-      { text: "Check Minimum Wage Rates", url: "https://www.mohr.gov.my" }, // TODO: Replace with LegalKaki resource URL
+      { text: "Check Minimum Wage Rates", url: "https://www.mohr.gov.my" },
     ],
-    sourceConversation: "Employment Contract Review",
+    sourceConversation: "chat_1", // Links to Employment Contract Review chat
   },
   {
-    id: "3",
+    id: "action_3",
     title: "Verify working hours arrangement",
     description: "Confirm that working hours comply with Employment Act limits",
     priority: "normal",
     status: "pending",
-    sourceConversation: "Employment Contract Review",
+    sourceConversation: "chat_1", // Links to Employment Contract Review chat
   },
   {
-    id: "4",
+    id: "action_4",
     title: "Submit SSM registration form",
     description:
       "Complete business registration with Companies Commission of Malaysia",
     priority: "normal",
     status: "completed",
     externalLinks: [
-      { text: "SSM Portal", url: "https://www.ssm.com.my" }, // TODO: Replace with LegalKaki resource URL
+      { text: "SSM Portal", url: "https://www.ssm.com.my" },
     ],
-    sourceConversation: "Business Registration Inquiry",
+    sourceConversation: "chat_2", // Links to Business Registration Inquiry chat
   },
   {
-    id: "5",
+    id: "action_5",
     title: "Calculate stamp duty for property purchase",
     description: "Determine exact stamp duty amount for property transfer",
     priority: "urgent",
     status: "pending",
     dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days from now
     externalLinks: [
-      { text: "Stamp Duty Calculator", url: "https://www.hasil.gov.my" }, // TODO: Replace with LegalKaki resource URL
+      { text: "Stamp Duty Calculator", url: "https://www.hasil.gov.my" },
     ],
-    sourceConversation: "Property Purchase Agreement",
+    sourceConversation: "chat_3", // Links to Property Purchase Agreement chat
+  },
+  {
+    id: "action_6",
+    title: "Verify property title deed authenticity",
+    description: "Check property title deed with Land Office to ensure no encumbrances",
+    priority: "urgent",
+    status: "pending",
+    dueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000), // 5 days from now
+    externalLinks: [
+      { text: "Land Office Portal", url: "https://www.jpph.gov.my" },
+    ],
+    sourceConversation: "chat_3", // Links to Property Purchase Agreement chat
+  },
+  {
+    id: "action_7",
+    title: "Arrange legal fees payment",
+    description: "Prepare payment for legal fees and disbursements to solicitor",
+    priority: "normal",
+    status: "pending",
+    dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 1 week from now
+    sourceConversation: "chat_3", // Links to Property Purchase Agreement chat
+  },
+  {
+    id: "action_8",
+    title: "Schedule property inspection",
+    description: "Arrange final property inspection before signing agreement",
+    priority: "important",
+    status: "completed",
+    sourceConversation: "chat_3", // Links to Property Purchase Agreement chat
+  },
+  {
+    id: "action_9",
+    title: "Review loan agreement terms",
+    description: "Carefully review all terms and conditions in the mortgage loan agreement",
+    priority: "important",
+    status: "pending",
+    dueDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000), // 10 days from now
+    externalLinks: [
+      { text: "BNM Loan Information", url: "https://www.bnm.gov.my" },
+    ],
+    sourceConversation: "chat_3", // Links to Property Purchase Agreement chat
   },
 ];
 
@@ -226,7 +267,7 @@ export const mockDocuments: Document[] = [
     uploadDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
     analysisStatus: "completed",
     contentSummary: "Employment contract with standard terms and conditions",
-    collectionId: "collection-1", // Linked to Employment Contract Review collection
+    collectionId: "1", // Linked to Employment Contract Review collection
     metadata: {
       pages: 5,
       language: "en",
@@ -244,7 +285,7 @@ export const mockDocuments: Document[] = [
     s3Key: `documents/${DEFAULT_USER_ID}/550e8400-e29b-41d4-a716-446655440002.docx`,
     uploadDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
     analysisStatus: "processing",
-    collectionId: "collection-2", // Linked to Business Registration collection
+    collectionId: "2", // Linked to Business Registration collection
     metadata: {
       pages: 12,
       language: "en",
@@ -262,7 +303,7 @@ export const mockDocuments: Document[] = [
     uploadDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3 days ago
     analysisStatus: "completed",
     contentSummary: "Corporate bylaws and governance structure",
-    collectionId: "collection-2", // Linked to Business Registration collection
+    collectionId: "2", // Linked to Business Registration collection
     metadata: {
       pages: 8,
       language: "en",
@@ -278,11 +319,65 @@ export const mockDocuments: Document[] = [
     s3Bucket: "legalkaki-documents",
     s3Key: `documents/${DEFAULT_USER_ID}/550e8400-e29b-41d4-a716-446655440004.pdf`,
     uploadDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
-    analysisStatus: "pending",
+    analysisStatus: "completed",
+    contentSummary: "Property sale agreement with terms and conditions for residential property transfer",
+    collectionId: "3", // Linked to Property Purchase Agreement collection
     metadata: {
       pages: 15,
       language: "en",
       wordCount: 4200,
+    },
+  },
+  {
+    id: "550e8400-e29b-41d4-a716-446655440005",
+    originalFilename: "Property_Valuation_Report.pdf",
+    storedFilename: "550e8400-e29b-41d4-a716-446655440005.pdf",
+    fileType: "application/pdf",
+    fileSize: 524288, // 512KB
+    s3Bucket: "legalkaki-documents",
+    s3Key: `documents/${DEFAULT_USER_ID}/550e8400-e29b-41d4-a716-446655440005.pdf`,
+    uploadDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 1 week ago
+    analysisStatus: "completed",
+    contentSummary: "Professional property valuation report for residential property in Kuala Lumpur",
+    collectionId: "3", // Linked to Property Purchase Agreement collection
+    metadata: {
+      pages: 8,
+      language: "en",
+      wordCount: 1800,
+    },
+  },
+  {
+    id: "550e8400-e29b-41d4-a716-446655440006",
+    originalFilename: "Title_Deed_Copy.pdf",
+    storedFilename: "550e8400-e29b-41d4-a716-446655440006.pdf",
+    fileType: "application/pdf",
+    fileSize: 204800, // 200KB
+    s3Bucket: "legalkaki-documents",
+    s3Key: `documents/${DEFAULT_USER_ID}/550e8400-e29b-41d4-a716-446655440006.pdf`,
+    uploadDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000), // 10 days ago
+    analysisStatus: "completed",
+    contentSummary: "Official property title deed for verification",
+    collectionId: "3", // Linked to Property Purchase Agreement collection
+    metadata: {
+      pages: 3,
+      language: "en",
+      wordCount: 850,
+    },
+  },
+  {
+    id: "550e8400-e29b-41d4-a716-446655440007",
+    originalFilename: "Stamp_Duty_Calculation.xlsx",
+    storedFilename: "550e8400-e29b-41d4-a716-446655440007.xlsx",
+    fileType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    fileSize: 102400, // 100KB
+    s3Bucket: "legalkaki-documents",
+    s3Key: `documents/${DEFAULT_USER_ID}/550e8400-e29b-41d4-a716-446655440007.xlsx`,
+    uploadDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3 days ago
+    analysisStatus: "completed",
+    contentSummary: "Stamp duty calculation spreadsheet for property transfer",
+    collectionId: "3", // Linked to Property Purchase Agreement collection
+    metadata: {
+      language: "en",
     },
   },
 ];
@@ -469,10 +564,10 @@ The Partners agree to carry on the business of [Business Description] under the 
 // Mock Chat Sessions
 export const mockChatSessions: ChatSession[] = [
   {
-    id: "1",
+    id: "chat_1",
     domain: "employment",
     title: "Employment Contract Review",
-    collectionId: "collection-1", // Linked to Employment Contract Review collection
+    collectionId: "1", // Linked to Employment Contract Review collection
     messages: [
       {
         id: "1",
@@ -495,10 +590,10 @@ export const mockChatSessions: ChatSession[] = [
     updatedAt: new Date(Date.now() - 50 * 60 * 1000),
   },
   {
-    id: "2",
+    id: "chat_2",
     domain: "company_setup",
     title: "Business Registration Inquiry",
-    collectionId: "collection-2", // Linked to Business Registration collection
+    collectionId: "2", // Linked to Business Registration collection
     messages: [
       {
         id: "3",
@@ -519,6 +614,32 @@ export const mockChatSessions: ChatSession[] = [
     ],
     createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
     updatedAt: new Date(Date.now() - 2 * 60 * 60 * 1000 + 5 * 60 * 1000),
+  },
+  {
+    id: "chat_3",
+    domain: "contracts",
+    title: "Property Purchase Agreement",
+    collectionId: "3", // Linked to Property Purchase Agreement collection
+    messages: [
+      {
+        id: "5",
+        content:
+          "Hi! I'm your legal assistant for Contract matters. How can I assist you today?",
+        sender: "assistant",
+        timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000), // 3 hours ago
+        domain: "contracts",
+        type: "text",
+      },
+      {
+        id: "6",
+        content: "I need help reviewing a property purchase agreement",
+        sender: "user",
+        timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000 + 5 * 60 * 1000), // 2h 55m ago
+        domain: "contracts",
+      },
+    ],
+    createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
+    updatedAt: new Date(Date.now() - 3 * 60 * 60 * 1000 + 5 * 60 * 1000),
   },
 ];
 

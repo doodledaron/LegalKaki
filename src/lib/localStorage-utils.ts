@@ -92,7 +92,12 @@ export function setUser(user: User): void {
 // =======================
 
 export function getDocuments(): Document[] {
-  return getStorage(STORAGE_KEYS.DOCUMENTS, mockDocuments)
+  const documents = getStorage(STORAGE_KEYS.DOCUMENTS, mockDocuments)
+  // Convert date strings back to Date objects
+  return documents.map(doc => ({
+    ...doc,
+    uploadDate: doc.uploadDate instanceof Date ? doc.uploadDate : new Date(doc.uploadDate),
+  }))
 }
 
 export function setDocuments(documents: Document[]): void {
@@ -221,7 +226,13 @@ export async function fileToBase64(file: File): Promise<string> {
 // =======================
 
 export function getCollections(): Collection[] {
-  return getStorage(STORAGE_KEYS.COLLECTIONS, mockCollections)
+  const collections = getStorage(STORAGE_KEYS.COLLECTIONS, mockCollections)
+  // Convert date strings back to Date objects
+  return collections.map(col => ({
+    ...col,
+    createdAt: col.createdAt instanceof Date ? col.createdAt : new Date(col.createdAt),
+    updatedAt: col.updatedAt instanceof Date ? col.updatedAt : new Date(col.updatedAt),
+  }))
 }
 
 export function setCollections(collections: Collection[]): void {
@@ -235,7 +246,11 @@ export function addCollection(collection: Collection): void {
 
 export function getCollectionById(id: string): Collection | undefined {
   const collections = getCollections()
-  return collections.find((col) => col.id === id)
+  const collection = collections.find((col) => col.id === id)
+  if (!collection) return undefined
+
+  // Dates are already converted by getCollections()
+  return collection
 }
 
 export function updateCollection(
@@ -255,12 +270,51 @@ export function deleteCollection(id: string): void {
   setCollections(collections.filter((col) => col.id !== id))
 }
 
+/**
+ * Link chat to collection and update related documents
+ */
+export function linkChatToCollection(chatId: string, collectionId: string): void {
+  // Update chat
+  updateChat(chatId, { collectionId })
+
+  // Get chat to find related documents
+  const chat = getChatById(chatId)
+  if (chat?.documents) {
+    // Update all documents in this chat
+    const documents = getDocuments()
+    const updatedDocuments = documents.map(doc => {
+      if (chat.documents?.some(chatDoc => chatDoc.id === doc.id)) {
+        return { ...doc, collectionId }
+      }
+      return doc
+    })
+    setDocuments(updatedDocuments)
+  }
+
+  // Update collection metadata
+  const collection = getCollectionById(collectionId)
+  if (collection) {
+    const updatedAt = new Date()
+    updateCollection(collectionId, { updatedAt })
+  }
+}
+
 // =======================
 // Chat Operations
 // =======================
 
 export function getChats(): ChatSession[] {
-  return getStorage(STORAGE_KEYS.CHATS, mockChatSessions)
+  const chats = getStorage(STORAGE_KEYS.CHATS, mockChatSessions)
+  // Convert date strings back to Date objects
+  return chats.map(chat => ({
+    ...chat,
+    createdAt: chat.createdAt instanceof Date ? chat.createdAt : new Date(chat.createdAt),
+    updatedAt: chat.updatedAt instanceof Date ? chat.updatedAt : new Date(chat.updatedAt),
+    messages: chat.messages?.map(msg => ({
+      ...msg,
+      timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
+    })),
+  }))
 }
 
 export function setChats(chats: ChatSession[]): void {
@@ -296,7 +350,12 @@ export function deleteChat(id: string): void {
 // =======================
 
 export function getActions(): ActionItem[] {
-  return getStorage(STORAGE_KEYS.ACTIONS, mockActionItems)
+  const actions = getStorage(STORAGE_KEYS.ACTIONS, mockActionItems)
+  // Convert date strings back to Date objects
+  return actions.map(action => ({
+    ...action,
+    dueDate: action.dueDate ? (action.dueDate instanceof Date ? action.dueDate : new Date(action.dueDate)) : undefined,
+  }))
 }
 
 export function setActions(actions: ActionItem[]): void {

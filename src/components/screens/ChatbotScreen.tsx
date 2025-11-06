@@ -56,6 +56,8 @@ import {
   ChatSession,
 } from "@/types";
 import { RetrievedChunks } from "@/components/chat/RetrievedChunks";
+import { addCollection, linkChatToCollection, updateChat, getChatById } from "@/lib/localStorage-utils";
+import { Collection } from "@/api/types";
 import type {
   AnalysisResult as ApiAnalysisResult,
   DraftResult as ApiDraftResult,
@@ -1623,67 +1625,45 @@ Generate a complete, updated version of the document incorporating all the reque
     }
 
     try {
-      // Serialize current state
-      const serializedMessages = currentSession.messages.map(msg => ({
-        id: msg.id,
-        content: msg.content,
-        sender: msg.sender,
-        timestamp: msg.timestamp.toISOString(),
-        attachments: msg.attachments,
-        domain: msg.domain,
-        type: msg.type,
-      }));
+      let finalCollectionId: string;
 
-      // Debug: Log all document sources
-      console.log('📋 Document sources before save:');
-      console.log('  sessionDocuments:', sessionDocuments.length, sessionDocuments);
-      console.log('  chatDocuments:', chatDocuments.length, chatDocuments);
+      // Create new collection or use existing
+      if (!collectionId) {
+        // Generate title from first user message if not provided
+        const firstUserMessage = currentSession.messages.find(m => m.sender === 'user');
+        const collectionTitle = title || firstUserMessage?.content.substring(0, 50) || 'Untitled Collection';
 
-      // Extract staged files (files with _staged flag that haven't been uploaded yet)
-      const stagedFiles = sessionDocuments
-        .filter((doc: StagedDocument) => doc._staged && doc._fileContent)
-        .map((doc: StagedDocument) => ({
-          filename: doc.originalFilename,
-          fileContent: Array.from(new Uint8Array(doc._fileContent!)), // Convert ArrayBuffer to number array
-          fileType: doc.fileType,
-          fileSize: doc.fileSize,
-        }));
+        const newCollection: Collection = {
+          id: `collection_${Date.now()}`,
+          title: collectionTitle,
+          domain: domain || 'general',
+          summary: `Collection created from ${domain} conversation`,
+          status: 'active',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          itemCount: currentSession.messages.length,
+          messageCount: currentSession.messages.length,
+          documentCount: chatDocuments.length,
+          actionItemsCount: 0,
+          urgentActionsCount: 0,
+          tags: [domain || 'general']
+        };
 
-      // Get already-uploaded document IDs from the chat
-      const existingDocumentIds = chatDocuments
-        .filter(doc => doc.id && !doc.id.startsWith('staged_'))
-        .map(doc => parseInt(doc.id));
-
-      console.log(`📤 Saving conversation with ${stagedFiles.length} staged files and ${existingDocumentIds.length} existing documents`);
-      console.log('  Staged files:', stagedFiles);
-      console.log('  Existing document IDs:', existingDocumentIds);
-
-      // Extract numeric chat ID from session ID (e.g., "session_1234567_abc" -> 1234567)
-      const chatIdMatch = currentSession.id.match(/session_(\d+)/);
-      const chatId = chatIdMatch ? parseInt(chatIdMatch[1]) : Date.now();
-
-      console.log(`📝 Session ID: ${currentSession.id}, Numeric Chat ID: ${chatId}`);
-
-      // Call API to save (collectionId is optional - will create new collection if undefined)
-      await collectionsApi.saveConversationToCollection({
-        collection_id: collectionId || undefined,
-        chat_id: chatId,
-        user_sub: getUserId(),
-        title: title || undefined,
-        domain: domain || undefined,
-        messages: serializedMessages,
-        messagePayloads,
-        stagedFiles: stagedFiles.length > 0 ? stagedFiles : undefined,
-        existingDocumentIds: existingDocumentIds.length > 0 ? existingDocumentIds : undefined,
-      });
-
-      console.log("✅ Conversation saved successfully");
-
-      // Update local state to show collection info in button
-      if (collectionId && !currentCollectionId) {
-        setCurrentCollectionId(collectionId.toString());
+        addCollection(newCollection);
+        finalCollectionId = newCollection.id;
+        console.log(`✅ Created new collection: ${collectionTitle}`);
+      } else {
+        finalCollectionId = collectionId.toString();
       }
-      if (title && !currentCollectionName) {
+
+      // Link chat and documents to collection
+      linkChatToCollection(currentSession.id, finalCollectionId);
+
+      console.log("✅ Conversation saved to collection successfully");
+
+      // Update local state
+      setCurrentCollectionId(finalCollectionId);
+      if (!collectionId && title) {
         setCurrentCollectionName(title);
       }
     } catch (error) {

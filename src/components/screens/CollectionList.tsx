@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
-import { ArrowLeft, MessageCircle, FileText, AlertTriangle, CheckCircle, ChevronRight, Search, Grid, List, Loader2, Trash2 } from 'lucide-react'
-import { collectionsApi, userApi, useApiCall, useApiMutation } from '@/api'
+import { ArrowLeft, MessageCircle, FileText, CheckCircle, ChevronRight, Search, Grid, List, Trash2, AlertTriangle } from 'lucide-react'
 import { ConfirmDeleteModal } from '@/components/modals/ConfirmDeleteModal'
 import { Collection } from '@/api/types'
+import { getCollections, deleteCollection, getActions } from '@/lib/localStorage-utils'
 
 interface CollectionListProps {
   onBack: () => void
@@ -21,43 +21,40 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'archived' | 'completed'>('all')
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [collectionToDelete, setCollectionToDelete] = useState<Collection | null>(null)
+  const [collections, setCollections] = useState<Collection[]>([])
+  const [refresh, setRefresh] = useState(0)
 
-  // Load collections from API with filters
-  const { 
-    data: collections, 
-    loading: collectionsLoading, 
-    error: collectionsError 
-  } = useApiCall(() => collectionsApi.getCollections({
-    status: statusFilter === 'all' ? undefined : statusFilter,
-    search: searchQuery || undefined,
-    limit: 50
-  }), [statusFilter, searchQuery])
+  // Load collections from localStorage
+  useEffect(() => {
+    const allCollections = getCollections()
+    setCollections(allCollections)
+  }, [refresh])
 
-  // Load user stats from API  
-  const { 
-    data: userStats, 
-    loading: statsLoading, 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    error: statsError 
-  } = useApiCall(() => userApi.getStats(), [])
-
-  // Delete collection mutation
-  const deleteCollectionMutation = useApiMutation(collectionsApi.deleteCollection)
-
-  const stats = userStats ? {
-    totalCollections: userStats.totalCollections,
-    activeCollections: userStats.activeCollections,
-    totalActions: userStats.totalActions,
-    urgentActions: userStats.urgentActions
-  } : {
-    totalCollections: 0,
-    activeCollections: 0,
-    totalActions: 0,
-    urgentActions: 0
+  // Calculate stats from collections and actions
+  const allActions = getActions()
+  const stats = {
+    totalCollections: collections.length,
+    activeCollections: collections.filter(c => c.status === 'active').length,
+    totalActions: allActions.length,
+    urgentActions: allActions.filter(a => a.priority === 'urgent' && a.status !== 'completed').length
   }
 
-  // Collections are already filtered by API, no need for client-side filtering
-  const filteredCollections = collections || []
+  // Client-side filtering
+  const filteredCollections = collections.filter(collection => {
+    // Status filter
+    if (statusFilter !== 'all' && collection.status !== statusFilter) {
+      return false
+    }
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      return (
+        collection.title.toLowerCase().includes(query) ||
+        collection.summary.toLowerCase().includes(query)
+      )
+    }
+    return true
+  })
 
   const handleDeleteClick = (collection: Collection, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -65,17 +62,13 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
     setShowDeleteModal(true)
   }
 
-  const handleDeleteCollection = async () => {
+  const handleDeleteCollection = () => {
     if (!collectionToDelete) return
 
-    try {
-      await deleteCollectionMutation.mutate(collectionToDelete.id)
-      setShowDeleteModal(false)
-      setCollectionToDelete(null)
-      // The collections will automatically refetch due to the useApiCall hook
-    } catch (err) {
-      console.error('Failed to delete collection:', err)
-    }
+    deleteCollection(collectionToDelete.id)
+    setShowDeleteModal(false)
+    setCollectionToDelete(null)
+    setRefresh(r => r + 1) // Refresh the list
   }
 
 
@@ -115,52 +108,36 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
 
           {/* Stats Row */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <motion.div 
+            <motion.div
               className="text-center p-4 bg-surface-white rounded-lg border border-gray-200"
               whileHover={{ scale: 1.02 }}
               transition={{ duration: 0.2 }}
             >
-              {statsLoading ? (
-                <Loader2 className="w-6 h-6 animate-spin mx-auto text-purple-primary" />
-              ) : (
-                <div className="text-2xl font-bold text-purple-primary">{stats.totalCollections}</div>
-              )}
+              <div className="text-2xl font-bold text-purple-primary">{stats.totalCollections}</div>
               <div className="body-small text-text-secondary">Total Collections</div>
             </motion.div>
-            <motion.div 
+            <motion.div
               className="text-center p-4 bg-surface-white rounded-lg border border-gray-200"
               whileHover={{ scale: 1.02 }}
               transition={{ duration: 0.2 }}
             >
-              {statsLoading ? (
-                <Loader2 className="w-6 h-6 animate-spin mx-auto text-success" />
-              ) : (
-                <div className="text-2xl font-bold text-success">{stats.activeCollections}</div>
-              )}
+              <div className="text-2xl font-bold text-success">{stats.activeCollections}</div>
               <div className="body-small text-text-secondary">Active</div>
             </motion.div>
-            <motion.div 
+            <motion.div
               className="text-center p-4 bg-surface-white rounded-lg border border-gray-200"
               whileHover={{ scale: 1.02 }}
               transition={{ duration: 0.2 }}
             >
-              {statsLoading ? (
-                <Loader2 className="w-6 h-6 animate-spin mx-auto text-info" />
-              ) : (
-                <div className="text-2xl font-bold text-info">{stats.totalActions}</div>
-              )}
+              <div className="text-2xl font-bold text-info">{stats.totalActions}</div>
               <div className="body-small text-text-secondary">Total Actions</div>
             </motion.div>
-            <motion.div 
+            <motion.div
               className="text-center p-4 bg-surface-white rounded-lg border border-gray-200"
               whileHover={{ scale: 1.02 }}
               transition={{ duration: 0.2 }}
             >
-              {statsLoading ? (
-                <Loader2 className="w-6 h-6 animate-spin mx-auto text-warning" />
-              ) : (
-                <div className="text-2xl font-bold text-warning">{stats.urgentActions}</div>
-              )}
+              <div className="text-2xl font-bold text-warning">{stats.urgentActions}</div>
               <div className="body-small text-text-secondary">Urgent</div>
             </motion.div>
           </div>
@@ -227,43 +204,13 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
         </motion.div>
 
         {/* Collections Grid/List */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
         >
-          {/* Error State */}
-          {collectionsError && (
-            <Card className="text-center py-12 border-red-200 bg-red-50">
-              <CardContent>
-                <div className="mb-4 flex justify-center">
-                  <AlertTriangle className="w-16 h-16 text-red-500" />
-                </div>
-                <h3 className="heading-3 mb-2 text-red-700">Error Loading Collections</h3>
-                <p className="body-regular text-red-600 mb-4">
-                  {collectionsError}
-                </p>
-                <Button 
-                  onClick={() => window.location.reload()} 
-                  variant="secondary"
-                  className="border-red-300 text-red-700 hover:bg-red-100"
-                >
-                  Try Again
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Loading State */}
-          {collectionsLoading && !collectionsError && (
-            <div className="text-center py-12">
-              <Loader2 className="w-12 h-12 animate-spin mx-auto text-purple-primary mb-4" />
-              <p className="body-regular text-text-secondary">Loading your collections...</p>
-            </div>
-          )}
-
           {/* Empty State */}
-          {!collectionsLoading && !collectionsError && filteredCollections.length === 0 && (
+          {filteredCollections.length === 0 && (
             <Card className="text-center py-12">
               <CardContent>
                 <div className="mb-4 flex justify-center">
@@ -284,7 +231,7 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
           )}
 
           {/* Collections Grid/List */}
-          {!collectionsLoading && !collectionsError && filteredCollections.length > 0 && (
+          {filteredCollections.length > 0 && (
             <div className={viewMode === 'grid' 
               ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' 
               : 'space-y-4'
