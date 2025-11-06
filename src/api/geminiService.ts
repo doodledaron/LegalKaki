@@ -88,6 +88,8 @@ class GeminiService {
   private genAI: GoogleGenerativeAI | null = null;
   private model: any = null;
 
+  private embeddingModel: any = null;
+
   constructor() {
     const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
@@ -102,7 +104,9 @@ class GeminiService {
       // Use Gemini Flash (1.5) for faster and cheaper responses
       const modelName = process.env.NEXT_PUBLIC_GEMINI_MODEL || "gemini-1.5-flash";
       this.model = this.genAI.getGenerativeModel({ model: modelName });
-      console.log(`✅ [Gemini Service] Initialized successfully with ${modelName}`);
+      // Initialize embedding model for RAG
+      this.embeddingModel = this.genAI.getGenerativeModel({ model: "text-embedding-004" });
+      console.log(`✅ [Gemini Service] Initialized successfully with ${modelName} and text-embedding-004`);
     } catch (error) {
       console.error('❌ [Gemini Service] Failed to initialize:', error);
     }
@@ -429,7 +433,7 @@ Generate comprehensive insights now.`;
     domain: string
   ): string {
     const historyText = chatHistory
-      .slice(-5) // Last 5 messages for context
+      .slice(-2) // Last 5 messages for context (history)
       .map(msg => `${msg.sender}: ${msg.content}`)
       .join('\n');
 
@@ -712,6 +716,100 @@ This document was generated based on your request: "${prompt}"
 --- END OF DOCUMENT ---
 
 Note: This is a template document. Please customize with specific details and have it reviewed by a qualified legal professional before use.`;
+  }
+
+  /**
+   * Generate embedding for a text using Gemini
+   * Used for RAG (Retrieval-Augmented Generation)
+   */
+  async generateEmbedding(text: string): Promise<number[]> {
+    console.log('[Gemini Service] Generating embedding...');
+
+    // If no API key, return mock embedding
+    if (!this.embeddingModel) {
+      console.log('[Gemini Service] Using mock embedding (no API key)');
+      return this.generateMockEmbedding(text);
+    }
+
+    try {
+      const result = await this.embeddingModel.embedContent(text);
+      const embedding = result.embedding;
+
+      if (!embedding || !embedding.values) {
+        throw new Error('Invalid embedding response');
+      }
+
+      console.log('[Gemini Service] Embedding generated, dimensions:', embedding.values.length);
+      return embedding.values;
+    } catch (error) {
+      console.error('[Gemini Service] Error generating embedding:', error);
+      return this.generateMockEmbedding(text);
+    }
+  }
+
+  /**
+   * Generate embeddings for multiple texts in batch
+   * More efficient than calling generateEmbedding multiple times
+   */
+  async generateEmbeddingsBatch(texts: string[]): Promise<number[][]> {
+    console.log(`[Gemini Service] Generating ${texts.length} embeddings in batch...`);
+
+    // If no API key, return mock embeddings
+    if (!this.embeddingModel) {
+      console.log('[Gemini Service] Using mock embeddings (no API key)');
+      return texts.map(text => this.generateMockEmbedding(text));
+    }
+
+    try {
+      // Generate embeddings one by one (Gemini API may not support batch)
+      // In production, you might want to implement proper batching
+      const embeddings: number[][] = [];
+
+      for (const text of texts) {
+        const result = await this.embeddingModel.embedContent(text);
+        const embedding = result.embedding;
+
+        if (!embedding || !embedding.values) {
+          throw new Error('Invalid embedding response');
+        }
+
+        embeddings.push(embedding.values);
+      }
+
+      console.log(`[Gemini Service] Generated ${embeddings.length} embeddings`);
+      return embeddings;
+    } catch (error) {
+      console.error('[Gemini Service] Error generating batch embeddings:', error);
+      return texts.map(text => this.generateMockEmbedding(text));
+    }
+  }
+
+  /**
+   * Generate a mock embedding based on text hash
+   * Used as fallback when Gemini is unavailable
+   */
+  private generateMockEmbedding(text: string): number[] {
+    // Generate a deterministic 768-dimensional vector based on text
+    const dimensions = 768;
+    const embedding: number[] = [];
+
+    // Use text hash as seed
+    let hash = 0;
+    for (let i = 0; i < text.length; i++) {
+      hash = ((hash << 5) - hash) + text.charCodeAt(i);
+      hash = hash & hash;
+    }
+
+    // Generate pseudo-random values
+    for (let i = 0; i < dimensions; i++) {
+      const seed = hash + i;
+      const x = Math.sin(seed) * 10000;
+      embedding.push(x - Math.floor(x));
+    }
+
+    // Normalize to unit vector
+    const magnitude = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0));
+    return embedding.map(val => val / magnitude);
   }
 }
 

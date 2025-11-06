@@ -55,6 +55,7 @@ import {
   ExternalLink,
   ChatSession,
 } from "@/types";
+import { RetrievedChunks } from "@/components/chat/RetrievedChunks";
 import type {
   AnalysisResult as ApiAnalysisResult,
   DraftResult as ApiDraftResult,
@@ -444,8 +445,8 @@ const CombinedMessageBubble = memo(
 
 CombinedMessageBubble.displayName = "CombinedMessageBubble";
 
-// Simplified Supervisor Bubble - for simplified 3-tab structure
-const SimplifiedSupervisorBubble = memo(({ supervisorData }: { supervisorData: Record<string, unknown> }) => {
+// 3-Tab Legal Analysis Bubble (Simplified Format)
+const LegalAnalysisBubble = memo(({ supervisorData, message }: { supervisorData: Record<string, unknown>; message?: Message }) => {
   const { explanation, analysis, actions } = supervisorData;
 
   const explanationData = explanation as { text?: string };
@@ -582,15 +583,22 @@ const SimplifiedSupervisorBubble = memo(({ supervisorData }: { supervisorData: R
             </div>
           </TabsContent>
         </Tabs>
+
+        {/* Show retrieved chunks if available */}
+        {message?.retrievedChunks && (
+          <div className="px-4 pb-4">
+            <RetrievedChunks chunks={message.retrievedChunks} />
+          </div>
+        )}
       </div>
     </motion.div>
   );
 });
 
-SimplifiedSupervisorBubble.displayName = "SimplifiedSupervisorBubble";
+LegalAnalysisBubble.displayName = "LegalAnalysisBubble";
 
-// Supervisor Message Bubble Component - renders tabs from supervisor response with structured UI
-const SupervisorMessageBubble = memo(({ supervisorData }: { supervisorData: Record<string, unknown> }) => {
+// Legacy Supervisor Bubble Component (handles old multi-format responses)
+const LegacySupervisorBubble = memo(({ supervisorData, message }: { supervisorData: Record<string, unknown>; message?: Message }) => {
   const { explanation_tab, analysis_tab, action_tab, extractedData, response_type, conversation_context,
           explanation, analysis, actions } = supervisorData;
 
@@ -599,7 +607,7 @@ const SupervisorMessageBubble = memo(({ supervisorData }: { supervisorData: Reco
 
   // If simplified structure, use simplified rendering
   if (hasSimplifiedStructure && response_type === 'final') {
-    return <SimplifiedSupervisorBubble supervisorData={supervisorData} />;
+    return <LegalAnalysisBubble supervisorData={supervisorData} message={message} />;
   }
 
   // Determine which tabs are active (legacy format)
@@ -836,6 +844,13 @@ const SupervisorMessageBubble = memo(({ supervisorData }: { supervisorData: Reco
           ) : null}
         </Tabs>
 
+        {/* Show retrieved chunks if available */}
+        {message?.retrievedChunks && (
+          <div className="px-4 pb-3">
+            <RetrievedChunks chunks={message.retrievedChunks} />
+          </div>
+        )}
+
         <div className="p-3 bg-gray-50/50 border-t border-gray-100">
           <p className="caption text-text-secondary text-center">
             {new Date().toLocaleTimeString([], {
@@ -849,10 +864,10 @@ const SupervisorMessageBubble = memo(({ supervisorData }: { supervisorData: Reco
   );
 });
 
-SupervisorMessageBubble.displayName = "SupervisorMessageBubble";
+LegacySupervisorBubble.displayName = "LegacySupervisorBubble";
 
-// Memoized Regular Message Bubble Component
-const RegularMessageBubble = memo(({ message }: { message: Message }) => (
+// Simple Text Message Bubble
+const TextMessageBubble = memo(({ message }: { message: Message }) => (
   <motion.div
     key={message.id}
     initial={{ opacity: 0, y: 20 }}
@@ -918,6 +933,14 @@ const RegularMessageBubble = memo(({ message }: { message: Message }) => (
           {message.content}
         </ReactMarkdown>
       </div>
+
+      {/* Show retrieved chunks for assistant messages */}
+      {message.sender === "assistant" && message.retrievedChunks && (
+        <div className="mt-3 pt-3">
+          <RetrievedChunks chunks={message.retrievedChunks} />
+        </div>
+      )}
+
       <p
         className={`caption mt-1 ${
           message.sender === "user" ? "text-white/80" : "text-text-secondary"
@@ -932,7 +955,7 @@ const RegularMessageBubble = memo(({ message }: { message: Message }) => (
   </motion.div>
 ));
 
-RegularMessageBubble.displayName = "RegularMessageBubble";
+TextMessageBubble.displayName = "TextMessageBubble";
 
 export function ChatbotScreen({ domain, onBack, initialSession, conversationId, collectionId, collectionName }: ChatbotScreenProps) {
   const [showDocumentPrompt, setShowDocumentPrompt] = useState(!initialSession && !conversationId); // Hide prompt if resuming or viewing saved conversation
@@ -1512,12 +1535,26 @@ Generate a complete, updated version of the document incorporating all the reque
 
         const result = await chatService.uploadDocument(file, (progress) => {
           console.log(`[Chat] Upload progress: ${progress}%`);
+          // Progress breakdown:
+          // 10-70%: PDF extraction
+          // 70-80%: Chunking text
+          // 80-90%: Generating embeddings
+          // 90-100%: Storing embeddings
         });
 
         if (result.document) {
           // Add to sessionDocuments
           setSessionDocuments((prev) => [...prev, result.document as any]);
-          console.log('[POC Chat] Document uploaded:', result.document.id);
+
+          // Get chunk info from localStorage for feedback
+          const { ragService } = await import('@/lib/ragService');
+          const chunks = ragService.getDocumentChunks(result.document.id);
+          const chunkCount = chunks ? chunks.length : 0;
+
+          console.log('[Chat] Document uploaded and indexed:', {
+            id: result.document.id,
+            chunks: chunkCount
+          });
         }
       }
 
@@ -1526,10 +1563,10 @@ Generate a complete, updated version of the document incorporating all the reque
         handleUploadFirst();
       }
 
-      alert('PDF uploaded successfully! Ask a question about it.');
+      alert('✅ PDF uploaded and indexed successfully! You can now ask questions about it.');
     } catch (error) {
-      console.error("[POC Chat] Upload error:", error);
-      alert("Failed to upload file. Please try again.");
+      console.error("[Chat] Upload error:", error);
+      alert("❌ Failed to upload file. Please try again.");
     } finally {
       setUploading(false);
     }
@@ -2269,12 +2306,13 @@ Generate a complete, updated version of the document incorporating all the reque
                   const draft = messagePayloads[message.id]?.draft;
                   const supervisor = messagePayloads[message.id]?.supervisor;
 
-                  // Handle supervisor response (highest priority)
+                  // Handle legal analysis response (3-tab format)
                   if (supervisor && message.sender === "assistant") {
                     return (
-                      <SupervisorMessageBubble
+                      <LegacySupervisorBubble
                         key={message.id}
                         supervisorData={supervisor}
+                        message={message}
                       />
                     );
                   }
@@ -2304,8 +2342,9 @@ Generate a complete, updated version of the document incorporating all the reque
                       />
                     );
                   }
+                  // Default: simple text message
                   return (
-                    <RegularMessageBubble key={message.id} message={message} />
+                    <TextMessageBubble key={message.id} message={message} />
                   );
                 })}
               </AnimatePresence>

@@ -9,8 +9,10 @@
  */
 
 import { extractTextFromPDF, cleanPDFText, truncateText } from '@/lib/pdfExtractor';
-import { fileToBase64, addFileBlob, addDocument, getFileBlob } from '@/lib/localStorage-utils';
+import { addDocument } from '@/lib/localStorage-utils';
 import { geminiService } from './geminiService';
+import { ragService, type DocumentChunk } from '@/lib/ragService';
+import { storageMonitor } from '@/lib/storageMonitor';
 import type {
   UploadDocumentResponse,
   SendMessageRequest,
@@ -21,7 +23,7 @@ import type { Message, LegalDomain, Document } from '@/types';
 
 /**
  * Upload a document (PDF) for chat
- * Stores in localStorage, extracts text client-side
+ * Stores in localStorage, extracts text client-side, chunks and embeds for RAG
  */
 export async function uploadDocument(
   file: File,
@@ -30,32 +32,37 @@ export async function uploadDocument(
   try {
     console.log('[Chat Service] Uploading document:', file.name);
 
+    // Check storage space before starting
+    const stats = storageMonitor.getStorageStats();
+    console.log(`[Chat Service] Storage: ${storageMonitor.formatBytes(stats.used)} / ${storageMonitor.formatBytes(stats.total)} (${stats.percentUsed.toFixed(1)}%)`);
+
+    // If storage is over 80% full, clear oldest document
+    if (stats.percentUsed > 80) {
+      console.warn('[Chat Service] Storage >80% full, clearing oldest document...');
+      storageMonitor.clearOldestDocuments(1);
+    }
+
     // Validate file type
     if (file.type !== 'application/pdf') {
       throw new Error('Only PDF files are supported');
     }
 
-    // Step 1: Extract text from PDF (10-90% progress)
+    // Step 1: Extract text from PDF (10-70% progress)
     onProgress?.(10);
     const extractionResult = await extractTextFromPDF(file, (extractProgress) => {
-      // Map extraction progress to 10-90%
-      const mappedProgress = 10 + (extractProgress * 0.8);
+      // Map extraction progress to 10-70%
+      const mappedProgress = 10 + (extractProgress * 0.6);
       onProgress?.(Math.round(mappedProgress));
     });
 
     console.log('[Chat Service] Extraction result:', extractionResult);
 
-    // Step 2: Convert file to base64 for storage
-    onProgress?.(90);
-    const base64Data = await fileToBase64(file);
-
-    // Step 3: Generate document ID
+    // Step 2: Generate document ID
+    onProgress?.(70);
     const documentId = `doc_${Date.now()}`;
 
-    // Step 4: Store file in localStorage
-    addFileBlob(documentId, file.name, file.type, base64Data);
-
-    // Step 5: Store document metadata with extracted text
+    // Step 3: Store document metadata with extracted text (no PDF binary needed for RAG)
+    const cleanedText = cleanPDFText(extractionResult.text);
     const documentMetadata = {
       id: documentId,
       originalFilename: file.name,
@@ -66,7 +73,7 @@ export async function uploadDocument(
       s3Key: documentId, // Not used in client-side mode
       uploadDate: new Date(),
       analysisStatus: 'completed' as const,
-      contentText: cleanPDFText(extractionResult.text),
+      contentText: cleanedText,
       contentSummary: `PDF document with ${extractionResult.pageCount} pages`,
       metadata: {
         pages: extractionResult.pageCount,
@@ -78,13 +85,51 @@ export async function uploadDocument(
 
     addDocument(documentMetadata);
 
-    console.log('[Chat Service] Document uploaded successfully:', {
+    // Step 6: RAG - Chunk and embed the document (70-100% progress)
+    onProgress?.(75);
+    console.log('[Chat Service] Starting RAG indexing...');
+
+    // Chunk the text
+    const chunks = ragService.chunkText(cleanedText);
+    console.log(`[Chat Service] Created ${chunks.length} chunks`);
+
+    onProgress?.(80);
+
+    // Generate embeddings for all chunks
+    const embeddings = await geminiService.generateEmbeddingsBatch(chunks);
+    console.log(`[Chat Service] Generated ${embeddings.length} embeddings`);
+
+    onProgress?.(90);
+
+    // Create document chunks with embeddings
+    const documentChunks: DocumentChunk[] = chunks.map((chunkText, index) => ({
+      id: `${documentId}_chunk_${index}`,
+      documentId,
+      text: chunkText,
+      chunkIndex: index,
+      embedding: embeddings[index],
+      metadata: {
+        startChar: 0, // We don't track exact positions in this implementation
+        endChar: chunkText.length,
+        length: chunkText.length,
+      },
+    }));
+
+    // Store chunks with embeddings
+    ragService.storeDocumentChunks(documentId, documentChunks);
+    console.log(`[Chat Service] Stored ${documentChunks.length} chunks with embeddings`);
+
+    onProgress?.(100);
+
+    console.log('[Chat Service] Document uploaded and indexed successfully:', {
       id: documentId,
       pages: extractionResult.pageCount,
       textLength: extractionResult.text.length,
+      chunks: chunks.length,
     });
 
-    onProgress?.(100);
+    // Log final storage stats
+    storageMonitor.logStorageStats();
 
     return {
       document: documentMetadata,
@@ -92,6 +137,14 @@ export async function uploadDocument(
     };
   } catch (error) {
     console.error('[Chat Service] Upload failed:', error);
+
+    // If storage quota exceeded, provide helpful message
+    if (error instanceof Error && error.message.includes('quota')) {
+      console.error('[Chat Service] Storage quota exceeded! Clearing oldest documents...');
+      storageMonitor.clearOldestDocuments(2);
+      throw new Error('Storage full. Oldest documents cleared. Please try uploading again.');
+    }
+
     throw error;
   }
 }
@@ -99,6 +152,7 @@ export async function uploadDocument(
 /**
  * Send a message in chat with document context
  * Calls Gemini Flash directly, no backend
+ * Uses RAG for similarity search to find relevant document chunks
  */
 export async function sendMessage(
   request: SendMessageRequest,
@@ -126,10 +180,45 @@ export async function sendMessage(
       })),
     };
 
-    // Call Gemini with document context
+    // RAG: Use similarity search if we have uploaded documents
+    let contextText = documentText || '';
+    let retrievedChunks: Array<{ text: string; similarity: number; chunkIndex: number }> = [];
+
+    if (request.uploadedDocuments && request.uploadedDocuments.length > 0) {
+      console.log('[Chat Service] Using RAG for document context...');
+
+      // Generate embedding for user's question
+      const queryEmbedding = await geminiService.generateEmbedding(request.content);
+      console.log('[Chat Service] Generated query embedding');
+
+      // Get document IDs
+      const documentIds = request.uploadedDocuments.map(doc => doc.id);
+
+      // Search for similar chunks
+      const searchResults = ragService.searchSimilarChunks(queryEmbedding, documentIds, 5);
+      console.log(`[Chat Service] Found ${searchResults.length} relevant chunks`);
+
+      // Format results as context
+      if (searchResults.length > 0) {
+        contextText = ragService.formatContextFromResults(searchResults);
+        console.log('[Chat Service] Using RAG context instead of full document');
+
+        // Store retrieved chunks for display in UI
+        retrievedChunks = searchResults.map(result => ({
+          text: result.chunk.text,
+          similarity: result.similarity,
+          chunkIndex: result.chunk.chunkIndex
+        }));
+      } else {
+        // Fallback to full document if no chunks found
+        console.warn('[Chat Service] No chunks found, using full document text');
+      }
+    }
+
+    // Call Gemini with RAG-enhanced context
     const geminiResponse = await geminiService.processChatWithDocument(
       request.content,
-      documentText || '',
+      contextText,
       chatHistory,
       request.domain || 'general'
     );
@@ -146,6 +235,7 @@ export async function sendMessage(
         timestamp: new Date(),
         domain: request.domain as LegalDomain,
         type: 'text',
+        retrievedChunks: retrievedChunks.length > 0 ? retrievedChunks : undefined,
       };
 
       console.log('[Chat Service] Simple message response');
@@ -165,6 +255,7 @@ export async function sendMessage(
         timestamp: new Date(),
         domain: request.domain as LegalDomain,
         type: 'text',
+        retrievedChunks: retrievedChunks.length > 0 ? retrievedChunks : undefined,
       };
 
       console.log('[Chat Service] 3-tab response');
@@ -193,6 +284,7 @@ export async function sendMessage(
       timestamp: new Date(),
       domain: request.domain as LegalDomain,
       type: 'text',
+      retrievedChunks: retrievedChunks.length > 0 ? retrievedChunks : undefined,
     };
 
     return {
@@ -233,14 +325,7 @@ export async function sendMessage(
  */
 export function getDocumentText(documentId: string): string | null {
   try {
-    const fileBlob = getFileBlob(documentId);
-    if (!fileBlob) {
-      console.warn('[Chat Service] Document not found:', documentId);
-      return null;
-    }
-
-    // Note: The actual text is stored in the document metadata, not the file blob
-    // We'll need to get it from the documents storage
+    // Get document text directly from documents storage (no file blobs needed)
     const documents = JSON.parse(localStorage.getItem('legalkaki_documents') || '[]');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const document = documents.find((doc: any) => doc.id === documentId);
@@ -276,13 +361,9 @@ export async function generateDraft(
     // Create document metadata
     const documentId = `doc_draft_${Date.now()}`;
     const filename = `${title.replace(/[^a-z0-9]/gi, '_')}.txt`;
-    const blob = new Blob([content], { type: 'text/plain' });
-    const fileSize = blob.size;
+    const fileSize = new Blob([content], { type: 'text/plain' }).size;
 
-    // Convert to base64 for storage
-    const base64Data = btoa(content);
-
-    // Store in localStorage
+    // Store in localStorage (only metadata and text, no binary blob)
     const documentMetadata: Document = {
       id: documentId,
       originalFilename: filename,
@@ -296,10 +377,8 @@ export async function generateDraft(
       contentText: content,
     };
 
-    // Add to documents list
-    const { addDocument, addFileBlob } = await import('@/lib/localStorage-utils');
+    // Add to documents list (no file blob storage needed)
     addDocument(documentMetadata);
-    addFileBlob(documentId, filename, 'text/plain', base64Data);
 
     console.log('[Chat Service] Draft created:', documentId);
 

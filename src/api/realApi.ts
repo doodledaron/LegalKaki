@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { bedrockService } from "./bedrockService";
 import {
   UploadDocumentResponse,
   SendMessageResponse,

@@ -10,6 +10,13 @@ export interface Message {
   attachments?: FileAttachment[]
   domain?: LegalDomain
   type?: 'text' | 'analysis' | 'draft'
+  retrievedChunks?: RetrievedChunk[]
+}
+
+export interface RetrievedChunk {
+  text: string
+  similarity: number
+  chunkIndex: number
 }
 
 export interface FileAttachment {
