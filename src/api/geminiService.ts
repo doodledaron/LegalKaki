@@ -454,6 +454,7 @@ You MUST respond with ONLY valid JSON. No markdown code blocks, no extra text, j
 START YOUR RESPONSE WITH: {
 END YOUR RESPONSE WITH: }
 
+here are the document chunks: 
 ${documentContext}
 
 ${historyText ? `Chat History:\n${historyText}\n` : ''}
@@ -516,10 +517,13 @@ Decide if this needs a simple reply or full 3-tab analysis:
 **Explanation Tab:**
 - 2-3 paragraphs max
 - Plain language, no legal jargon
+- Focus on the legal concepts of user's question, NOT document chunks
 - Focus on what the user needs to understand
+- focuses on explaining concepts and not providing legal advice. eg: if the user ask about partnering with a company, the explanation should be about the concept of partnering and not providing legal advice.
 
 **Analysis Tab:**
 - List 2-4 risks with severity levels (HIGH/MEDIUM/LOW)
+- now focus on document chunks and the user's question.
 - Keep risk descriptions concise
 - List 3-5 key points as bullet points
 
@@ -530,6 +534,7 @@ Decide if this needs a simple reply or full 3-tab analysis:
 - Include dueDate as ISO date string (YYYY-MM-DD) if action is time-sensitive (optional)
 - Format links as externalLinks array: [{"text": "Link text", "url": "https://..."}]
 - If no links, use empty array: "externalLinks": []
+- always be cautious with actions steps because it may not have actions for the user to take.
 
 **Malaysian Law Context:**
 - Reference specific Malaysian laws (Employment Act 1955, Contracts Act 1950, etc.)

@@ -7,6 +7,7 @@ import {
   MessageCircle,
   Bookmark,
   User,
+  Settings,
   ChevronRight,
   Menu,
   X,
@@ -52,6 +53,13 @@ export function SideNavigation({}: SideNavigationProps) {
       isActive: pathname.startsWith("/collections"),
     },
     {
+      id: "settings",
+      label: "Settings",
+      icon: "settings",
+      route: "/settings",
+      isActive: pathname.startsWith("/settings"),
+    },
+    {
       id: "profile",
       label: "Profile",
       icon: "user",
@@ -74,6 +82,8 @@ export function SideNavigation({}: SideNavigationProps) {
         return <MessageCircle {...iconProps} />;
       case "bookmark":
         return <Bookmark {...iconProps} />;
+      case "settings":
+        return <Settings {...iconProps} />;
       case "user":
         return <User {...iconProps} />;
       default:
