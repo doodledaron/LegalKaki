@@ -40,6 +40,7 @@ export interface ActionItem {
   dueDate?: Date
   externalLinks?: ExternalLink[]
   sourceConversation?: string
+  collectionId?: string
   steps?: ActionStep[]
 }
 

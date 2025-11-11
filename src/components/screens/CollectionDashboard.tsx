@@ -46,28 +46,49 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
   const [conversations, setConversations] = useState<ChatSession[]>([])
 
   useEffect(() => {
+    console.log("🔍 DEBUG: CollectionDashboard loading data");
+    console.log("  collectionId:", collectionId);
+
     // Get collection
     const collection = getCollectionById(collectionId)
     setCollectionData(collection || null)
 
     if (collection) {
+      console.log("  Collection found:", collection.title);
+
       // Get related documents
       const allDocuments = getDocuments()
+      console.log("  Total documents in storage:", allDocuments.length);
+      console.log("  Documents in storage:", allDocuments.map(d => ({ id: d.id, name: d.originalFilename, collectionId: d.collectionId })));
+
       const collectionDocs = allDocuments.filter(doc => doc.collectionId === collectionId)
+      console.log("  Documents for this collection:", collectionDocs.length);
       setDocuments(collectionDocs)
 
       // Get related chats
       const allChats = getChats()
+      console.log("  Total chats in storage:", allChats.length);
+      console.log("  Chats in storage:", allChats.map(c => ({ id: c.id, title: c.title, collectionId: c.collectionId, messages: c.messages?.length })));
+
       const collectionChats = allChats.filter(chat => chat.collectionId === collectionId)
+      console.log("  Chats for this collection:", collectionChats.length);
       setConversations(collectionChats)
 
       // Get related actions (actions linked to chats in this collection)
       const allActions = getActions()
+      console.log("  Total actions in storage:", allActions.length);
+      console.log("  Actions in storage:", allActions.map(a => ({ id: a.id, title: a.title, sourceConversation: a.sourceConversation, collectionId: a.collectionId })));
+
       const chatIds = collectionChats.map(chat => chat.id)
+      console.log("  Chat IDs for this collection:", chatIds);
+
       const collectionActions = allActions.filter(action =>
         action.sourceConversation && chatIds.includes(action.sourceConversation)
       )
+      console.log("  Actions for this collection:", collectionActions.length);
       setActionItems(collectionActions)
+    } else {
+      console.log("  Collection not found!");
     }
   }, [collectionId])
 
@@ -468,7 +489,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
                             </span>
                             <span className="flex items-center space-x-1">
                               <MessageCircle className="w-4 h-4" />
-                              <span>{conversation.messageCount || 0} messages</span>
+                              <span>{conversation.messages?.length || 0} messages</span>
                             </span>
                           </div>
 
@@ -699,7 +720,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
                             <div className="flex space-x-2">
                               {action.externalLinks?.map((link, linkIndex) => (
                                 <Button
-                                  key={linkIndex}
+                                  key={`${action.id}-link-${linkIndex}`}
                                   variant="secondary"
                                   size="small"
                                   rightIcon={<ExternalLink className="w-3 h-3" />}

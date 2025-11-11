@@ -56,7 +56,7 @@ import {
   ChatSession,
 } from "@/types";
 import { RetrievedChunks } from "@/components/chat/RetrievedChunks";
-import { addCollection, linkChatToCollection, updateChat, getChatById } from "@/lib/localStorage-utils";
+import { addCollection, linkChatToCollection, updateChat, getChatById, addChat, addAction, getActions, updateDocument } from "@/lib/localStorage-utils";
 import { Collection } from "@/api/types";
 import type {
   AnalysisResult as ApiAnalysisResult,
@@ -1618,14 +1618,95 @@ Generate a complete, updated version of the document incorporating all the reque
     }
   };
 
+  /**
+   * Extract and save action items from messagePayloads
+   */
+  const extractAndSaveActionItems = (
+    messagePayloads: Record<string, { analysis?: ApiAnalysisResult; draft?: ApiDraftResult; supervisor?: Record<string, unknown> }>,
+    chatId: string,
+    collectionId: string
+  ) => {
+    console.log("🔍 DEBUG: extractAndSaveActionItems called");
+    console.log("  messagePayloads count:", Object.keys(messagePayloads).length);
+    console.log("  chatId:", chatId);
+    console.log("  collectionId:", collectionId);
+
+    const existingActions = getActions();
+    let savedCount = 0;
+
+    // Extract from all analysis results in messagePayloads
+    Object.entries(messagePayloads).forEach(([messageId, payload]) => {
+      console.log(`  Checking messageId: ${messageId}`);
+      console.log(`    Has analysis:`, !!payload.analysis);
+      console.log(`    Has supervisor:`, !!payload.supervisor);
+
+      // Try analysis.actionItems first
+      if (payload.analysis?.actionItems) {
+        console.log(`    Found ${payload.analysis.actionItems.length} action items in analysis`);
+        payload.analysis.actionItems.forEach((action: ActionItem) => {
+          // Check if action already saved
+          const exists = existingActions.find(a => a.id === action.id);
+          if (!exists) {
+            console.log(`      Saving action: ${action.title}`);
+            addAction({
+              ...action,
+              sourceConversation: chatId,
+              collectionId: collectionId
+            });
+            savedCount++;
+          } else {
+            console.log(`      Action already exists: ${action.title}`);
+          }
+        });
+      }
+
+      // Also try supervisor.actions (alternative structure)
+      if (payload.supervisor && 'actions' in payload.supervisor) {
+        const supervisorActions = (payload.supervisor as { actions?: ActionItem[] }).actions;
+        if (supervisorActions && Array.isArray(supervisorActions)) {
+          console.log(`    Found ${supervisorActions.length} action items in supervisor`);
+          supervisorActions.forEach((action: ActionItem) => {
+            const exists = existingActions.find(a => a.id === action.id);
+            if (!exists) {
+              console.log(`      Saving action from supervisor: ${action.title}`);
+              addAction({
+                ...action,
+                sourceConversation: chatId,
+                collectionId: collectionId
+              });
+              savedCount++;
+            }
+          });
+        }
+      }
+    });
+
+    if (savedCount > 0) {
+      console.log(`✅ Extracted and saved ${savedCount} action items from conversation`);
+    } else {
+      console.log(`⚠️ No action items found to save`);
+    }
+
+    return savedCount;
+  };
+
   const handleSaveConversation = async (collectionId: number | undefined, title?: string) => {
     if (!currentSession) {
       console.error("No active session to save");
       return;
     }
 
+    console.log("🔍 DEBUG: Starting handleSaveConversation");
+    console.log("  Session ID:", currentSession.id);
+    console.log("  Messages count:", currentSession.messages.length);
+    console.log("  chatDocuments count:", chatDocuments.length);
+    console.log("  sessionDocuments count:", sessionDocuments.length);
+    console.log("  messagePayloads keys:", Object.keys(messagePayloads));
+    console.log("  messagePayloads:", JSON.stringify(messagePayloads, null, 2));
+
     try {
       let finalCollectionId: string;
+      let actionItemsCount = 0;
 
       // Create new collection or use existing
       if (!collectionId) {
@@ -1644,7 +1725,7 @@ Generate a complete, updated version of the document incorporating all the reque
           itemCount: currentSession.messages.length,
           messageCount: currentSession.messages.length,
           documentCount: chatDocuments.length,
-          actionItemsCount: 0,
+          actionItemsCount: 0, // Will update after extracting actions
           urgentActionsCount: 0,
           tags: [domain || 'general']
         };
@@ -1656,10 +1737,54 @@ Generate a complete, updated version of the document incorporating all the reque
         finalCollectionId = collectionId.toString();
       }
 
-      // Link chat and documents to collection
+      // Step 1: Save the complete chat session with all messages
+      const chatToSave: ChatSession = {
+        id: currentSession.id,
+        domain: currentSession.domain,
+        title: currentSession.title || title,
+        messages: currentSession.messages, // Save ALL messages
+        createdAt: currentSession.createdAt,
+        updatedAt: new Date(),
+        collectionId: finalCollectionId
+      };
+
+      // Check if chat already exists in localStorage
+      const existingChat = getChatById(currentSession.id);
+      if (existingChat) {
+        // Update existing chat
+        updateChat(currentSession.id, chatToSave);
+        console.log(`✅ Updated existing chat with ${currentSession.messages.length} messages`);
+      } else {
+        // Add new chat
+        addChat(chatToSave);
+        console.log(`✅ Saved new chat session with ${currentSession.messages.length} messages`);
+      }
+
+      // Step 2: Extract and save action items from messagePayloads
+      actionItemsCount = extractAndSaveActionItems(messagePayloads, currentSession.id, finalCollectionId);
+
+      // Step 3: Link documents to collection
+      // Combine both chatDocuments (persistent) and sessionDocuments (temporary uploads)
+      const allSessionDocs = [...chatDocuments, ...sessionDocuments];
+      console.log("🔍 DEBUG: Linking documents");
+      console.log("  chatDocuments count:", chatDocuments.length);
+      console.log("  sessionDocuments count:", sessionDocuments.length);
+      console.log("  Total docs to link:", allSessionDocs.length);
+      console.log("  Document IDs to link:", allSessionDocs.map(d => d.id));
+
+      // Update all documents (both persistent and newly uploaded) to have this collectionId
+      allSessionDocs.forEach(doc => {
+        console.log(`  Updating document ${doc.id} (${doc.originalFilename}) with collectionId ${finalCollectionId}`);
+        updateDocument(doc.id, { collectionId: finalCollectionId });
+      });
+
+      // Step 4: Link chat to collection (updates chat.collectionId)
       linkChatToCollection(currentSession.id, finalCollectionId);
 
       console.log("✅ Conversation saved to collection successfully");
+      console.log(`   - Messages: ${currentSession.messages.length}`);
+      console.log(`   - Documents: ${chatDocuments.length}`);
+      console.log(`   - Action Items: ${actionItemsCount}`);
 
       // Update local state
       setCurrentCollectionId(finalCollectionId);
