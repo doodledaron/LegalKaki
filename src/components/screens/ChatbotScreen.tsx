@@ -1660,21 +1660,28 @@ Generate a complete, updated version of the document incorporating all the reque
         });
       }
 
-      // Also try supervisor.actions (alternative structure)
+      // Also try supervisor.actions (Gemini's new format)
       if (payload.supervisor && 'actions' in payload.supervisor) {
-        const supervisorActions = (payload.supervisor as { actions?: ActionItem[] }).actions;
+        const supervisorActions = (payload.supervisor as { actions?: any[] }).actions;
         if (supervisorActions && Array.isArray(supervisorActions)) {
           console.log(`    Found ${supervisorActions.length} action items in supervisor`);
-          supervisorActions.forEach((action: ActionItem) => {
+          supervisorActions.forEach((action: any) => {
             const exists = existingActions.find(a => a.id === action.id);
             if (!exists) {
               console.log(`      Saving action from supervisor: ${action.title}`);
-              addAction({
+
+              // Parse dueDate if present (convert ISO string to Date)
+              const actionItem: ActionItem = {
                 ...action,
+                dueDate: action.dueDate ? new Date(action.dueDate) : undefined,
                 sourceConversation: chatId,
                 collectionId: collectionId
-              });
+              };
+
+              addAction(actionItem);
               savedCount++;
+            } else {
+              console.log(`      Action already exists: ${action.title}`);
             }
           });
         }

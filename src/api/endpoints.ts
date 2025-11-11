@@ -21,15 +21,6 @@ import {
 import { getBackendUrl, getEnvConfig } from "@/lib/envConfig";
 import { getUserId } from "@/lib/auth-utils";
 
-export interface BackendExplainRequest {
-  sentence: string;
-}
-
-export interface BackendExplainResponse {
-  explanation: string;
-  sentence_provided: string;
-}
-
 import {
   ApiResponse,
   ApiError,
@@ -2031,29 +2022,6 @@ export const pdfApi = {
       };
     }, "fast");
   },
-
-  // Backend API service for highlight explainer
-  async explainSentence(sentence: string): Promise<BackendExplainResponse> {
-    try {
-      const response = await fetch(`${getEnvConfig().backendUrl}/explain/sentence`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ sentence }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Backend API error: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Backend explain API error:', error);
-      throw error;
-    }
-  },
 };
 
 // Combine all APIs
@@ -2068,9 +2036,6 @@ export const api = {
   search: searchApi,
   tools: toolsApi,
   pdf: pdfApi,
-  explain: {
-    explainSentence: pdfApi.explainSentence,
-  },
 };
 
 export default api;

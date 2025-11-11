@@ -3,14 +3,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/Button'
-import { Eye, EyeOff, ZoomIn, ZoomOut, Download, X, Lightbulb, AlertCircle, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, ZoomIn, ZoomOut, Download, X, AlertCircle, Loader2 } from 'lucide-react'
 import { Document as PDFDocument, Page, pdfjs } from 'react-pdf'
 import { geminiService } from '@/api/geminiService'
-import { api } from '@/api'
 import { Document as DocumentType } from '@/types'
-import { collectionApiClient } from '@/api/realApi'
-import { getUserId } from '@/lib/auth-utils'
-import { getEnvConfig } from '@/lib/envConfig'
+import { getFileBlob, blobToUrl } from '@/lib/indexedDB-utils'
 
 // Configure PDF.js worker for react-pdf v9
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -29,25 +26,22 @@ interface Tooltip {
   visible: boolean
   category?: string
   selectedText?: string
-  confidence?: number
 }
 
 interface PDFViewerProps {
   document: DocumentType
   onClose?: () => void
-  collectionId?: string // Optional collection ID for fetching document details
 }
 
-export function PDFViewer({ document, onClose, collectionId }: PDFViewerProps) {
+export function PDFViewer({ document, onClose }: PDFViewerProps) {
   const [isHighlightMode, setIsHighlightMode] = useState(false)
   const [zoom, setZoom] = useState(1.0)
-  const [tooltip, setTooltip] = useState<Tooltip>({ 
-    content: '', 
-    x: 0, 
-    y: 0, 
-    visible: false, 
-    category: '',
-    confidence: 0
+  const [tooltip, setTooltip] = useState<Tooltip>({
+    content: '',
+    x: 0,
+    y: 0,
+    visible: false,
+    category: ''
   })
   const [highlightedTerms, setHighlightedTerms] = useState<Set<string>>(new Set())
   const [isGeneratingExplanation, setIsGeneratingExplanation] = useState(false)
@@ -58,102 +52,61 @@ export function PDFViewer({ document, onClose, collectionId }: PDFViewerProps) {
   const [pdfUrl, setPdfUrl] = useState<string>('')
   const viewerRef = useRef<HTMLDivElement>(null)
 
-  // Initialize PDF URL
+  // Initialize PDF URL - Load from IndexedDB
   useEffect(() => {
     const loadPdfUrl = async () => {
       try {
         setPdfLoading(true)
-        const userId = getUserId()
-        console.log('📄 Loading PDF for document:', {
+        console.log('📄 Loading PDF from IndexedDB for document:', {
           id: document.id,
           filename: document.originalFilename,
-          s3Bucket: document.s3Bucket,
-          s3Key: document.s3Key,
-          fileType: document.fileType,
-          userId: userId
+          fileType: document.fileType
         })
 
-        // Get document details from collection endpoint
-        try {
-          console.log('🔄 Getting document details from collection endpoint...')
+        // Try to get file blob from IndexedDB
+        const fileBlob = await getFileBlob(document.id)
 
-          // Use collectionId prop or document.collectionId, with fallback
-          const collectionIdToUse = collectionId || document.collectionId || '7' // Fallback to '7' as seen in logs
-
-          console.log(`📋 Fetching collection ${collectionIdToUse} details for document ${document.id}`)
-          const collectionDetails = await collectionApiClient.getCollectionDetails(parseInt(collectionIdToUse))
-
-          // Find the specific document in the collection
-          console.log(`🔍 Searching for document ${document.id} in collection documents:`, collectionDetails.documents.map(d => ({ id: d.document_id, title: d.title })))
-
-          const collectionDocument = collectionDetails.documents.find(doc =>
-            doc.document_id.toString() === document.id
-          )
-
-          if (collectionDocument && collectionDocument.s3_bucket && collectionDocument.s3_key) {
-            console.log('✅ Found document in collection details')
-            console.log('📄 Document S3 info:', {
-              bucket: collectionDocument.s3_bucket,
-              key: collectionDocument.s3_key,
-              region: 'ap-southeast-5'
-            })
-
-            // Use backend proxy endpoint to avoid CORS issues
-            try {
-              console.log('🔄 Using backend proxy for document:', document.id)
-              const backendUrl = getEnvConfig().backendUrl
-              const contentUrl = `${backendUrl}/documents/${document.id}/content?owner_sub=${userId}`
-
-              console.log('📡 Using proxied content URL:', contentUrl)
-              console.log('✅ Backend will proxy S3 content to avoid CORS')
-              setPdfUrl(contentUrl)
-              return
-            } catch (proxyError) {
-              console.error('❌ Error setting up backend proxy:', proxyError)
-            }
-          } else {
-            console.warn('⚠️ Document not found in collection details or missing S3 info')
-          }
-        } catch (collectionError) {
-          console.error('❌ Collection endpoint failed:', collectionError)
-        }
-        
-        // Fallback: try presigned URL with document's own S3 info
-        if (document.s3Bucket && document.s3Key) {
-          console.log('⚠️ Collection endpoint failed, trying presigned URL with document info')
-          console.log('📄 Document S3 info:', {
-            bucket: document.s3Bucket,
-            key: document.s3Key,
-            region: 'ap-southeast-5'
+        if (fileBlob && fileBlob.blob) {
+          console.log('✅ Found file blob in IndexedDB')
+          console.log('📦 Blob info:', {
+            id: fileBlob.id,
+            filename: fileBlob.filename,
+            fileType: fileBlob.fileType,
+            blobSize: fileBlob.blob.size
           })
 
-          // Use backend proxy endpoint (fallback)
-          try {
-            console.log('🔄 Using backend proxy (fallback)...')
-            const backendUrl = getEnvConfig().backendUrl
-            const contentUrl = `${backendUrl}/documents/${document.id}/content?owner_sub=${userId}`
+          // Convert Blob to blob URL for viewing
+          const blobUrl = blobToUrl(fileBlob.blob)
 
-            console.log('📡 Using proxied content URL (fallback):', contentUrl)
-            console.log('✅ Backend will proxy S3 content to avoid CORS (fallback)')
-            setPdfUrl(contentUrl)
+          if (blobUrl && blobUrl !== '#') {
+            console.log('✅ Successfully created blob URL')
+            setPdfUrl(blobUrl)
+            setPdfError(null)
             return
-          } catch (proxyError) {
-            console.error('❌ Error setting up backend proxy (fallback):', proxyError)
+          } else {
+            console.error('❌ Failed to create blob URL')
+            setPdfError('Failed to convert document data to viewable format')
           }
+        } else {
+          console.warn('⚠️ No file blob found in IndexedDB for document:', document.id)
+          console.log('💡 Trying fallback static PDF...')
+
+          // Fallback to static file
+          setPdfUrl('/partnership.pdf')
+          setPdfError(null)
+          console.log('📄 Using fallback static PDF: /partnership.pdf')
         }
-        
-        // Final fallback to static file
-        setPdfUrl('/partnership.pdf')
-        console.log('⚠️ Using fallback static PDF - S3 access failed')
-        console.log('📄 Document info:', {
-          hasS3Bucket: !!document.s3Bucket,
-          hasS3Key: !!document.s3Key,
-          s3Bucket: document.s3Bucket,
-          s3Key: document.s3Key
-        })
       } catch (error) {
-        console.error('Error loading PDF URL:', error)
-        setPdfError('Failed to load document')
+        console.error('❌ Error loading PDF from IndexedDB:', error)
+        setPdfError('Failed to load document from IndexedDB')
+
+        // Try fallback as last resort
+        try {
+          console.log('🔄 Attempting final fallback to static PDF...')
+          setPdfUrl('/partnership.pdf')
+        } catch (fallbackError) {
+          console.error('❌ Even fallback failed:', fallbackError)
+        }
       } finally {
         setPdfLoading(false)
       }
@@ -171,16 +124,16 @@ export function PDFViewer({ document, onClose, collectionId }: PDFViewerProps) {
 
   const onDocumentLoadError = (error: Error) => {
     console.error('PDF load error:', error)
-    
-    // Check if it's a CORS or 403 error
-    if (error.message.includes('Failed to fetch') || error.message.includes('CORS')) {
-      setPdfError('Document access blocked by CORS policy. Backend proxy needed to access S3 documents.')
-    } else if (error.message.includes('403')) {
-      setPdfError('Access forbidden. Document requires authentication or signed URL.')
+
+    // Simplified error messages for IndexedDB mode
+    if (error.message.includes('Failed to fetch')) {
+      setPdfError('Document not found. Please ensure the document is uploaded and stored.')
+    } else if (error.message.includes('404')) {
+      setPdfError('Document file not found.')
     } else {
-      setPdfError('Failed to load PDF document')
+      setPdfError('Failed to load PDF document. The document may not be available in storage.')
     }
-    
+
     setPdfLoading(false)
   }
 
@@ -205,88 +158,51 @@ export function PDFViewer({ document, onClose, collectionId }: PDFViewerProps) {
     
     if (viewerRect && selectedText) {
       setIsGeneratingExplanation(true)
-      
+
       // Get surrounding context for better analysis
       const context = getSelectionContext(selectedText, range)
-      
+
       try {
-        // Call backend API for explanation
-        const backendResponse = await api.explain.explainSentence(selectedText)
-        
-        console.log('Backend Response:', backendResponse.explanation) // Debug log
-        
-        // Convert backend response to tooltip format
-        // The backend returns markdown format, so we need to convert it to HTML
-        const htmlExplanation = convertMarkdownToHtml(backendResponse.explanation)
-        
+        // Use Gemini directly for text analysis (no backend/AWS dependencies)
+        console.log('📝 Analyzing text with Gemini:', selectedText.substring(0, 50) + '...')
+        const geminiResponse = await geminiService.analyzeText({
+          selectedText,
+          context: context,
+          pageNumber: currentPage
+        })
+
+        console.log('✅ Gemini analysis complete:', geminiResponse.category)
+
+        // Gemini already returns HTML with <strong> tags - use directly
         setTooltip({
-          content: htmlExplanation,
+          content: geminiResponse.explanation,
           x: rect.left - viewerRect.left + rect.width / 2,
           y: rect.top - viewerRect.top - 10,
           visible: true,
+          category: geminiResponse.category,
           selectedText: selectedText
         })
-        
+
         // Add to highlighted terms
         setHighlightedTerms(prev => new Set([...prev, selectedText]))
-        
+
       } catch (error) {
-        console.error('Failed to analyze text:', error)
-        
-        // Try fallback to Gemini service if backend fails
-        try {
-          console.log('Backend failed, trying Gemini fallback...')
-          const geminiResponse = await geminiService.analyzeText({
-            selectedText,
-            context: context,
-            pageNumber: currentPage
-          })
-          
-          setTooltip({
-            content: geminiResponse.explanation,
-            x: rect.left - viewerRect.left + rect.width / 2,
-            y: rect.top - viewerRect.top - 10,
-            visible: true,
-            category: geminiResponse.category,
-            selectedText: selectedText,
-            confidence: geminiResponse.confidence
-          })
-        } catch (fallbackError) {
-          console.error('Gemini fallback also failed:', fallbackError)
-          
-          // Final fallback explanation
-          setTooltip({
-            content: `"${selectedText}" - This text requires professional interpretation. The AI analysis service is currently unavailable.`,
-            x: rect.left - viewerRect.left + rect.width / 2,
-            y: rect.top - viewerRect.top - 10,
-            visible: true,
-            category: 'general',
-            selectedText: selectedText,
-            confidence: 0
-          })
-        }
+        console.error('❌ Gemini analysis failed:', error)
+
+        // Fallback explanation when AI is unavailable
+        setTooltip({
+          content: `"${selectedText}" - This text requires professional interpretation. The AI analysis service is currently unavailable.`,
+          x: rect.left - viewerRect.left + rect.width / 2,
+          y: rect.top - viewerRect.top - 10,
+          visible: true,
+          category: 'general',
+          selectedText: selectedText
+        })
       } finally {
         setIsGeneratingExplanation(false)
       }
     }
   }, [isHighlightMode, currentPage])
-
-  // Convert markdown to HTML for display
-  const convertMarkdownToHtml = (markdown: string): string => {
-    return markdown
-      // Convert headers to bold text
-      .replace(/^# (.+)$/gm, '<strong>$1</strong>')
-      .replace(/^## (.+)$/gm, '<strong>$1</strong>')
-      .replace(/^### (.+)$/gm, '<strong>$1</strong>')
-      // Convert bold text
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      // Convert bullet points to HTML list
-      .replace(/^- (.+)$/gm, '• $1')
-      // Convert line breaks
-      .replace(/\n/g, '<br>')
-      // Clean up multiple line breaks
-      .replace(/<br><br>/g, '<br>')
-  }
 
   // Get context around the selected text
   const getSelectionContext = (selectedText: string, range: Range): string => {
@@ -307,18 +223,6 @@ export function PDFViewer({ document, onClose, collectionId }: PDFViewerProps) {
       console.error('Failed to get context:', error)
     }
     return ''
-  }
-
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case 'clause': return 'bg-blue-500'
-      case 'legal-term': return 'bg-purple-500'
-      case 'obligation': return 'bg-orange-500'
-      case 'right': return 'bg-green-500'
-      case 'warning': return 'bg-red-500'
-      case 'general': return 'bg-indigo-500'
-      default: return 'bg-gray-500'
-    }
   }
 
   const getTooltipStyle = (category: string) => {
@@ -428,30 +332,6 @@ export function PDFViewer({ document, onClose, collectionId }: PDFViewerProps) {
           </div>
         </div>
 
-        {/* Highlight Mode Info Banner */}
-        <AnimatePresence>
-          {isHighlightMode && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="bg-gradient-to-r from-yellow-50 to-yellow-100 border-b border-yellow-200 px-4 py-3"
-            >
-              <div className="flex items-center space-x-2">
-                <Lightbulb className="w-4 h-4 text-yellow-600" />
-                <span className="body-small text-yellow-800">
-                  <strong>AI Highlight Explainer Active:</strong> Select any text for <strong>concise, layman-friendly explanations</strong> with highlighted key points. 
-                  <span className="inline-block w-3 h-3 bg-purple-500 rounded mx-1"></span>Legal Terms
-                  <span className="inline-block w-3 h-3 bg-blue-500 rounded mx-1"></span>Clauses
-                  <span className="inline-block w-3 h-3 bg-orange-500 rounded mx-1"></span>Obligations
-                  <span className="inline-block w-3 h-3 bg-green-500 rounded mx-1"></span>Rights
-                  <span className="inline-block w-3 h-3 bg-red-500 rounded mx-1"></span>Warnings
-                  <span className="inline-block w-3 h-3 bg-indigo-500 rounded mx-1"></span>General
-                </span>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         {/* Document Content */}
         <div 
@@ -575,35 +455,27 @@ export function PDFViewer({ document, onClose, collectionId }: PDFViewerProps) {
                 }}
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="flex items-start space-x-2">
-                  <div className={`w-3 h-3 rounded-full ${getCategoryColor(tooltip.category || 'general')} flex-shrink-0 mt-1`}></div>
-                  <div className="flex-1 min-w-0">
-                    <div
-                      className="body-small text-text-primary leading-relaxed [&_strong]:font-bold [&_strong]:text-gray-900"
-                      dangerouslySetInnerHTML={{ __html: tooltip.content }}
-                    />
-                    <div className="flex items-center justify-between mt-2">
-                      <div className="flex items-center space-x-2">
-                        {tooltip.category && (
-                          <span className="caption text-text-secondary capitalize">
-                            {tooltip.category.replace('-', ' ')}
-                          </span>
-                        )}
-                        {tooltip.confidence !== undefined && tooltip.confidence > 0 && (
-                          <span className="caption text-text-secondary">
-                            • {tooltip.confidence}% confidence
-                          </span>
-                        )}
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="small"
-                        onClick={closeTooltip}
-                        className="p-1 text-xs"
-                      >
-                        <X className="w-3 h-3" />
-                      </Button>
+                <div className="flex flex-col">
+                  <div
+                    className="body-small text-text-primary leading-relaxed [&_strong]:font-bold [&_strong]:text-gray-900"
+                    dangerouslySetInnerHTML={{ __html: tooltip.content }}
+                  />
+                  <div className="flex items-center justify-between mt-2">
+                    <div className="flex items-center space-x-2">
+                      {tooltip.category && (
+                        <span className="caption text-text-secondary capitalize">
+                          {tooltip.category.replace('-', ' ')}
+                        </span>
+                      )}
                     </div>
+                    <Button
+                      variant="ghost"
+                      size="small"
+                      onClick={closeTooltip}
+                      className="p-1 text-xs"
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
                   </div>
                 </div>
                 

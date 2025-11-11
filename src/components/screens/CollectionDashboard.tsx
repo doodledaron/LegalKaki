@@ -933,7 +933,6 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
         <PDFViewer
           document={selectedDocument}
           onClose={() => setSelectedDocument(null)}
-          collectionId={collectionId}
         />
       )}
 

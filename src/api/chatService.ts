@@ -10,6 +10,7 @@
 
 import { extractTextFromPDF, cleanPDFText, truncateText } from '@/lib/pdfExtractor';
 import { addDocument } from '@/lib/localStorage-utils';
+import { storeFileBlob } from '@/lib/indexedDB-utils';
 import { geminiService } from './geminiService';
 import { ragService, type DocumentChunk } from '@/lib/ragService';
 import { storageMonitor } from '@/lib/storageMonitor';
@@ -60,6 +61,11 @@ export async function uploadDocument(
     // Step 2: Generate document ID
     onProgress?.(70);
     const documentId = `doc_${Date.now()}`;
+
+    // Step 2.5: Save file blob to IndexedDB for PDF viewing (avoids localStorage quota issues)
+    console.log('[Chat Service] Saving PDF file blob to IndexedDB...');
+    await storeFileBlob(documentId, file.name, file.type, file);
+    console.log('[Chat Service] PDF file blob saved to IndexedDB');
 
     // Step 3: Store document metadata with extracted text (no PDF binary needed for RAG)
     const cleanedText = cleanPDFText(extractionResult.text);

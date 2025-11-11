@@ -495,11 +495,18 @@ Decide if this needs a simple reply or full 3-tab analysis:
   },
   "actions": [
     {
+      "id": "action_[timestamp]_[random]",
       "title": "Action item title",
       "description": "What needs to be done",
-      "priority": "URGENT|IMPORTANT|NORMAL",
-      "link_text": "Button text (optional)",
-      "link_url": "https://... (optional)"
+      "priority": "urgent|important|normal",
+      "status": "pending",
+      "dueDate": "2025-12-31",
+      "externalLinks": [
+        {
+          "text": "Button text",
+          "url": "https://example.com"
+        }
+      ]
     }
   ]
 }
@@ -517,9 +524,12 @@ Decide if this needs a simple reply or full 3-tab analysis:
 - List 3-5 key points as bullet points
 
 **Actions Tab:**
-- List 2-4 actionable steps
-- Assign priority: URGENT, IMPORTANT, or NORMAL
-- Include helpful links when relevant (Malaysian Bar, government sites, etc.)
+- List 2-4 actionable steps with unique IDs (format: "action_[timestamp]_[random]")
+- Assign priority: "urgent", "important", or "normal" (LOWERCASE ONLY)
+- Always set status: "pending" for new actions
+- Include dueDate as ISO date string (YYYY-MM-DD) if action is time-sensitive (optional)
+- Format links as externalLinks array: [{"text": "Link text", "url": "https://..."}]
+- If no links, use empty array: "externalLinks": []
 
 **Malaysian Law Context:**
 - Reference specific Malaysian laws (Employment Act 1955, Contracts Act 1950, etc.)
