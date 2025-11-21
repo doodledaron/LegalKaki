@@ -19,12 +19,12 @@ export interface TextAnalysisRequest {
 export interface TextAnalysisResponse {
   explanation: string;
   category:
-    | "clause"
-    | "legal-term"
-    | "obligation"
-    | "right"
-    | "warning"
-    | "general";
+  | "clause"
+  | "legal-term"
+  | "obligation"
+  | "right"
+  | "warning"
+  | "general";
   confidence: number;
 }
 
@@ -171,7 +171,7 @@ class GeminiService {
   async processChatWithDocument(
     userMessage: string,
     documentText: string,
-    chatHistory: Array<{content: string, sender: string}>,
+    chatHistory: Array<{ content: string, sender: string }>,
     domain: string
   ): Promise<any> {
     console.log('[Gemini Service] Processing chat with document context');
@@ -429,7 +429,7 @@ Generate comprehensive insights now.`;
   private buildChatPrompt(
     userMessage: string,
     documentText: string,
-    chatHistory: Array<{content: string, sender: string}>,
+    chatHistory: Array<{ content: string, sender: string }>,
     domain: string
   ): string {
     const historyText = chatHistory
@@ -659,7 +659,7 @@ Remember: Return ONLY JSON. No markdown blocks. Choose "simple" for casual messa
     try {
       console.log('[Gemini Service] Generating draft document:', title);
 
-      const draftPrompt = `You are a legal document drafting assistant specializing in Malaysian law for the ${domain} domain.
+      const draftPrompt = `You are an expert legal document drafting assistant specializing in Malaysian law (e.g., Contracts Act 1950, Employment Act 1955, Companies Act 2016) for the ${domain} domain.
 
 User Request: ${prompt}
 
@@ -667,14 +667,19 @@ Document Title: ${title}
 
 ${context ? `Additional Context:\n${context}\n` : ''}
 
-Generate a complete, professional legal document that addresses the user's request. The document should:
-1. Follow standard legal document formatting
-2. Include all necessary clauses and provisions
-3. Use appropriate legal terminology
-4. Be specific to Malaysian law where applicable
-5. Include placeholders for specific details (e.g., [PARTY NAME], [DATE], [AMOUNT])
+INSTRUCTIONS:
+1. Generate a comprehensive, legally sound document based on the user's request.
+2. Ensure strict adherence to Malaysian legal standards and terminology.
+3. Use professional, formal legal language.
+4. Include all standard clauses (e.g., Governing Law, Dispute Resolution, Severability) appropriate for this type of document.
+5. Format the document clearly with section headings (e.g., "1. DEFINITIONS", "2. OBLIGATIONS").
+6. Use placeholders like [PARTY NAME], [DATE], [AMOUNT] for variable details.
+7. If the user request implies editing an existing text provided in the prompt, output the *full* revised document, incorporating the changes seamlessly.
 
-Format the document as plain text with clear section headings and numbering.`;
+OUTPUT FORMAT:
+- Plain text with clear spacing between sections.
+- Do not use markdown code blocks (like \`\`\`).
+- Do not include conversational filler (e.g., "Here is your draft"). Just the document content.`;
 
       const result = await this.model.generateContent(draftPrompt);
       const response = await result.response;

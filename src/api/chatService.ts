@@ -356,10 +356,11 @@ export async function generateDraft(
   prompt: string,
   title: string,
   domain: string,
-  context?: string
+  context?: string,
+  shouldSave: boolean = true
 ): Promise<{ success: boolean; document?: Document; error?: string }> {
   try {
-    console.log('[Chat Service] Generating draft:', title);
+    console.log('[Chat Service] Generating draft:', title, 'shouldSave:', shouldSave);
 
     // Generate content using Gemini
     const content = await geminiService.generateDraftDocument(prompt, title, domain, context);
@@ -369,7 +370,7 @@ export async function generateDraft(
     const filename = `${title.replace(/[^a-z0-9]/gi, '_')}.txt`;
     const fileSize = new Blob([content], { type: 'text/plain' }).size;
 
-    // Store in localStorage (only metadata and text, no binary blob)
+    // Create document object
     const documentMetadata: Document = {
       id: documentId,
       originalFilename: filename,
@@ -383,10 +384,13 @@ export async function generateDraft(
       contentText: content,
     };
 
-    // Add to documents list (no file blob storage needed)
-    addDocument(documentMetadata);
-
-    console.log('[Chat Service] Draft created:', documentId);
+    if (shouldSave) {
+      // Store in localStorage (only metadata and text, no binary blob)
+      addDocument(documentMetadata);
+      console.log('[Chat Service] Draft created and saved:', documentId);
+    } else {
+      console.log('[Chat Service] Draft created (not saved):', documentId);
+    }
 
     return {
       success: true,
@@ -402,6 +406,20 @@ export async function generateDraft(
 }
 
 /**
+ * Save a draft document that was previously generated but not saved
+ */
+export function saveDraft(document: Document): boolean {
+  try {
+    console.log('[Chat Service] Saving draft manually:', document.id);
+    addDocument(document);
+    return true;
+  } catch (error) {
+    console.error('[Chat Service] Error saving draft:', error);
+    return false;
+  }
+}
+
+/**
  * Chat Service Export
  */
 export const chatService = {
@@ -409,6 +427,7 @@ export const chatService = {
   sendMessage,
   getDocumentText,
   generateDraft,
+  saveDraft,
 };
 
 export default chatService;

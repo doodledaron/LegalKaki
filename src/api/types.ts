@@ -47,26 +47,26 @@ export function mapBackendActionToActionItem(backend: BackendAction): ActionItem
     external_url_length: backend.external_url?.length,
     category: backend.category
   })
-  
+
   const externalLinks: Array<{ text: string; url: string }> = []
-  
+
   // Use the external_url from backend if it's provided and not just "string"
   // If external_url is 'string', it means there is no external URL
   const trimmedUrl = backend.external_url?.trim()
-  
+
   // Debug URL validation
   console.log('🔍 URL Validation:', {
     originalUrl: backend.external_url,
     trimmedUrl: trimmedUrl,
     isValid: trimmedUrl && trimmedUrl !== 'string' && trimmedUrl.startsWith('http')
   })
-  
+
   // Only use real backend URLs - validate they are proper HTTP/HTTPS URLs
-  if (backend.external_url && 
-      trimmedUrl && 
-      trimmedUrl !== 'string' &&
-      trimmedUrl.length > 0 &&
-      (trimmedUrl.startsWith('http://') || trimmedUrl.startsWith('https://'))) {
+  if (backend.external_url &&
+    trimmedUrl &&
+    trimmedUrl !== 'string' &&
+    trimmedUrl.length > 0 &&
+    (trimmedUrl.startsWith('http://') || trimmedUrl.startsWith('https://'))) {
     console.log('✅ Adding backend external URL:', backend.external_url)
     externalLinks.push({
       text: 'View Resource',
@@ -82,9 +82,9 @@ export function mapBackendActionToActionItem(backend: BackendAction): ActionItem
       startsWithHttp: trimmedUrl?.startsWith('http')
     })
   }
-  
+
   // Only use real backend URLs - no generated links
-  
+
   const mappedAction = {
     id: backend.action_id.toString(),
     title: backend.title,
@@ -95,7 +95,7 @@ export function mapBackendActionToActionItem(backend: BackendAction): ActionItem
     externalLinks,
     sourceConversation: undefined, // Backend doesn't provide source conversation
   }
-  
+
   console.log('✅ Mapped Action Result:', {
     id: mappedAction.id,
     title: mappedAction.title,
@@ -106,7 +106,7 @@ export function mapBackendActionToActionItem(backend: BackendAction): ActionItem
     hasBackendUrl: !!backend.external_url,
     backendUrlIsString: backend.external_url === 'string'
   })
-  
+
   return mappedAction
 }
 
@@ -136,7 +136,7 @@ export function mapBackendDocumentToDocument(backend: BackendDocument): Document
     }
   }
   const fileExtension = filename.includes('.') ? filename.split('.').pop() : 'unknown'
-  
+
   return {
     id: backend.document_id.toString(),
     originalFilename: filename,
@@ -179,7 +179,7 @@ export function mapBackendCollectionDocumentToDocument(backend: BackendCollectio
     filename = lastPart.includes('_') ? lastPart.split('_').slice(1).join('_') : lastPart
   }
   const fileExtension = filename.includes('.') ? filename.split('.').pop() : 'unknown'
-  
+
   return {
     id: backend.document_id.toString(),
     originalFilename: filename,
@@ -361,7 +361,7 @@ export interface CollectionDashboardData {
     completedActions: number
   }
 }
-  
+
 // Base API Response Types
 export interface ApiResponse<T> {
   data: T
@@ -538,6 +538,7 @@ export interface RiskIndicator {
 
 export interface DraftResult {
   id: string
+  documentId?: string // Optional ID for the generated document
   documentType: string
   content: string
   suggestions: DraftSuggestion[]

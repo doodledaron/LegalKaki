@@ -107,7 +107,7 @@ const AnalysisMessageBubble = memo(
               <span>Actions</span>
             </TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="explanation" className="p-4 max-h-96 overflow-y-auto">
             <div className="space-y-3">
               <div className="bg-purple-subtle/30 rounded-lg p-4 border border-purple-primary/20">
@@ -123,7 +123,7 @@ const AnalysisMessageBubble = memo(
               </div>
             </div>
           </TabsContent>
-          
+
           <TabsContent value="analysis" className="p-4 max-h-96 overflow-y-auto">
             <div className="space-y-3">
               <div>
@@ -139,13 +139,12 @@ const AnalysisMessageBubble = memo(
                         className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg border border-gray-100"
                       >
                         <AlertTriangle
-                          className={`w-4 h-4 mt-0.5 ${
-                            risk.level === "high"
-                              ? "text-red-500"
-                              : risk.level === "medium"
+                          className={`w-4 h-4 mt-0.5 ${risk.level === "high"
+                            ? "text-red-500"
+                            : risk.level === "medium"
                               ? "text-yellow-500"
                               : "text-green-500"
-                          }`}
+                            }`}
                         />
                         <div className="flex-1">
                           <p className="body-small text-text-primary">
@@ -185,7 +184,7 @@ const AnalysisMessageBubble = memo(
               </div>
             </div>
           </TabsContent>
-          
+
           <TabsContent value="action" className="p-4 max-h-96 overflow-y-auto">
             <div className="space-y-3">
               {analysisResult.actionItems.map((action: ActionItem) => (
@@ -201,13 +200,12 @@ const AnalysisMessageBubble = memo(
                     <div className="flex-1">
                       <div className="flex items-center space-x-2 mb-2">
                         <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            action.priority === "urgent"
-                              ? "bg-red-100 text-red-700"
-                              : action.priority === "important"
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${action.priority === "urgent"
+                            ? "bg-red-100 text-red-700"
+                            : action.priority === "important"
                               ? "bg-yellow-100 text-yellow-700"
                               : "bg-green-100 text-green-700"
-                          }`}
+                            }`}
                         >
                           {action.priority}
                         </span>
@@ -225,7 +223,7 @@ const AnalysisMessageBubble = memo(
             </div>
           </TabsContent>
         </Tabs>
-        
+
         <div className="p-3 bg-gray-50/50 border-t border-gray-100">
           <p className="caption text-text-secondary text-center">
             {new Date().toLocaleTimeString([], {
@@ -243,45 +241,108 @@ AnalysisMessageBubble.displayName = "AnalysisMessageBubble";
 
 // Memoized Draft Message Bubble Component
 const DraftMessageBubble = memo(
-  ({ draftResult }: { draftResult: ApiDraftResult }) => (
+  ({ draftResult, onDiscard, onEmail, onSave }: { draftResult: ApiDraftResult; onDiscard?: () => void; onEmail?: () => void; onSave?: () => void }) => (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className="flex justify-start mb-4"
     >
-      <div className="w-[70%] bg-surface-white border-2 border-indigo-200/50 rounded-2xl rounded-bl-sm shadow-md overflow-hidden">
-        <Tabs defaultValue="explanation" className="w-full">
+      <div className="w-[85%] bg-surface-white border-2 border-indigo-200/50 rounded-2xl rounded-bl-sm shadow-md overflow-hidden">
+        <Tabs defaultValue="action" className="w-full">
           <TabsList className="w-full justify-start border-b border-gray-100 bg-gray-50/50 rounded-none px-4">
-            <TabsTrigger value="explanation" className="flex items-center space-x-2">
-              <BookOpen className="w-4 h-4" />
-              <span>Explanation</span>
+            <TabsTrigger value="action" className="flex items-center space-x-2">
+              <FileText className="w-4 h-4" />
+              <span>Draft</span>
             </TabsTrigger>
             <TabsTrigger value="analysis" className="flex items-center space-x-2">
               <Search className="w-4 h-4" />
               <span>Analysis</span>
             </TabsTrigger>
-            <TabsTrigger value="action" className="flex items-center space-x-2">
-              <Target className="w-4 h-4" />
-              <span>Actions</span>
+            <TabsTrigger value="explanation" className="flex items-center space-x-2">
+              <BookOpen className="w-4 h-4" />
+              <span>Explanation</span>
             </TabsTrigger>
           </TabsList>
-          
-          <TabsContent value="explanation" className="p-4 max-h-96 overflow-y-auto">
+
+          <TabsContent value="action" className="p-4 max-h-[600px] overflow-y-auto">
             <div className="space-y-3">
-              <div className="bg-purple-subtle/30 rounded-lg p-4 border border-purple-primary/20">
-                <div className="flex items-center space-x-2 mb-2">
-                  <FileText className="w-4 h-4 text-purple-primary" />
-                  <span className="body-small font-medium text-purple-primary">
-                    Document Draft - {draftResult.documentType}
-                  </span>
+              <div className="border border-purple-primary/20 bg-purple-subtle/20 rounded-lg p-4">
+                <div className="flex items-start space-x-3">
+                  <FileText className="w-4 h-4 text-purple-primary mt-1" />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                          Draft Document
+                        </span>
+                        <span className="body-small font-medium text-text-primary">
+                          {draftResult.documentType}
+                        </span>
+                      </div>
+                      <div className="flex space-x-2">
+                        {onSave && (
+                          <Button
+                            size="small"
+                            variant="ghost"
+                            onClick={onSave}
+                            className="h-8 w-8 p-0 text-text-secondary hover:text-green-600 hover:bg-green-50"
+                            title="Save to Documents"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {onEmail && (
+                          <Button
+                            size="small"
+                            variant="ghost"
+                            onClick={onEmail}
+                            className="h-8 w-8 p-0 text-text-secondary hover:text-purple-primary hover:bg-purple-subtle/20"
+                            title="Email Document"
+                          >
+                            <Mail className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {onDiscard && (
+                          <Button
+                            size="small"
+                            variant="ghost"
+                            onClick={onDiscard}
+                            className="h-8 w-8 p-0 text-text-secondary hover:text-red-600 hover:bg-red-50"
+                            title="Discard Draft"
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm">
+                      <pre className="whitespace-pre-wrap text-sm text-text-primary font-mono leading-relaxed">
+                        {draftResult.content}
+                      </pre>
+                    </div>
+                    <div className="mt-4 flex justify-end space-x-3">
+                      <Button
+                        size="small"
+                        variant="secondary"
+                        className="border-purple-primary text-purple-primary hover:bg-purple-subtle/20"
+                      >
+                        <Edit className="w-4 h-4 mr-2" />
+                        Refine Draft
+                      </Button>
+                      <Button
+                        size="small"
+                        className="bg-purple-primary text-white hover:bg-purple-primary/90"
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Download PDF
+                      </Button>
+                    </div>
+                  </div>
                 </div>
-                <p className="body-regular text-text-primary">
-                  {draftResult.disclaimer}
-                </p>
               </div>
             </div>
           </TabsContent>
-          
+
           <TabsContent value="analysis" className="p-4 max-h-96 overflow-y-auto">
             <div className="space-y-3">
               <div>
@@ -300,13 +361,12 @@ const DraftMessageBubble = memo(
                         className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg border border-gray-100"
                       >
                         <div
-                          className={`w-2 h-2 rounded-full mt-2 ${
-                            suggestion.priority === "high"
-                              ? "bg-red-500"
-                              : suggestion.priority === "medium"
+                          className={`w-2 h-2 rounded-full mt-2 ${suggestion.priority === "high"
+                            ? "bg-red-500"
+                            : suggestion.priority === "medium"
                               ? "bg-yellow-500"
                               : "bg-green-500"
-                          }`}
+                            }`}
                         />
                         <div className="flex-1">
                           <p className="body-small font-medium text-text-primary mb-1">
@@ -323,52 +383,29 @@ const DraftMessageBubble = memo(
               </div>
             </div>
           </TabsContent>
-          
-          <TabsContent value="action" className="p-4 max-h-96 overflow-y-auto">
+
+          <TabsContent value="explanation" className="p-4 max-h-96 overflow-y-auto">
             <div className="space-y-3">
-              <div className="border border-purple-primary/20 bg-purple-subtle/20 rounded-lg p-4">
-                <div className="flex items-start space-x-3">
-                  <FileText className="w-4 h-4 text-purple-primary mt-1" />
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                        Draft Document
-                      </span>
-                      <span className="body-small font-medium text-text-primary">
-                        {draftResult.documentType}
-                      </span>
-                    </div>
-                    <div className="bg-white rounded-lg p-4 border border-gray-200">
-                      <pre className="whitespace-pre-wrap text-sm text-text-primary font-mono">
-                        {draftResult.content}
-                      </pre>
-                    </div>
-                    <div className="mt-3 flex space-x-2">
-                      <Button
-                        size="small"
-                        className="bg-purple-primary text-white hover:bg-purple-primary/90"
-                      >
-                        <Download className="w-4 h-4 mr-2" />
-                        Download
-                      </Button>
-                      <Button
-                        size="small"
-                        variant="secondary"
-                        className="border-purple-primary text-purple-primary hover:bg-purple-subtle/20"
-                      >
-                        <Edit className="w-4 h-4 mr-2" />
-                        Edit
-                      </Button>
-                    </div>
-                  </div>
+              <div className="bg-purple-subtle/30 rounded-lg p-4 border border-purple-primary/20">
+                <div className="flex items-center space-x-2 mb-2">
+                  <FileText className="w-4 h-4 text-purple-primary" />
+                  <span className="body-small font-medium text-purple-primary">
+                    About this Draft
+                  </span>
                 </div>
+                <p className="body-regular text-text-primary">
+                  {draftResult.disclaimer}
+                </p>
               </div>
             </div>
           </TabsContent>
         </Tabs>
-        
-        <div className="p-3 bg-gray-50/50 border-t border-gray-100">
-          <p className="caption text-text-secondary text-center">
+
+        <div className="p-3 bg-gray-50/50 border-t border-gray-100 flex justify-between items-center">
+          <p className="caption text-text-secondary">
+            AI-generated draft • Review carefully before use
+          </p>
+          <p className="caption text-text-secondary">
             {new Date().toLocaleTimeString([], {
               hour: "2-digit",
               minute: "2-digit",
@@ -387,9 +424,15 @@ const CombinedMessageBubble = memo(
   ({
     analysis,
     draft,
+    onDiscard,
+    onEmail,
+    onSave,
   }: {
     analysis?: ApiAnalysisResult;
     draft?: ApiDraftResult;
+    onDiscard?: () => void;
+    onEmail?: () => void;
+    onSave?: () => void;
   }) => (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -427,7 +470,9 @@ const CombinedMessageBubble = memo(
 
           {draft && (
             <TabsContent value="draft" className="p-0">
-              <DraftMessageBubble draftResult={draft} />
+              <TabsContent value="draft" className="p-0">
+                <DraftMessageBubble draftResult={draft} onDiscard={onDiscard} onEmail={onEmail} onSave={onSave} />
+              </TabsContent>
             </TabsContent>
           )}
         </Tabs>
@@ -502,17 +547,15 @@ const LegalAnalysisBubble = memo(({ supervisorData, message }: { supervisorData:
                   </h4>
                   <div className="space-y-2">
                     {analysisData.risks.map((risk, idx) => (
-                      <div key={idx} className={`p-3 rounded-lg border-l-4 ${
-                        risk.severity === 'HIGH' ? 'bg-red-50 border-red-500' :
+                      <div key={idx} className={`p-3 rounded-lg border-l-4 ${risk.severity === 'HIGH' ? 'bg-red-50 border-red-500' :
                         risk.severity === 'MEDIUM' ? 'bg-yellow-50 border-yellow-500' :
-                        'bg-green-50 border-green-500'
-                      }`}>
+                          'bg-green-50 border-green-500'
+                        }`}>
                         <div className="flex items-start gap-2">
-                          <span className={`caption font-bold px-2 py-0.5 rounded ${
-                            risk.severity === 'HIGH' ? 'bg-red-100 text-red-700' :
+                          <span className={`caption font-bold px-2 py-0.5 rounded ${risk.severity === 'HIGH' ? 'bg-red-100 text-red-700' :
                             risk.severity === 'MEDIUM' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-green-100 text-green-700'
-                          }`}>
+                              'bg-green-100 text-green-700'
+                            }`}>
                             {risk.severity}
                           </span>
                           <div className="flex-1">
@@ -557,11 +600,10 @@ const LegalAnalysisBubble = memo(({ supervisorData, message }: { supervisorData:
                         <input type="checkbox" className="mt-1" />
                         <h5 className="body-semibold text-text-primary">{action.title}</h5>
                       </div>
-                      <span className={`caption font-bold px-2 py-1 rounded ${
-                        action.priority === 'URGENT' ? 'bg-red-100 text-red-700' :
+                      <span className={`caption font-bold px-2 py-1 rounded ${action.priority === 'URGENT' ? 'bg-red-100 text-red-700' :
                         action.priority === 'IMPORTANT' ? 'bg-yellow-100 text-yellow-700' :
-                        'bg-blue-100 text-blue-700'
-                      }`}>
+                          'bg-blue-100 text-blue-700'
+                        }`}>
                         {action.priority}
                       </span>
                     </div>
@@ -602,7 +644,7 @@ LegalAnalysisBubble.displayName = "LegalAnalysisBubble";
 // Legacy Supervisor Bubble Component (handles old multi-format responses)
 const LegacySupervisorBubble = memo(({ supervisorData, message }: { supervisorData: Record<string, unknown>; message?: Message }) => {
   const { explanation_tab, analysis_tab, action_tab, extractedData, response_type, conversation_context,
-          explanation, analysis, actions } = supervisorData;
+    explanation, analysis, actions } = supervisorData;
 
   // Check if we have simplified structure (new format)
   const hasSimplifiedStructure = explanation || analysis || actions;
@@ -671,10 +713,10 @@ const LegacySupervisorBubble = memo(({ supervisorData, message }: { supervisorDa
     // Try to get content from conversation_context.system_message (for plain text responses)
     // or fallback to tab contents
     const messageContent = (conversation_context as { system_message?: string })?.system_message ||
-                          (explanation_tab as { content?: string })?.content ||
-                          (action_tab as { content?: string })?.content ||
-                          (analysis_tab as { content?: string })?.content ||
-                          "No response available.";
+      (explanation_tab as { content?: string })?.content ||
+      (action_tab as { content?: string })?.content ||
+      (analysis_tab as { content?: string })?.content ||
+      "No response available.";
 
     return (
       <motion.div
@@ -746,16 +788,16 @@ const LegacySupervisorBubble = memo(({ supervisorData, message }: { supervisorDa
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{
-                      p: ({children}) => <p className="body-regular text-text-primary mb-3">{children}</p>,
-                      ul: ({children}) => <ul className="list-disc list-inside space-y-2 mb-3">{children}</ul>,
-                      ol: ({children}) => <ol className="list-decimal list-inside space-y-2 mb-3">{children}</ol>,
-                      li: ({children}) => <li className="body-regular text-text-primary">{children}</li>,
-                      h1: ({children}) => <h1 className="heading-3 text-text-primary mb-3">{children}</h1>,
-                      h2: ({children}) => <h2 className="heading-4 text-text-primary mb-2">{children}</h2>,
-                      h3: ({children}) => <h3 className="body-semibold text-text-primary mb-2">{children}</h3>,
-                      strong: ({children}) => <strong className="body-semibold text-purple-primary">{children}</strong>,
-                      em: ({children}) => <em className="italic">{children}</em>,
-                      code: ({children}) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
+                      p: ({ children }) => <p className="body-regular text-text-primary mb-3">{children}</p>,
+                      ul: ({ children }) => <ul className="list-disc list-inside space-y-2 mb-3">{children}</ul>,
+                      ol: ({ children }) => <ol className="list-decimal list-inside space-y-2 mb-3">{children}</ol>,
+                      li: ({ children }) => <li className="body-regular text-text-primary">{children}</li>,
+                      h1: ({ children }) => <h1 className="heading-3 text-text-primary mb-3">{children}</h1>,
+                      h2: ({ children }) => <h2 className="heading-4 text-text-primary mb-2">{children}</h2>,
+                      h3: ({ children }) => <h3 className="body-semibold text-text-primary mb-2">{children}</h3>,
+                      strong: ({ children }) => <strong className="body-semibold text-purple-primary">{children}</strong>,
+                      em: ({ children }) => <em className="italic">{children}</em>,
+                      code: ({ children }) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
                     }}
                   >
                     {(explanation_tab as { content?: string })?.content}
@@ -779,16 +821,16 @@ const LegacySupervisorBubble = memo(({ supervisorData, message }: { supervisorDa
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{
-                      p: ({children}) => <p className="body-regular text-text-primary mb-3">{children}</p>,
-                      ul: ({children}) => <ul className="list-disc list-inside space-y-2 mb-3">{children}</ul>,
-                      ol: ({children}) => <ol className="list-decimal list-inside space-y-2 mb-3">{children}</ol>,
-                      li: ({children}) => <li className="body-regular text-text-primary">{children}</li>,
-                      h1: ({children}) => <h1 className="heading-3 text-text-primary mb-3">{children}</h1>,
-                      h2: ({children}) => <h2 className="heading-4 text-text-primary mb-2">{children}</h2>,
-                      h3: ({children}) => <h3 className="body-semibold text-text-primary mb-2">{children}</h3>,
-                      strong: ({children}) => <strong className="body-semibold text-purple-primary">{children}</strong>,
-                      em: ({children}) => <em className="italic">{children}</em>,
-                      code: ({children}) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
+                      p: ({ children }) => <p className="body-regular text-text-primary mb-3">{children}</p>,
+                      ul: ({ children }) => <ul className="list-disc list-inside space-y-2 mb-3">{children}</ul>,
+                      ol: ({ children }) => <ol className="list-decimal list-inside space-y-2 mb-3">{children}</ol>,
+                      li: ({ children }) => <li className="body-regular text-text-primary">{children}</li>,
+                      h1: ({ children }) => <h1 className="heading-3 text-text-primary mb-3">{children}</h1>,
+                      h2: ({ children }) => <h2 className="heading-4 text-text-primary mb-2">{children}</h2>,
+                      h3: ({ children }) => <h3 className="body-semibold text-text-primary mb-2">{children}</h3>,
+                      strong: ({ children }) => <strong className="body-semibold text-purple-primary">{children}</strong>,
+                      em: ({ children }) => <em className="italic">{children}</em>,
+                      code: ({ children }) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
                     }}
                   >
                     {(analysis_tab as { content?: string })?.content}
@@ -812,16 +854,16 @@ const LegacySupervisorBubble = memo(({ supervisorData, message }: { supervisorDa
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{
-                      p: ({children}) => <p className="body-regular text-text-primary mb-3">{children}</p>,
-                      ul: ({children}) => <ul className="list-disc list-inside space-y-2 mb-3">{children}</ul>,
-                      ol: ({children}) => <ol className="list-decimal list-inside space-y-2 mb-3">{children}</ol>,
-                      li: ({children}) => <li className="body-regular text-text-primary">{children}</li>,
-                      h1: ({children}) => <h1 className="heading-3 text-text-primary mb-3">{children}</h1>,
-                      h2: ({children}) => <h2 className="heading-4 text-text-primary mb-2">{children}</h2>,
-                      h3: ({children}) => <h3 className="body-semibold text-text-primary mb-2">{children}</h3>,
-                      strong: ({children}) => <strong className="body-semibold text-purple-primary">{children}</strong>,
-                      em: ({children}) => <em className="italic">{children}</em>,
-                      code: ({children}) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
+                      p: ({ children }) => <p className="body-regular text-text-primary mb-3">{children}</p>,
+                      ul: ({ children }) => <ul className="list-disc list-inside space-y-2 mb-3">{children}</ul>,
+                      ol: ({ children }) => <ol className="list-decimal list-inside space-y-2 mb-3">{children}</ol>,
+                      li: ({ children }) => <li className="body-regular text-text-primary">{children}</li>,
+                      h1: ({ children }) => <h1 className="heading-3 text-text-primary mb-3">{children}</h1>,
+                      h2: ({ children }) => <h2 className="heading-4 text-text-primary mb-2">{children}</h2>,
+                      h3: ({ children }) => <h3 className="body-semibold text-text-primary mb-2">{children}</h3>,
+                      strong: ({ children }) => <strong className="body-semibold text-purple-primary">{children}</strong>,
+                      em: ({ children }) => <em className="italic">{children}</em>,
+                      code: ({ children }) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
                     }}
                   >
                     {(action_tab as { content?: string })?.content}
@@ -875,16 +917,14 @@ const TextMessageBubble = memo(({ message }: { message: Message }) => (
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
     exit={{ opacity: 0, y: -20 }}
-    className={`flex ${
-      message.sender === "user" ? "justify-end" : "justify-start"
-    }`}
+    className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"
+      }`}
   >
     <div
-      className={`max-w-[85%] px-4 py-3 rounded-2xl ${
-        message.sender === "user"
-          ? "bg-purple-primary text-white rounded-br-sm"
-          : "bg-surface-white border border-gray-200 text-text-primary rounded-bl-sm"
-      }`}
+      className={`max-w-[85%] px-4 py-3 rounded-2xl ${message.sender === "user"
+        ? "bg-purple-primary text-white rounded-br-sm"
+        : "bg-surface-white border border-gray-200 text-text-primary rounded-bl-sm"
+        }`}
     >
       {/* Show file attachments if present */}
       {message.attachments && message.attachments.length > 0 && (
@@ -892,11 +932,10 @@ const TextMessageBubble = memo(({ message }: { message: Message }) => (
           {message.attachments.map((attachment) => (
             <div
               key={attachment.id}
-              className={`flex items-center gap-2 text-xs ${
-                message.sender === "user"
-                  ? "text-white/90"
-                  : "text-purple-700"
-              }`}
+              className={`flex items-center gap-2 text-xs ${message.sender === "user"
+                ? "text-white/90"
+                : "text-purple-700"
+                }`}
             >
               <FileText className="w-3 h-3 flex-shrink-0" />
               <span className="truncate">{attachment.filename}</span>
@@ -911,9 +950,8 @@ const TextMessageBubble = memo(({ message }: { message: Message }) => (
       )}
 
       <div
-        className={`body-regular ${
-          message.sender === "user" ? "text-white" : "text-text-primary"
-        }`}
+        className={`body-regular ${message.sender === "user" ? "text-white" : "text-text-primary"
+          }`}
       >
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
@@ -921,11 +959,10 @@ const TextMessageBubble = memo(({ message }: { message: Message }) => (
             a: ({ node, ...props }) => (
               <a
                 {...props}
-                className={`underline ${
-                  message.sender === "user"
-                    ? "text-white hover:text-white/80"
-                    : "text-purple-primary hover:text-purple-700"
-                }`}
+                className={`underline ${message.sender === "user"
+                  ? "text-white hover:text-white/80"
+                  : "text-purple-primary hover:text-purple-700"
+                  }`}
                 target="_blank"
                 rel="noopener noreferrer"
               />
@@ -944,9 +981,8 @@ const TextMessageBubble = memo(({ message }: { message: Message }) => (
       )}
 
       <p
-        className={`caption mt-1 ${
-          message.sender === "user" ? "text-white/80" : "text-text-secondary"
-        }`}
+        className={`caption mt-1 ${message.sender === "user" ? "text-white/80" : "text-text-secondary"
+          }`}
       >
         {message.timestamp.toLocaleTimeString([], {
           hour: "2-digit",
@@ -972,7 +1008,7 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
   const [isDragOver, setIsDragOver] = useState(false);
   const [isSidePanelOpen, setIsSidePanelOpen] = useState(false);
   const [messagePayloads, setMessagePayloads] = useState<
-    Record<string, { 
+    Record<string, {
       analysis?: ApiAnalysisResult;
       draft?: ApiDraftResult;
       supervisor?: Record<string, unknown>; // Supervisor response structure
@@ -1189,7 +1225,7 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
         (stage, progress) => {
           try {
             console.log("[Chat] stream progress:", { stage, progress });
-          } catch (_) {}
+          } catch (_) { }
         }
       );
       return response;
@@ -1250,7 +1286,7 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
   }, [showDocumentDropdown]);
 
   // Handle draft generation using the document generation endpoint
-  const handleDraftGeneration = async (prompt: string, chatId: number) => {
+  const handleDraftGeneration = async (prompt: string, chatId: number, context?: string) => {
     // Add user's message first
     const userMessage: Message = {
       id: `user_${Date.now()}`,
@@ -1281,23 +1317,40 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
 
       console.log(`🎯 [POC] Calling draft generation: chatId=${chatId}, prompt="${prompt}"`);
 
-      // POC: Generate draft using Gemini
-      const result = await chatService.generateDraft(prompt, title, domain);
+      // POC: Generate draft using Gemini (shouldSave: false for manual save workflow)
+      const result = await chatService.generateDraft(prompt, title, domain, context, false);
 
       if (result.success && result.document) {
         const doc = result.document;
 
-        // Add to chat documents so it appears in dropdown
-        setChatDocuments(prev => [...prev, doc]);
+        // Don't add to chat documents yet - wait for user to save
+        // setChatDocuments(prev => [...prev, doc]);
 
         // Add success message
         const successMessage: Message = {
           id: `doc_${Date.now()}`,
-          content: `✅ **Document Generated Successfully!**\n\n📄 **${doc.originalFilename}**\n\nSize: ${(doc.fileSize / 1024).toFixed(1)} KB\n\nThe document has been saved and can be accessed from your documents list.`,
+          content: `✅ **Draft Generated!**\n\n📄 **${doc.originalFilename}**\n\nSize: ${(doc.fileSize / 1024).toFixed(1)} KB\n\nPlease review the draft below. You can **Save** it to your documents if you're satisfied, or **Discard** it to try again.`,
           sender: "assistant",
           timestamp: new Date(),
           domain,
+          type: "draft"
         };
+
+        // Create draft payload for the bubble
+        const draftResult: ApiDraftResult = {
+          id: `draft_${Date.now()}`,
+          documentId: doc.id,
+          documentType: title,
+          content: doc.contentText || "",
+          suggestions: [], // We could generate these later
+          disclaimer: "This is an AI-generated draft. Please review carefully before use.",
+        };
+
+        // Update payloads first
+        setMessagePayloads(prev => ({
+          ...prev,
+          [successMessage.id]: { draft: draftResult }
+        }));
 
         // Replace generating message with success message
         setCurrentSession(prev => ({
@@ -1382,6 +1435,52 @@ Generate a complete, updated version of the document incorporating all the reque
     }
   };
 
+  const handleSaveDraft = useCallback((document: Document) => {
+    const success = chatService.saveDraft(document);
+    if (success) {
+      // Add to chat documents list
+      setChatDocuments(prev => [...prev, document]);
+
+      // Show success message
+      if (currentSession) {
+        const saveMessage: Message = {
+          id: Date.now().toString(),
+          content: `💾 **Document Saved!**\n\n"${document.originalFilename}" has been added to your documents list.`,
+          sender: "assistant",
+          timestamp: new Date(),
+          domain,
+          type: "text"
+        };
+        setCurrentSession({
+          ...currentSession,
+          messages: [...currentSession.messages, saveMessage]
+        });
+      }
+    }
+  }, [currentSession, domain]);
+
+  const handleDiscardDraft = useCallback(() => {
+    // 1. Exit draft mode
+    setIsDraftMode(false);
+    setSelectedDocumentForEdit(null);
+
+    // 2. Add a system message indicating discard
+    if (currentSession) {
+      const discardMessage: Message = {
+        id: Date.now().toString(),
+        content: "🗑️ Draft discarded. Returning to Analysis Mode.",
+        sender: "assistant",
+        timestamp: new Date(),
+        domain,
+        type: "text"
+      };
+      setCurrentSession({
+        ...currentSession,
+        messages: [...currentSession.messages, discardMessage]
+      });
+    }
+  }, [currentSession, domain]);
+
   const handleSendMessage = async () => {
     if (!inputValue.trim() || !currentSession) return;
 
@@ -1405,6 +1504,36 @@ Generate a complete, updated version of the document incorporating all the reque
       return;
     }
 
+    // Check if in Draft Mode - if so, treat as draft refinement if a draft exists
+    if (isDraftMode) {
+      // Find the last draft in the session
+      const messages = currentSession.messages;
+      let lastDraftContent = "";
+
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const msg = messages[i];
+        const payload = messagePayloads[msg.id];
+        if (payload && payload.draft) {
+          lastDraftContent = payload.draft.content;
+          break;
+        }
+      }
+
+      if (lastDraftContent) {
+        console.log("📝 [Draft Mode] Refining existing draft with context");
+        setInputValue("");
+        // Call handleDraftGeneration with the previous draft as context
+        await handleDraftGeneration(messageContent, chatId, lastDraftContent);
+        return;
+      } else {
+        // If no previous draft, just generate a new one (normal flow)
+        console.log("📝 [Draft Mode] Generating new draft (no context)");
+        setInputValue("");
+        await handleDraftGeneration(messageContent, chatId);
+        return;
+      }
+    }
+
     const messageType = "analysis_request";
     setInputValue("");
 
@@ -1419,12 +1548,12 @@ Generate a complete, updated version of the document incorporating all the reque
       domain,
       attachments: sessionDocuments.length > 0
         ? sessionDocuments.map((doc: any) => ({
-            id: doc.id,
-            filename: doc.originalFilename,
-            fileType: doc.fileType,
-            fileSize: doc.fileSize,
-            url: `#document-${doc.id}`,
-          }))
+          id: doc.id,
+          filename: doc.originalFilename,
+          fileType: doc.fileType,
+          fileSize: doc.fileSize,
+          url: `#document-${doc.id}`,
+        }))
         : undefined,
     };
 
@@ -1865,9 +1994,8 @@ Generate a complete, updated version of the document incorporating all the reque
   const DocumentUploadPrompt = useCallback(
     () => (
       <div
-        className={`h-full flex items-center justify-center p-6 transition-all duration-300 ${
-          isDragOver ? "bg-purple-subtle/30" : "bg-background"
-        }`}
+        className={`h-full flex items-center justify-center p-6 transition-all duration-300 ${isDragOver ? "bg-purple-subtle/30" : "bg-background"
+          }`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -1880,11 +2008,10 @@ Generate a complete, updated version of the document incorporating all the reque
         >
           {/* Drag & Drop Zone */}
           <motion.div
-            className={`relative border-2 border-dashed rounded-2xl p-12 mb-6 transition-all duration-300 ${
-              isDragOver
-                ? "border-purple-primary bg-purple-subtle/20 scale-105"
-                : "border-gray-300 hover:border-purple-primary/50 hover:bg-purple-subtle/10"
-            }`}
+            className={`relative border-2 border-dashed rounded-2xl p-12 mb-6 transition-all duration-300 ${isDragOver
+              ? "border-purple-primary bg-purple-subtle/20 scale-105"
+              : "border-gray-300 hover:border-purple-primary/50 hover:bg-purple-subtle/10"
+              }`}
             initial={{ scale: 0.95 }}
             animate={{ scale: 1 }}
             transition={{ duration: 0.5, delay: 0.2 }}
@@ -1897,9 +2024,8 @@ Generate a complete, updated version of the document incorporating all the reque
               transition={{ duration: 0.3 }}
             >
               <FileText
-                className={`w-8 h-8 transition-colors duration-300 ${
-                  isDragOver ? "text-purple-primary" : "text-purple-primary"
-                }`}
+                className={`w-8 h-8 transition-colors duration-300 ${isDragOver ? "text-purple-primary" : "text-purple-primary"
+                  }`}
               />
             </motion.div>
 
@@ -2114,24 +2240,22 @@ Generate a complete, updated version of the document incorporating all the reque
 
   return (
     <div
-      className={`h-screen flex flex-col relative transition-colors duration-700 ${
-        isDragOver
-          ? "bg-purple-subtle/20"
-          : isDraftMode
+      className={`h-screen flex flex-col relative transition-colors duration-700 ${isDragOver
+        ? "bg-purple-subtle/20"
+        : isDraftMode
           ? "bg-gradient-to-br from-purple-subtle/20 via-purple-light/10 to-background"
           : "bg-gradient-to-br from-blue-50/30 via-gray-50/20 to-background"
-      }`}
+        }`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
       {/* Mode-specific background overlay */}
       <div
-        className={`absolute inset-0 pointer-events-none transition-all duration-700 ${
-          isDraftMode
-            ? "opacity-100 bg-gradient-to-br from-purple-primary/8 via-purple-light/4 to-purple-subtle/6"
-            : "opacity-100 bg-gradient-to-br from-indigo-50/40 via-blue-50/20 to-gray-50/30"
-        }`}
+        className={`absolute inset-0 pointer-events-none transition-all duration-700 ${isDraftMode
+          ? "opacity-100 bg-gradient-to-br from-purple-primary/8 via-purple-light/4 to-purple-subtle/6"
+          : "opacity-100 bg-gradient-to-br from-indigo-50/40 via-blue-50/20 to-gray-50/30"
+          }`}
       />
 
       {/* Main Content */}
@@ -2209,17 +2333,16 @@ Generate a complete, updated version of the document incorporating all the reque
                   }
                   rightIcon={<ChevronDown className="w-3 h-3" />}
                   onClick={() => setShowDocumentDropdown(!showDocumentDropdown)}
-                  className={`document-dropdown-button transition-all duration-300 ${
-                    selectedDocumentForEdit
-                      ? "shadow-lg shadow-purple-primary/20 ring-2 ring-purple-primary/20"
-                      : "hover:shadow-md"
-                  }`}
+                  className={`document-dropdown-button transition-all duration-300 ${selectedDocumentForEdit
+                    ? "shadow-lg shadow-purple-primary/20 ring-2 ring-purple-primary/20"
+                    : "hover:shadow-md"
+                    }`}
                 >
                   {selectedDocumentForEdit
                     ? `Editing: ${selectedDocumentForEdit.originalFilename}`
                     : isDraftMode
-                    ? "Draft Mode"
-                    : "Analysis Mode"}
+                      ? "Draft Mode"
+                      : "Analysis Mode"}
                 </Button>
 
                 {/* Dropdown Menu */}
@@ -2258,11 +2381,10 @@ Generate a complete, updated version of the document incorporating all the reque
                               });
                             }
                           }}
-                          className={`w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors ${
-                            !selectedDocumentForEdit
-                              ? "bg-purple-subtle text-purple-primary"
-                              : "text-text-primary"
-                          }`}
+                          className={`w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors ${!selectedDocumentForEdit
+                            ? "bg-purple-subtle text-purple-primary"
+                            : "text-text-primary"
+                            }`}
                         >
                           <Search className="w-4 h-4" />
                           <div className="text-left">
@@ -2314,11 +2436,10 @@ Generate a complete, updated version of the document incorporating all the reque
                                       });
                                     }
                                   }}
-                                  className={`w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors ${
-                                    selectedDocumentForEdit?.id === document.id
-                                      ? "bg-purple-subtle text-purple-primary"
-                                      : "text-text-primary"
-                                  }`}
+                                  className={`w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors ${selectedDocumentForEdit?.id === document.id
+                                    ? "bg-purple-subtle text-purple-primary"
+                                    : "text-text-primary"
+                                    }`}
                                 >
                                   <FileText className="w-4 h-4" />
                                   <div className="text-left flex-1 min-w-0">
@@ -2332,8 +2453,8 @@ Generate a complete, updated version of the document incorporating all the reque
                                   </div>
                                   {selectedDocumentForEdit?.id ===
                                     document.id && (
-                                    <div className="w-2 h-2 bg-purple-primary rounded-full"></div>
-                                  )}
+                                      <div className="w-2 h-2 bg-purple-primary rounded-full"></div>
+                                    )}
                                 </button>
                               ))}
                             </div>
@@ -2414,105 +2535,141 @@ Generate a complete, updated version of the document incorporating all the reque
               >
                 <AnimatePresence>
                   {currentSession?.messages.map((message: Message) => {
-                  const analysis = messagePayloads[message.id]?.analysis;
-                  const draft = messagePayloads[message.id]?.draft;
-                  const supervisor = messagePayloads[message.id]?.supervisor;
+                    const analysis = messagePayloads[message.id]?.analysis;
+                    const draft = messagePayloads[message.id]?.draft;
+                    const supervisor = messagePayloads[message.id]?.supervisor;
 
-                  // Handle legal analysis response (3-tab format)
-                  if (supervisor && message.sender === "assistant") {
-                    return (
-                      <LegacySupervisorBubble
-                        key={message.id}
-                        supervisorData={supervisor}
-                        message={message}
-                      />
-                    );
-                  }
+                    // Handle legal analysis response (3-tab format)
+                    if (supervisor && message.sender === "assistant") {
+                      return (
+                        <LegacySupervisorBubble
+                          key={message.id}
+                          supervisorData={supervisor}
+                          message={message}
+                        />
+                      );
+                    }
 
-                  if (analysis && draft) {
+                    if (analysis && draft) {
+                      return (
+                        <CombinedMessageBubble
+                          key={message.id}
+                          analysis={analysis}
+                          draft={draft}
+                          onDiscard={handleDiscardDraft}
+                          onEmail={handleOpenEmailModal}
+                          onSave={draft.documentId ? () => {
+                            // Reconstruct document object for saving
+                            const docToSave: Document = {
+                              id: draft.documentId || `doc_draft_${Date.now()}`,
+                              originalFilename: `${draft.documentType.replace(/\s+/g, '_')}.txt`,
+                              storedFilename: `${draft.documentType.replace(/\s+/g, '_')}.txt`,
+                              fileType: 'text/plain',
+                              fileSize: new Blob([draft.content], { type: 'text/plain' }).size,
+                              uploadDate: new Date(),
+                              analysisStatus: 'completed',
+                              s3Key: `drafts/${draft.documentId}`,
+                              s3Bucket: 'local-storage',
+                              contentText: draft.content,
+                            };
+                            handleSaveDraft(docToSave);
+                          } : undefined}
+                        />
+                      );
+                    }
+                    if (message.type === "analysis" && analysis) {
+                      return (
+                        <AnalysisMessageBubble
+                          key={message.id}
+                          analysisResult={analysis}
+                        />
+                      );
+                    }
+                    if (message.type === "draft" && draft) {
+                      return (
+                        <DraftMessageBubble
+                          key={message.id}
+                          draftResult={draft}
+                          onDiscard={handleDiscardDraft}
+                          onEmail={handleOpenEmailModal}
+                          onSave={draft.documentId ? () => {
+                            // Reconstruct document object for saving
+                            const docToSave: Document = {
+                              id: draft.documentId || `doc_draft_${Date.now()}`,
+                              originalFilename: `${draft.documentType.replace(/\s+/g, '_')}.txt`,
+                              storedFilename: `${draft.documentType.replace(/\s+/g, '_')}.txt`,
+                              fileType: 'text/plain',
+                              fileSize: new Blob([draft.content], { type: 'text/plain' }).size,
+                              uploadDate: new Date(),
+                              analysisStatus: 'completed',
+                              s3Key: `drafts/${draft.documentId}`,
+                              s3Bucket: 'local-storage',
+                              contentText: draft.content,
+                            };
+                            handleSaveDraft(docToSave);
+                          } : undefined}
+                        />
+                      );
+                    }
+                    // Default: simple text message
                     return (
-                      <CombinedMessageBubble
-                        key={message.id}
-                        analysis={analysis}
-                        draft={draft}
-                      />
+                      <TextMessageBubble key={message.id} message={message} />
                     );
-                  }
-                  if (message.type === "analysis" && analysis) {
-                    return (
-                      <AnalysisMessageBubble
-                        key={message.id}
-                        analysisResult={analysis}
-                      />
-                    );
-                  }
-                  if (message.type === "draft" && draft) {
-                    return (
-                      <DraftMessageBubble
-                        key={message.id}
-                        draftResult={draft}
-                      />
-                    );
-                  }
-                  // Default: simple text message
-                  return (
-                    <TextMessageBubble key={message.id} message={message} />
-                  );
-                })}
-              </AnimatePresence>
+                  })}
+                </AnimatePresence>
 
-              {(sendingMessage || creatingSession || uploading) && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex justify-start"
-                >
-                  <div className="bg-surface-white border border-gray-200 px-4 py-3 rounded-2xl rounded-bl-sm max-w-[85%]">
-                    <div className="flex items-center space-x-3">
-                      <div className="flex space-x-1">
-                        <motion.div
-                          className="w-2 h-2 bg-text-secondary rounded-full"
-                          animate={{ opacity: [0.3, 1, 0.3] }}
-                          transition={{
-                            duration: 1,
-                            repeat: Infinity,
-                            delay: 0,
-                          }}
-                        />
-                        <motion.div
-                          className="w-2 h-2 bg-text-secondary rounded-full"
-                          animate={{ opacity: [0.3, 1, 0.3] }}
-                          transition={{
-                            duration: 1,
-                            repeat: Infinity,
-                            delay: 0.2,
-                          }}
-                        />
-                        <motion.div
-                          className="w-2 h-2 bg-text-secondary rounded-full"
-                          animate={{ opacity: [0.3, 1, 0.3] }}
-                          transition={{
-                            duration: 1,
-                            repeat: Infinity,
-                            delay: 0.4,
-                          }}
-                        />
+                {(sendingMessage || creatingSession || uploading) && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex justify-start"
+                  >
+                    <div className="bg-surface-white border border-gray-200 px-4 py-3 rounded-2xl rounded-bl-sm max-w-[85%]">
+                      <div className="flex items-center space-x-3">
+                        <div className="flex space-x-1">
+                          <motion.div
+                            className="w-2 h-2 bg-text-secondary rounded-full"
+                            animate={{ opacity: [0.3, 1, 0.3] }}
+                            transition={{
+                              duration: 1,
+                              repeat: Infinity,
+                              delay: 0,
+                            }}
+                          />
+                          <motion.div
+                            className="w-2 h-2 bg-text-secondary rounded-full"
+                            animate={{ opacity: [0.3, 1, 0.3] }}
+                            transition={{
+                              duration: 1,
+                              repeat: Infinity,
+                              delay: 0.2,
+                            }}
+                          />
+                          <motion.div
+                            className="w-2 h-2 bg-text-secondary rounded-full"
+                            animate={{ opacity: [0.3, 1, 0.3] }}
+                            transition={{
+                              duration: 1,
+                              repeat: Infinity,
+                              delay: 0.4,
+                            }}
+                          />
+                        </div>
+                        <span className="body-small text-text-secondary">
+                          {uploading
+                            ? "Uploading document..."
+                            : sendingMessage
+                              ? "Processing message..."
+                              : creatingSession
+                                ? "Starting chat..."
+                                : "Loading..."}
+                        </span>
                       </div>
-                      <span className="body-small text-text-secondary">
-                        {uploading
-                          ? "Uploading document..."
-                          : sendingMessage
-                          ? "Processing message..."
-                          : creatingSession
-                          ? "Starting chat..."
-                          : "Loading..."}
-                      </span>
                     </div>
-                  </div>
-                </motion.div>
-              )}
+                  </motion.div>
+                )}
 
-              <div ref={messagesEndRef} />
+                <div ref={messagesEndRef} />
               </motion.div>
             )}
           </AnimatePresence>
@@ -2595,8 +2752,8 @@ Generate a complete, updated version of the document incorporating all the reque
                     isDraftMode
                       ? "Describe the legal document you need or ask for editing help..."
                       : sessionDocuments.filter((doc: StagedDocument) => doc._staged).length > 0
-                      ? "Add your question about the file(s)..."
-                      : "Ask your legal question or drag & drop a PDF..."
+                        ? "Add your question about the file(s)..."
+                        : "Ask your legal question or drag & drop a PDF..."
                   }
                   className="pr-12 min-h-[44px] max-h-[120px] resize-none bg-gray-50 focus:bg-surface-white border-purple-primary/20 focus:border-purple-primary"
                   rows={1}
