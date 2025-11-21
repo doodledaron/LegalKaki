@@ -428,6 +428,9 @@ export const chatService = {
   getDocumentText,
   generateDraft,
   saveDraft,
+
+  // Intent detection
+  detectIntent: (prompt: string) => geminiService.detectIntent(prompt)
 };
 
 export default chatService;

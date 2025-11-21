@@ -11,6 +11,7 @@ export interface Message {
   domain?: LegalDomain
   type?: 'text' | 'analysis' | 'draft'
   retrievedChunks?: RetrievedChunk[]
+  payload?: any // For storing rich content like analysis results or draft data
 }
 
 export interface RetrievedChunk {

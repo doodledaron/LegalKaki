@@ -227,12 +227,29 @@ export async function fileToBase64(file: File): Promise<string> {
 
 export function getCollections(): Collection[] {
   const collections = getStorage(STORAGE_KEYS.COLLECTIONS, mockCollections)
-  // Convert date strings back to Date objects
-  return collections.map(col => ({
-    ...col,
-    createdAt: col.createdAt instanceof Date ? col.createdAt : new Date(col.createdAt),
-    updatedAt: col.updatedAt instanceof Date ? col.updatedAt : new Date(col.updatedAt),
-  }))
+  const documents = getDocuments()
+  const actions = getActions()
+
+  // Convert date strings back to Date objects and calculate dynamic stats
+  return collections.map(col => {
+    // Calculate document count for this collection
+    const colDocs = documents.filter(doc => doc.collectionId === col.id)
+
+    // Calculate urgent actions for this collection
+    const colUrgentActions = actions.filter(action =>
+      action.collectionId === col.id &&
+      action.priority === 'urgent' &&
+      action.status !== 'completed'
+    )
+
+    return {
+      ...col,
+      createdAt: col.createdAt instanceof Date ? col.createdAt : new Date(col.createdAt),
+      updatedAt: col.updatedAt instanceof Date ? col.updatedAt : new Date(col.updatedAt),
+      documentCount: colDocs.length,
+      urgentActionsCount: colUrgentActions.length
+    }
+  })
 }
 
 export function setCollections(collections: Collection[]): void {
@@ -279,11 +296,13 @@ export function linkChatToCollection(chatId: string, collectionId: string): void
 
   // Get chat to find related documents
   const chat = getChatById(chatId)
-  if (chat?.documents) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if ((chat as any)?.documents) {
     // Update all documents in this chat
     const documents = getDocuments()
     const updatedDocuments = documents.map(doc => {
-      if (chat.documents?.some(chatDoc => chatDoc.id === doc.id)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((chat as any).documents?.some((chatDoc: any) => chatDoc.id === doc.id)) {
         return { ...doc, collectionId }
       }
       return doc

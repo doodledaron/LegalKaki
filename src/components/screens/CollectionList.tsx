@@ -24,19 +24,22 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
   const [collections, setCollections] = useState<Collection[]>([])
   const [refresh, setRefresh] = useState(0)
 
-  // Load collections from localStorage
+  const [actions, setActions] = useState<any[]>([]) // Using any[] to avoid import issues, or better import ActionItem
+
+  // Load data from localStorage
   useEffect(() => {
     const allCollections = getCollections()
+    const allActions = getActions()
     setCollections(allCollections)
+    setActions(allActions)
   }, [refresh])
 
   // Calculate stats from collections and actions
-  const allActions = getActions()
   const stats = {
     totalCollections: collections.length,
     activeCollections: collections.filter(c => c.status === 'active').length,
-    totalActions: allActions.length,
-    urgentActions: allActions.filter(a => a.priority === 'urgent' && a.status !== 'completed').length
+    totalActions: actions.length,
+    urgentActions: actions.filter(a => a.priority === 'urgent' && a.status !== 'completed').length
   }
 
   // Client-side filtering
@@ -76,7 +79,7 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
     <div className="min-h-screen bg-background p-4 pb-nav">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <motion.div 
+        <motion.div
           className="mb-6"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -100,7 +103,7 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
               Start New Chat
             </Button>
           </div>
-          
+
           <h1 className="heading-2 mb-2">Your Legal Collections</h1>
           <p className="body-regular text-text-secondary mb-6">
             Access your saved conversations, documents, and legal progress
@@ -144,7 +147,7 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
         </motion.div>
 
         {/* Search and Filters */}
-        <motion.div 
+        <motion.div
           className="mb-6"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -161,7 +164,7 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-primary focus:border-transparent"
               />
             </div>
-            
+
             <div className="flex items-center space-x-2">
               {/* Status Filter */}
               <div className="flex space-x-1">
@@ -218,7 +221,7 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
                 </div>
                 <h3 className="heading-3 mb-2">No collections found</h3>
                 <p className="body-regular text-text-secondary mb-4">
-                  {searchQuery 
+                  {searchQuery
                     ? 'Try adjusting your search terms or filters'
                     : 'Start your first legal conversation to create a collection'
                   }
@@ -232,8 +235,8 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
 
           {/* Collections Grid/List */}
           {filteredCollections.length > 0 && (
-            <div className={viewMode === 'grid' 
-              ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' 
+            <div className={viewMode === 'grid'
+              ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
               : 'space-y-4'
             }>
               {filteredCollections.map((collection, index) => (
@@ -243,33 +246,33 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.3, delay: index * 0.1 }}
                 >
-                  <Card 
+                  <Card
                     className="card-interactive cursor-pointer"
                     onClick={() => onSelectCollection(collection.id)}
                   >
                     <CardContent className="p-4">
-                       {/* Header */}
-                       <div className="flex items-start justify-between mb-3">
-                         <div className="flex-1">
-                           <h3 className="body-regular font-semibold text-text-primary mb-2">
-                             {collection.title}
-                           </h3>
-                           <p className="body-small text-text-secondary leading-relaxed line-clamp-2">
-                             {collection.summary}
-                           </p>
-                         </div>
-                         <div className="flex items-center space-x-1">
-                           <Button
-                             variant="ghost"
-                             size="small"
-                             onClick={(e) => handleDeleteClick(collection, e)}
-                             leftIcon={<Trash2 className="w-4 h-4 text-red-500" />}
-                           >
-                             Delete
-                           </Button>
-                           <ChevronRight className="w-4 h-4 text-text-secondary flex-shrink-0" />
-                         </div>
-                       </div>
+                      {/* Header */}
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <h3 className="body-regular font-semibold text-text-primary mb-2">
+                            {collection.title}
+                          </h3>
+                          <p className="body-small text-text-secondary leading-relaxed line-clamp-2">
+                            {collection.summary}
+                          </p>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <Button
+                            variant="ghost"
+                            size="small"
+                            onClick={(e) => handleDeleteClick(collection, e)}
+                            leftIcon={<Trash2 className="w-4 h-4 text-red-500" />}
+                          >
+                            Delete
+                          </Button>
+                          <ChevronRight className="w-4 h-4 text-text-secondary flex-shrink-0" />
+                        </div>
+                      </div>
 
                       {/* Footer */}
                       <div className="flex items-center justify-between pt-3 border-t border-gray-100">
@@ -277,7 +280,7 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
                           <FileText className="w-4 h-4" />
                           <span className="body-small">{collection.documentCount} doc{collection.documentCount !== 1 ? 's' : ''}</span>
                         </div>
-                        
+
                         {collection.urgentActionsCount > 0 ? (
                           <div className="flex items-center space-x-1 px-2 py-1 bg-red-50 border border-red-200 rounded-full">
                             <AlertTriangle className="w-3 h-3 text-red-500" />

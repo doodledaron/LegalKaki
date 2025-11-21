@@ -627,6 +627,7 @@ export interface MessageSnapshot {
   }>
   domain?: string
   type?: 'text' | 'analysis' | 'draft'
+  payload?: any
 }
 
 export interface SnapshotMetadata {

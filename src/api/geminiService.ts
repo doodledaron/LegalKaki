@@ -696,6 +696,33 @@ OUTPUT FORMAT:
   }
 
   /**
+   * Detect user intent (Draft vs Question)
+   */
+  async detectIntent(prompt: string): Promise<'DRAFT' | 'QUESTION'> {
+    try {
+      if (!this.model) return 'QUESTION'; // Fallback
+
+      const intentPrompt = `Classify the following user input into one of two categories:
+      1. DRAFT: The user wants to create a document, edit a document, add a clause, change wording, or refine the text. (e.g., "make it formal", "add a termination clause", "draft a contract", "change section 3")
+      2. QUESTION: The user is asking a question about the document, asking for an explanation, or general legal advice, WITHOUT asking to change the document text itself. (e.g., "what does this clause mean?", "is this legal?", "explain section 5")
+
+      User Input: "${prompt}"
+
+      Respond with ONLY the category name: DRAFT or QUESTION.`;
+
+      const result = await this.model.generateContent(intentPrompt);
+      const response = await result.response;
+      const text = response.text().trim().toUpperCase();
+
+      if (text.includes('DRAFT')) return 'DRAFT';
+      return 'QUESTION';
+    } catch (error) {
+      console.error('[Gemini Service] Error detecting intent:', error);
+      return 'QUESTION'; // Default to question on error to be safe
+    }
+  }
+
+  /**
    * Fallback draft when Gemini is unavailable
    */
   private fallbackDraft(title: string, prompt: string): string {

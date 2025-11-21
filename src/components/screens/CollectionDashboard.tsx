@@ -16,6 +16,7 @@ import { getUserId } from '@/lib/auth-utils'
 import { getEnvConfig } from '@/lib/envConfig'
 import { getCollectionById, getChats, getDocuments, getActions, deleteCollection } from '@/lib/localStorage-utils'
 import { Collection } from '@/api/types'
+import { ConversationHistoryPanel } from '@/components/chat/ConversationHistoryPanel'
 
 interface CollectionDashboardProps {
   collectionId: string
@@ -27,7 +28,7 @@ interface CollectionDashboardProps {
 
 export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onViewConversation }: CollectionDashboardProps) {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
-  const [activeFilter, setActiveFilter] = useState<'all' | 'urgent' | 'pending' | 'completed'>('all')
+  const [activeFilter, setActiveFilter] = useState<'all' | 'urgent' | 'important' | 'normal'>('all')
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null)
   const [showMindMap, setShowMindMap] = useState(false)
   const [mindMapCode, setMindMapCode] = useState('')
@@ -44,6 +45,9 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
   const [documents, setDocuments] = useState<Document[]>([])
   const [actionItems, setActionItems] = useState<ActionItem[]>([])
   const [conversations, setConversations] = useState<ChatSession[]>([])
+  const [selectedConversation, setSelectedConversation] = useState<ChatSession | null>(null)
+
+
 
   useEffect(() => {
     console.log("🔍 DEBUG: CollectionDashboard loading data");
@@ -101,12 +105,12 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
     completedActions: actionItems.filter(a => a.status === 'completed').length
   }
 
-  // Filter action items based on active filter
+  // Filter action items based on active filter (priority-based only)
   const filteredActions = actionItems.filter(action => {
     if (activeFilter === 'all') return true
     if (activeFilter === 'urgent') return action.priority === 'urgent'
-    if (activeFilter === 'pending') return action.status === 'pending'
-    if (activeFilter === 'completed') return action.status === 'completed'
+    if (activeFilter === 'important') return action.priority === 'important'
+    if (activeFilter === 'normal') return action.priority === 'normal'
     return true
   }).sort((a, b) => {
     // Sort by urgency: urgent > important > normal
@@ -127,7 +131,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
     const now = new Date()
     const diffInMs = now.getTime() - date.getTime()
     const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24))
-    
+
     if (diffInDays === 0) return 'Today'
     if (diffInDays === 1) return 'Yesterday'
     if (diffInDays < 7) return `${diffInDays} days ago`
@@ -154,7 +158,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
   const getFileIcon = (fileType: string) => {
     switch (fileType.toLowerCase()) {
       case 'pdf': return FileIcon
-      case 'docx': 
+      case 'docx':
       case 'doc': return FileText
       case 'xlsx':
       case 'xls': return FileSpreadsheet
@@ -243,7 +247,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
       try {
         console.log('🔄 Falling back to basic mind map...')
         const mindMapData = createMindMapDataFromCollection(
-          collectionData,
+          collectionData!,
           conversations.map(conv => ({
             ...conv,
             title: conv.title || 'Untitled Chat'
@@ -266,39 +270,39 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
 
   const handleNodeClick = (node: InteractiveMindMapNode) => {
     console.log('🖱️ Node clicked in CollectionDashboard:', node)
-    
+
     switch (node.navigationTarget?.action) {
       case 'openDocument':
         const doc = node.navigationTarget.data as Document
         setSelectedDocument(doc)
         setShowMindMap(false) // Close mind map to show document
         break
-        
+
       case 'startChat':
         if (onStartNewChat) {
           onStartNewChat()
           setShowMindMap(false)
         }
         break
-        
+
       case 'showAction':
         // Could scroll to action items section or open action details
         console.log('📝 Action clicked:', node.navigationTarget.data)
         // For now, just close mind map and user can see actions below
         setShowMindMap(false)
         break
-        
+
       case 'showInsight':
         // Insight details are already shown in the AI panel
         console.log('🧠 Insight clicked:', node.navigationTarget.data)
         break
-        
+
       default:
         console.log('❓ Unknown navigation action:', node.navigationTarget?.action)
     }
   }
 
-  const handleDeleteCollection = () => {
+  const handleDeleteCollection = async () => {
     setIsDeleting(true)
     deleteCollection(collectionId)
     console.log('✅ Collection deleted successfully')
@@ -347,7 +351,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
     <div className="min-h-screen bg-background p-4 pb-nav">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <motion.div 
+        <motion.div
           className="mb-6"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -372,17 +376,16 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
               Delete Collection
             </Button>
           </div>
-          
+
           <div className="mb-4">
             <div className="flex items-center space-x-2 mb-2">
               <span className="px-3 py-1 bg-purple-subtle text-purple-primary rounded-full text-sm font-medium">
                 {collectionData.domain}
               </span>
-              <span className={`px-2 py-1 rounded-full text-xs font-medium border ${
-                collectionData.status === 'active' ? 'bg-green-100 text-green-700 border-green-200' :
+              <span className={`px-2 py-1 rounded-full text-xs font-medium border ${collectionData.status === 'active' ? 'bg-green-100 text-green-700 border-green-200' :
                 collectionData.status === 'completed' ? 'bg-blue-100 text-blue-700 border-blue-200' :
-                'bg-gray-100 text-gray-700 border-gray-200'
-              }`}>
+                  'bg-gray-100 text-gray-700 border-gray-200'
+                }`}>
                 {collectionData.status}
               </span>
             </div>
@@ -408,7 +411,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
 
           {/* Stats Row */}
           <div className="grid grid-cols-2 gap-4 mb-6">
-          <motion.div 
+            <motion.div
               className="text-center p-4 bg-surface-white rounded-lg border border-gray-200"
               whileHover={{ scale: 1.02 }}
               transition={{ duration: 0.2 }}
@@ -416,7 +419,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
               <div className="text-2xl font-bold text-purple-primary">{stats.totalDocuments}</div>
               <div className="body-small text-text-secondary">Documents</div>
             </motion.div>
-            <motion.div 
+            <motion.div
               className="text-center p-4 bg-surface-white rounded-lg border border-gray-200"
               whileHover={{ scale: 1.02 }}
               transition={{ duration: 0.2 }}
@@ -505,7 +508,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
                           size="small"
                           leftIcon={<Eye className="w-4 h-4" />}
                           className="ml-4 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => onViewConversation?.(conversation.id, conversation.domain)}
+                          onClick={() => setSelectedConversation(conversation)}
                         >
                           View
                         </Button>
@@ -519,7 +522,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
         </motion.div>
 
         {/* Documents Section */}
-        <motion.div 
+        <motion.div
           className="mb-8"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -606,21 +609,21 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
                             return <IconComponent className="w-10 h-10 text-purple-primary group-hover:text-purple-light transition-colors duration-300" />
                           })()}
                         </div>
-                        
+
                         <div className="flex-1 min-w-0">
                           <h4 className="heading-4 text-text-primary mb-2 group-hover:text-purple-primary transition-colors duration-300">
                             {document.originalFilename}
                           </h4>
-                          
+
                           <p className="body-regular text-text-secondary mb-4 leading-relaxed">
                             {document.contentSummary || "No summary available for this document."}
                           </p>
-                          
-                          
+
+
                           <div className="flex justify-end">
-                            <Button 
-                              variant="primary" 
-                              size="default" 
+                            <Button
+                              variant="primary"
+                              size="default"
                               leftIcon={<Eye className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />}
                               onClick={() => setSelectedDocument(document)}
                               className="bg-gradient-to-r from-purple-primary to-purple-light hover:from-purple-light hover:to-purple-primary shadow-lg hover:shadow-xl hover:shadow-purple-primary/30 transform hover:scale-105 transition-all duration-300 border-0"
@@ -639,7 +642,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
         </motion.div>
 
         {/* Action Items Section */}
-        <motion.div 
+        <motion.div
           className="mb-8"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -650,14 +653,14 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
               <ClipboardList className="w-6 h-6 text-purple-primary" />
               <h2 className="heading-3">Action Items</h2>
             </div>
-            
+
             <div className="flex space-x-2">
-              {['all', 'urgent', 'pending', 'completed'].map((filter) => (
+              {['all', 'urgent', 'important', 'normal'].map((filter) => (
                 <Button
                   key={filter}
                   variant={activeFilter === filter ? 'primary' : 'ghost'}
                   size="small"
-                  onClick={() => setActiveFilter(filter as 'all' | 'urgent' | 'pending' | 'completed')}
+                  onClick={() => setActiveFilter(filter as 'all' | 'urgent' | 'important' | 'normal')}
                   className="capitalize"
                 >
                   {filter}
@@ -674,7 +677,7 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
                 </div>
                 <h3 className="heading-3 mb-2">No action items found</h3>
                 <p className="body-regular text-text-secondary mb-4">
-                  {activeFilter === 'all' 
+                  {activeFilter === 'all'
                     ? 'No action items have been generated for this collection yet'
                     : `No ${activeFilter} action items at the moment`
                   }
@@ -684,19 +687,15 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
           ) : (
             <div className="space-y-3">
               {filteredActions.map((action, index) => (
-                  <motion.div
-                    key={action.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.3, delay: index * 0.1 }}
-                  >
+                <motion.div
+                  key={action.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3, delay: index * 0.1 }}
+                >
                   <Card className="hover:shadow-md transition-shadow duration-200">
                     <CardContent className="p-4">
-                      <div className="flex items-start space-x-3">
-                        <div className="mt-1">
-                          {getStatusIcon(action.status)}
-                        </div>
-                        
+                      <div className="flex items-start">
                         <div className="flex-1">
                           <div className="flex items-start justify-between mb-2">
                             <div>
@@ -710,12 +709,12 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
                                 </p>
                               )}
                             </div>
-                            
+
                             <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getPriorityColor(action.priority)}`}>
                               {action.priority.toUpperCase()}
                             </span>
                           </div>
-                          
+
                           <div className="flex items-center justify-between mt-2">
                             <div className="flex space-x-2">
                               {action.externalLinks?.map((link, linkIndex) => (
@@ -771,9 +770,8 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
               ease: "easeInOut"
             } : { duration: 0.2 }}
           >
-            <Card className={`bg-gradient-to-br from-purple-primary via-purple-600 to-purple-light text-white border-0 shadow-lg hover:shadow-2xl hover:shadow-purple-primary/40 transition-all duration-300 overflow-hidden relative ${
-              isGeneratingMindMap ? 'ring-4 ring-purple-300 ring-opacity-50' : ''
-            }`}>
+            <Card className={`bg-gradient-to-br from-purple-primary via-purple-600 to-purple-light text-white border-0 shadow-lg hover:shadow-2xl hover:shadow-purple-primary/40 transition-all duration-300 overflow-hidden relative ${isGeneratingMindMap ? 'ring-4 ring-purple-300 ring-opacity-50' : ''
+              }`}>
               {/* Animated background gradient when generating */}
               {isGeneratingMindMap && (
                 <motion.div
@@ -959,6 +957,13 @@ export function CollectionDashboard({ collectionId, onBack, onStartNewChat, onVi
         message="Are you sure you want to delete this collection? This action cannot be undone and will permanently remove:"
         itemName={collectionData.title}
         isDeleting={isDeleting}
+      />
+
+      {/* Conversation History Panel */}
+      <ConversationHistoryPanel
+        session={selectedConversation}
+        isOpen={!!selectedConversation}
+        onClose={() => setSelectedConversation(null)}
       />
     </div>
   )

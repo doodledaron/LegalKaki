@@ -187,147 +187,118 @@ function ActionItemCard({
         isDone && "opacity-60"
       )}
     >
-      {/* Header */}
-      <div className="flex items-start gap-3">
-        {/* Status Checkbox */}
+      {/* Content */}
+      <div className="w-full">
+        <div className="flex items-center gap-2 flex-wrap mb-2">
+          <h5 className={cn("font-semibold text-gray-900", isDone && "line-through")}>
+            {item.title}
+          </h5>
+          <span className={cn("px-2 py-0.5 rounded-full text-xs font-semibold", config.badge)}>
+            {item.priority.toUpperCase()}
+          </span>
+          {item.due && (
+            <span className="flex items-center gap-1 text-xs text-gray-600">
+              <Clock className="w-3 h-3" />
+              {item.due}
+            </span>
+          )}
+          {item.estimatedHours !== undefined && item.estimatedHours > 0 && (
+            <span className="text-xs text-gray-600">{item.estimatedHours}h</span>
+          )}
+        </div>
+
+        <p className="text-gray-700 text-sm mb-2">{item.whatToDo}</p>
+
+        {/* Why It Matters */}
+        <div className="bg-white/70 rounded-lg p-3 mb-3 text-sm">
+          <span className="font-semibold text-gray-700">Why it matters: </span>
+          <span className="text-gray-600">{item.whyItMatters}</span>
+        </div>
+
+        {/* Expandable Details */}
         <button
-          onClick={() => {
-            const newStatus =
-              item.status === "todo"
-                ? "in_progress"
-                : item.status === "in_progress"
-                ? "done"
-                : "todo";
-            onStatusChange(item.id, newStatus);
-          }}
-          className={cn(
-            "w-6 h-6 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors",
-            item.status === "done"
-              ? "bg-green-500 border-green-500"
-              : item.status === "in_progress"
-              ? "bg-blue-500 border-blue-500"
-              : "border-gray-300 hover:border-gray-400"
-          )}
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="text-purple-600 text-sm font-medium hover:text-purple-700 transition-colors"
         >
-          {item.status === "done" && <CheckCircle className="w-4 h-4 text-white" />}
-          {item.status === "in_progress" && (
-            <div className="w-3 h-3 bg-white rounded-full animate-pulse" />
-          )}
+          {isExpanded ? "Hide details ↑" : "Show details ↓"}
         </button>
 
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-2">
-            <h5 className={cn("font-semibold text-gray-900", isDone && "line-through")}>
-              {item.title}
-            </h5>
-            <span className={cn("px-2 py-0.5 rounded-full text-xs font-semibold", config.badge)}>
-              {item.priority.toUpperCase()}
-            </span>
-            {item.due && (
-              <span className="flex items-center gap-1 text-xs text-gray-600">
-                <Clock className="w-3 h-3" />
-                {item.due}
-              </span>
-            )}
-            {item.estimatedHours !== undefined && item.estimatedHours > 0 && (
-              <span className="text-xs text-gray-600">{item.estimatedHours}h</span>
-            )}
-          </div>
-
-          <p className="text-gray-700 text-sm mb-2">{item.whatToDo}</p>
-
-          {/* Why It Matters */}
-          <div className="bg-white/70 rounded-lg p-3 mb-3 text-sm">
-            <span className="font-semibold text-gray-700">Why it matters: </span>
-            <span className="text-gray-600">{item.whyItMatters}</span>
-          </div>
-
-          {/* Expandable Details */}
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="text-purple-600 text-sm font-medium hover:text-purple-700 transition-colors"
-          >
-            {isExpanded ? "Hide details ↑" : "Show details ↓"}
-          </button>
-
-          {isExpanded && (
-            <div className="mt-4 space-y-3">
-              {/* Dependencies */}
-              {item.dependencies && item.dependencies.length > 0 && (
-                <div className="bg-white/70 rounded-lg p-3">
-                  <div className="text-xs font-semibold text-gray-700 mb-2">Dependencies:</div>
-                  <div className="flex flex-wrap gap-2">
-                    {item.dependencies.map((depId) => (
-                      <span
-                        key={depId}
-                        className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs"
-                      >
-                        {depId}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Tags */}
-              {item.tags && item.tags.length > 0 && (
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Tag className="w-4 h-4 text-gray-500" />
-                  {item.tags.map((tag) => (
-                    <span key={tag} className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
-                      {tag}
+        {isExpanded && (
+          <div className="mt-4 space-y-3">
+            {/* Dependencies */}
+            {item.dependencies && item.dependencies.length > 0 && (
+              <div className="bg-white/70 rounded-lg p-3">
+                <div className="text-xs font-semibold text-gray-700 mb-2">Dependencies:</div>
+                <div className="flex flex-wrap gap-2">
+                  {item.dependencies.map((depId) => (
+                    <span
+                      key={depId}
+                      className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs"
+                    >
+                      {depId}
                     </span>
                   ))}
                 </div>
-              )}
+              </div>
+            )}
 
-              {/* Required Documents */}
-              {item.requiredDocuments && item.requiredDocuments.length > 0 && (
-                <div className="bg-white/70 rounded-lg p-3">
-                  <div className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1">
-                    <FileText className="w-4 h-4" />
-                    Required Documents:
-                  </div>
-                  <ul className="space-y-1">
-                    {item.requiredDocuments.map((doc, index) => (
-                      <li key={index} className="text-xs text-gray-600 flex items-start gap-2">
-                        <span className="text-gray-400">•</span>
-                        <span>{doc}</span>
-                      </li>
-                    ))}
-                  </ul>
+            {/* Tags */}
+            {item.tags && item.tags.length > 0 && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <Tag className="w-4 h-4 text-gray-500" />
+                {item.tags.map((tag) => (
+                  <span key={tag} className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Required Documents */}
+            {item.requiredDocuments && item.requiredDocuments.length > 0 && (
+              <div className="bg-white/70 rounded-lg p-3">
+                <div className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1">
+                  <FileText className="w-4 h-4" />
+                  Required Documents:
                 </div>
-              )}
-
-              {/* Links */}
-              {item.links && item.links.length > 0 && (
-                <div className="space-y-2">
-                  {item.links.map((link, index) => (
-                    <a
-                      key={index}
-                      href={link.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 text-sm text-purple-600 hover:text-purple-700 transition-colors"
-                    >
-                      <LinkIcon className="w-4 h-4" />
-                      {link.label}
-                    </a>
+                <ul className="space-y-1">
+                  {item.requiredDocuments.map((doc, index) => (
+                    <li key={index} className="text-xs text-gray-600 flex items-start gap-2">
+                      <span className="text-gray-400">•</span>
+                      <span>{doc}</span>
+                    </li>
                   ))}
-                </div>
-              )}
+                </ul>
+              </div>
+            )}
 
-              {/* Jurisdiction */}
-              {item.jurisdiction && (
-                <div className="flex items-center gap-2 text-xs text-gray-600">
-                  <MapPin className="w-4 h-4" />
-                  {item.jurisdiction}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+            {/* Links */}
+            {item.links && item.links.length > 0 && (
+              <div className="space-y-2">
+                {item.links.map((link, index) => (
+                  <a
+                    key={index}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-purple-600 hover:text-purple-700 transition-colors"
+                  >
+                    <LinkIcon className="w-4 h-4" />
+                    {link.label}
+                  </a>
+                ))}
+              </div>
+            )}
+
+            {/* Jurisdiction */}
+            {item.jurisdiction && (
+              <div className="flex items-center gap-2 text-xs text-gray-600">
+                <MapPin className="w-4 h-4" />
+                {item.jurisdiction}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

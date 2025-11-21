@@ -35,6 +35,7 @@ import {
   Target,
 } from "lucide-react";
 import { ExplanationTab, AnalysisTab, ActionTab, SupplementaryTab } from "@/components/chat/tabs";
+import { AnalysisMessageBubble } from "@/components/chat/AnalysisMessageBubble";
 import { SaveToCollectionModal } from "@/components/modals/SaveToCollectionModal";
 import { EmailModal, EmailData } from "@/components/modals/EmailModal";
 import { emailService } from "@/api/emailService";
@@ -82,162 +83,6 @@ interface ChatbotScreenProps {
 }
 
 // Removed unused mock data
-
-// Memoized Analysis Message Bubble Component
-const AnalysisMessageBubble = memo(
-  ({ analysisResult }: { analysisResult: ApiAnalysisResult }) => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="flex justify-start mb-4"
-    >
-      <div className="w-[70%] bg-surface-white border-2 border-indigo-200/50 rounded-2xl rounded-bl-sm shadow-md overflow-hidden">
-        <Tabs defaultValue="explanation" className="w-full">
-          <TabsList className="w-full justify-start border-b border-gray-100 bg-gray-50/50 rounded-none px-4">
-            <TabsTrigger value="explanation" className="flex items-center space-x-2">
-              <BookOpen className="w-4 h-4" />
-              <span>Explanation</span>
-            </TabsTrigger>
-            <TabsTrigger value="analysis" className="flex items-center space-x-2">
-              <Search className="w-4 h-4" />
-              <span>Analysis</span>
-            </TabsTrigger>
-            <TabsTrigger value="action" className="flex items-center space-x-2">
-              <Target className="w-4 h-4" />
-              <span>Actions</span>
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="explanation" className="p-4 max-h-96 overflow-y-auto">
-            <div className="space-y-3">
-              <div className="bg-purple-subtle/30 rounded-lg p-4 border border-purple-primary/20">
-                <div className="flex items-center space-x-2 mb-2">
-                  <Lightbulb className="w-4 h-4 text-purple-primary" />
-                  <span className="body-small font-medium text-purple-primary">
-                    Legal Explanation
-                  </span>
-                </div>
-                <p className="body-regular text-text-primary">
-                  {analysisResult.explanation}
-                </p>
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="analysis" className="p-4 max-h-96 overflow-y-auto">
-            <div className="space-y-3">
-              <div>
-                <h4 className="body-regular font-medium mb-3 flex items-center space-x-2">
-                  <AlertTriangle className="w-4 h-4 text-purple-primary" />
-                  <span>Risk Assessment</span>
-                </h4>
-                <div className="space-y-2">
-                  {analysisResult.risks.map(
-                    (risk: ApiAnalysisResult["risks"][number], index: number) => (
-                      <div
-                        key={index}
-                        className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg border border-gray-100"
-                      >
-                        <AlertTriangle
-                          className={`w-4 h-4 mt-0.5 ${risk.level === "high"
-                            ? "text-red-500"
-                            : risk.level === "medium"
-                              ? "text-yellow-500"
-                              : "text-green-500"
-                            }`}
-                        />
-                        <div className="flex-1">
-                          <p className="body-small text-text-primary">
-                            {risk.description}
-                          </p>
-                          {risk.recommendation && (
-                            <p className="caption text-text-secondary mt-1">
-                              {risk.recommendation}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <h4 className="body-regular font-medium mb-3 flex items-center space-x-2">
-                  <CheckCircle className="w-4 h-4 text-purple-primary" />
-                  <span>Key Points</span>
-                </h4>
-                <div className="space-y-2">
-                  {analysisResult.keyPoints.map(
-                    (point: string, index: number) => (
-                      <div key={index} className="flex items-start space-x-3 p-2">
-                        <span className="text-purple-primary mt-1 text-sm">
-                          •
-                        </span>
-                        <span className="body-small text-text-primary">
-                          {point}
-                        </span>
-                      </div>
-                    )
-                  )}
-                </div>
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="action" className="p-4 max-h-96 overflow-y-auto">
-            <div className="space-y-3">
-              {analysisResult.actionItems.map((action: ActionItem) => (
-                <div
-                  key={action.id}
-                  className="border border-purple-primary/20 bg-purple-subtle/20 rounded-lg p-4"
-                >
-                  <div className="flex items-start space-x-3">
-                    <input
-                      type="checkbox"
-                      className="mt-1 rounded border-gray-300 text-purple-primary focus:ring-purple-primary"
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${action.priority === "urgent"
-                            ? "bg-red-100 text-red-700"
-                            : action.priority === "important"
-                              ? "bg-yellow-100 text-yellow-700"
-                              : "bg-green-100 text-green-700"
-                            }`}
-                        >
-                          {action.priority}
-                        </span>
-                        <span className="body-small font-medium text-text-primary">
-                          {action.title}
-                        </span>
-                      </div>
-                      <p className="caption text-text-secondary">
-                        {action.description}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </TabsContent>
-        </Tabs>
-
-        <div className="p-3 bg-gray-50/50 border-t border-gray-100">
-          <p className="caption text-text-secondary text-center">
-            {new Date().toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </p>
-        </div>
-      </div>
-    </motion.div>
-  )
-);
-
-AnalysisMessageBubble.displayName = "AnalysisMessageBubble";
 
 // Memoized Draft Message Bubble Component
 const DraftMessageBubble = memo(
@@ -1082,6 +927,7 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
             attachments: msg.attachments,
             domain: msg.domain as LegalDomain,
             type: msg.type,
+            payload: msg.payload, // Restore payload if present
           }));
 
           // Track initial message count BEFORE setting session to prevent auto-save trigger
@@ -1490,13 +1336,6 @@ Generate a complete, updated version of the document incorporating all the reque
     const chatIdMatch = currentSession.id.match(/session_(\d+)/);
     const chatId = chatIdMatch ? parseInt(chatIdMatch[1]) : Date.now();
 
-    // Check if in draft mode - use document generation endpoint
-    if (isDraftMode) {
-      setInputValue("");
-      await handleDraftGeneration(messageContent, chatId);
-      return;
-    }
-
     // Check if editing a document
     if (selectedDocumentForEdit) {
       setInputValue("");
@@ -1504,7 +1343,7 @@ Generate a complete, updated version of the document incorporating all the reque
       return;
     }
 
-    // Check if in Draft Mode - if so, treat as draft refinement if a draft exists
+    // Check if in Draft Mode - if so, use smart intent detection
     if (isDraftMode) {
       // Find the last draft in the session
       const messages = currentSession.messages;
@@ -1519,18 +1358,46 @@ Generate a complete, updated version of the document incorporating all the reque
         }
       }
 
-      if (lastDraftContent) {
-        console.log("📝 [Draft Mode] Refining existing draft with context");
-        setInputValue("");
-        // Call handleDraftGeneration with the previous draft as context
-        await handleDraftGeneration(messageContent, chatId, lastDraftContent);
-        return;
+      // Detect intent
+      console.log("🤔 [Draft Mode] Detecting intent for:", messageContent);
+      const intent = await chatService.detectIntent(messageContent);
+      console.log("💡 [Draft Mode] Detected intent:", intent);
+
+      if (intent === 'DRAFT') {
+        if (lastDraftContent) {
+          console.log("📝 [Draft Mode] Refining existing draft with context");
+          setInputValue("");
+          await handleDraftGeneration(messageContent, chatId, lastDraftContent);
+          return;
+        } else {
+          console.log("📝 [Draft Mode] Generating new draft (no context)");
+          setInputValue("");
+          await handleDraftGeneration(messageContent, chatId);
+          return;
+        }
       } else {
-        // If no previous draft, just generate a new one (normal flow)
-        console.log("📝 [Draft Mode] Generating new draft (no context)");
-        setInputValue("");
-        await handleDraftGeneration(messageContent, chatId);
-        return;
+        // It's a question - treat as normal chat but with draft context
+        console.log("💬 [Draft Mode] Handling as question about draft");
+        // Fall through to normal chat logic below, but we'll need to ensure context is passed
+        // We can append the context to the prompt invisibly or rely on the chatService to handle it
+        // For now, let's prepend the context to the prompt sent to the AI (but not shown to user)
+
+        // If we have a draft, we should probably include it in the context
+        if (lastDraftContent) {
+          // We'll modify the message content passed to chatService, but keep user's display message same
+          // Actually, chatService.sendMessage takes the whole message history.
+          // We should probably add a system instruction or context.
+          // For this POC, let's prepend the context to the message content sent to API
+
+          // Let's continue to the normal flow, but we need to override the `documentText`
+          // logic to use our draft content.
+
+          // We need to set sessionDocuments temporarily to include this draft if it's not there?
+          // Or just pass it as the third argument to sendMessage which is `documentText`.
+
+          // Let's proceed to the normal flow logic, but we need to override the `documentText`
+          // logic to use our draft content.
+        }
       }
     }
 
@@ -1567,9 +1434,27 @@ Generate a complete, updated version of the document incorporating all the reque
     try {
       console.log('[POC Chat] Sending message with', sessionDocuments.length, 'documents');
 
-      // POC: Get document text from localStorage
+      // POC: Get document text from localStorage OR use draft content if in Draft Mode
       let documentText = '';
-      if (sessionDocuments.length > 0) {
+
+      // If in Draft Mode and we fell through here, it means it's a QUESTION about the draft
+      // So we should use the draft content as the document context
+      if (isDraftMode) {
+        // Find the last draft again (we need it here)
+        const messages = currentSession.messages;
+        for (let i = messages.length - 1; i >= 0; i--) {
+          const msg = messages[i];
+          const payload = messagePayloads[msg.id];
+          if (payload && payload.draft) {
+            documentText = payload.draft.content;
+            console.log('[POC Chat] Using draft content as context:', documentText.length, 'chars');
+            break;
+          }
+        }
+      }
+
+      // If no draft context, try uploaded documents
+      if (!documentText && sessionDocuments.length > 0) {
         const docId = sessionDocuments[0].id;
         documentText = chatService.getDocumentText(docId) || '';
         console.log('[POC Chat] Document text length:', documentText.length);
@@ -1874,11 +1759,22 @@ Generate a complete, updated version of the document incorporating all the reque
       }
 
       // Step 1: Save the complete chat session with all messages
+      // Merge messagePayloads into messages before saving
+      const messagesWithPayloads = currentSession.messages.map(msg => {
+        if (messagePayloads[msg.id]) {
+          return {
+            ...msg,
+            payload: messagePayloads[msg.id].analysis || messagePayloads[msg.id].draft || messagePayloads[msg.id].supervisor
+          };
+        }
+        return msg;
+      });
+
       const chatToSave: ChatSession = {
         id: currentSession.id,
         domain: currentSession.domain,
         title: currentSession.title || title,
-        messages: currentSession.messages, // Save ALL messages
+        messages: messagesWithPayloads, // Save messages with payloads
         createdAt: currentSession.createdAt,
         updatedAt: new Date(),
         collectionId: finalCollectionId
