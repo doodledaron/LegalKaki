@@ -849,6 +849,9 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
   const [isDraftMode, setIsDraftMode] = useState(false);
   const [selectedDocumentForEdit, setSelectedDocumentForEdit] =
     useState<Document | null>(null);
+  const [latestDraft, setLatestDraft] = useState<Document | null>(null);
+  const [pendingSaveData, setPendingSaveData] = useState<{ collectionId?: number; title?: string } | null>(null);
+  const [showDraftConfirmation, setShowDraftConfirmation] = useState(false);
   const [showDocumentDropdown, setShowDocumentDropdown] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isSidePanelOpen, setIsSidePanelOpen] = useState(false);
@@ -1132,11 +1135,11 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
   }, [showDocumentDropdown]);
 
   // Handle draft generation using the document generation endpoint
-  const handleDraftGeneration = async (prompt: string, chatId: number, context?: string) => {
+  const handleDraftGeneration = async (prompt: string, chatId: number, context?: string, displayMessage?: string) => {
     // Add user's message first
     const userMessage: Message = {
       id: `user_${Date.now()}`,
-      content: prompt,
+      content: displayMessage || prompt,
       sender: "user",
       timestamp: new Date(),
       domain,
@@ -1168,6 +1171,9 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
 
       if (result.success && result.document) {
         const doc = result.document;
+        // Tag as draft for collection dashboard filtering
+        doc.metadata = { ...doc.metadata, sourceType: 'draft' };
+        setLatestDraft(doc);
 
         // Don't add to chat documents yet - wait for user to save
         // setChatDocuments(prev => [...prev, doc]);
@@ -1255,7 +1261,7 @@ ${changes}
 Generate a complete, updated version of the document incorporating all the requested changes. Maintain the original document structure and format where not affected by the changes.`;
 
       // Use the draft generation function with edit context
-      await handleDraftGeneration(editPrompt, chatId);
+      await handleDraftGeneration(editPrompt, chatId, undefined, changes);
 
       // Clear edit mode
       setSelectedDocumentForEdit(null);
@@ -1284,6 +1290,7 @@ Generate a complete, updated version of the document incorporating all the reque
   const handleSaveDraft = useCallback((document: Document) => {
     const success = chatService.saveDraft(document);
     if (success) {
+      setLatestDraft(null); // Clear pending draft
       // Add to chat documents list
       setChatDocuments(prev => [...prev, document]);
 
@@ -1309,6 +1316,7 @@ Generate a complete, updated version of the document incorporating all the reque
     // 1. Exit draft mode
     setIsDraftMode(false);
     setSelectedDocumentForEdit(null);
+    setLatestDraft(null); // Clear pending draft
 
     // 2. Add a system message indicating discard
     if (currentSession) {
@@ -1711,7 +1719,42 @@ Generate a complete, updated version of the document incorporating all the reque
     return savedCount;
   };
 
+  const handleConfirmDraftSave = async () => {
+    let extraDocs: Document[] = [];
+    if (latestDraft) {
+      handleSaveDraft(latestDraft);
+      extraDocs = [latestDraft];
+    }
+    setShowDraftConfirmation(false);
+    if (pendingSaveData) {
+      await processSaveConversation(pendingSaveData.collectionId, pendingSaveData.title, extraDocs);
+      setPendingSaveData(null);
+    }
+  };
+
+  const handleDiscardDraftSave = async () => {
+    // Just discard the draft (don't save it)
+    setLatestDraft(null);
+    setShowDraftConfirmation(false);
+    if (pendingSaveData) {
+      await processSaveConversation(pendingSaveData.collectionId, pendingSaveData.title);
+      setPendingSaveData(null);
+    }
+  };
+
   const handleSaveConversation = async (collectionId: number | undefined, title?: string) => {
+    // Check for pending draft
+    if (latestDraft) {
+      setPendingSaveData({ collectionId, title });
+      setShowDraftConfirmation(true);
+      return;
+    }
+
+    await processSaveConversation(collectionId, title);
+  };
+
+  const processSaveConversation = async (collectionId: number | undefined, title?: string, extraDocuments: Document[] = []) => {
+
     if (!currentSession) {
       console.error("No active session to save");
       return;
@@ -1796,8 +1839,8 @@ Generate a complete, updated version of the document incorporating all the reque
       actionItemsCount = extractAndSaveActionItems(messagePayloads, currentSession.id, finalCollectionId);
 
       // Step 3: Link documents to collection
-      // Combine both chatDocuments (persistent) and sessionDocuments (temporary uploads)
-      const allSessionDocs = [...chatDocuments, ...sessionDocuments];
+      // Combine both chatDocuments (persistent), sessionDocuments (temporary uploads), and any extra documents (like just-saved drafts)
+      const allSessionDocs = [...chatDocuments, ...sessionDocuments, ...extraDocuments];
       console.log("🔍 DEBUG: Linking documents");
       console.log("  chatDocuments count:", chatDocuments.length);
       console.log("  sessionDocuments count:", sessionDocuments.length);
@@ -2693,6 +2736,45 @@ Generate a complete, updated version of the document incorporating all the reque
           defaultTitle={currentSession?.title || ""}
           userSub={getUserId()}
         />
+
+        <DraftConfirmationModal
+          isOpen={showDraftConfirmation}
+          onClose={() => setShowDraftConfirmation(false)}
+          onConfirm={handleConfirmDraftSave}
+          onDiscard={handleDiscardDraftSave}
+          draftName={latestDraft?.originalFilename || "Draft Document"}
+        />
+      </div>
+    </div>
+  );
+}
+
+interface DraftConfirmationModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  onDiscard: () => void;
+  draftName: string;
+}
+
+function DraftConfirmationModal({ isOpen, onClose, onConfirm, onDiscard, draftName }: DraftConfirmationModalProps) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
+        <h3 className="text-lg font-semibold mb-4">Save Draft?</h3>
+        <p className="text-gray-600 mb-6">
+          You have a generated draft "{draftName}". Are you satisfied with it and want to save it to the collection?
+        </p>
+        <div className="flex justify-end space-x-3">
+          <Button variant="ghost" onClick={onDiscard}>
+            Discard Draft
+          </Button>
+          <Button variant="primary" onClick={onConfirm}>
+            Yes, Save Draft
+          </Button>
+        </div>
       </div>
     </div>
   );
