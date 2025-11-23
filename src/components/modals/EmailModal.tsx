@@ -12,6 +12,8 @@ interface EmailModalProps {
   onClose: () => void;
   documents: Document[];
   onSendEmail: (emailData: EmailData) => Promise<void>;
+  initialSelectedDocs?: string[];
+  initialBody?: string;
 }
 
 export interface EmailData {
@@ -21,7 +23,7 @@ export interface EmailData {
   documentIds: string[];
 }
 
-export function EmailModal({ isOpen, onClose, documents, onSendEmail }: EmailModalProps) {
+export function EmailModal({ isOpen, onClose, documents, onSendEmail, initialSelectedDocs = [], initialBody }: EmailModalProps) {
   const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
   const [emailTo, setEmailTo] = useState("");
   const [emailSubject, setEmailSubject] = useState(
@@ -39,11 +41,11 @@ export function EmailModal({ isOpen, onClose, documents, onSendEmail }: EmailMod
   // Reset form when modal opens/closes
   useEffect(() => {
     if (isOpen) {
-      setSelectedDocs([]);
+      setSelectedDocs(initialSelectedDocs);
       setEmailTo("");
       setEmailSubject("Legal documents from LegalKaki");
       setEmailMessage(
-        "Hi,\n\nPlease find the selected legal documents attached for your reference.\n\nThese documents have been analyzed using LegalKaki's AI-powered legal assistance system.\n\nBest regards,\nLegalKaki"
+        initialBody || "Hi,\n\nPlease find the selected legal documents attached for your reference.\n\nThese documents have been analyzed using LegalKaki's AI-powered legal assistance system.\n\nBest regards,\nLegalKaki"
       );
       setSendResult({ type: null, message: "" });
     }
@@ -151,9 +153,9 @@ export function EmailModal({ isOpen, onClose, documents, onSendEmail }: EmailMod
                   <Mail className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h2 className="heading-4 text-text-primary">Send Documents via Email</h2>
+                  <h2 className="heading-4 text-text-primary">Send Documents via Gmail</h2>
                   <p className="caption text-text-secondary">
-                    Share legal documents securely using AWS SES
+                    Share legal documents using your Gmail account
                   </p>
                 </div>
               </div>
@@ -175,7 +177,7 @@ export function EmailModal({ isOpen, onClose, documents, onSendEmail }: EmailMod
                   <FileText className="w-4 h-4 text-purple-primary" />
                   <span>Select Documents to Send</span>
                 </h3>
-                
+
                 {documents.length === 0 ? (
                   <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
                     <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
@@ -188,11 +190,10 @@ export function EmailModal({ isOpen, onClose, documents, onSendEmail }: EmailMod
                     {documents.map((doc) => (
                       <div
                         key={doc.id}
-                        className={`flex items-center space-x-3 p-3 rounded-lg border transition-all cursor-pointer ${
-                          selectedDocs.includes(doc.id)
-                            ? "bg-purple-subtle/30 border-purple-primary/50"
-                            : "bg-gray-50 border-gray-200 hover:bg-gray-100"
-                        }`}
+                        className={`flex items-center space-x-3 p-3 rounded-lg border transition-all cursor-pointer ${selectedDocs.includes(doc.id)
+                          ? "bg-purple-subtle/30 border-purple-primary/50"
+                          : "bg-gray-50 border-gray-200 hover:bg-gray-100"
+                          }`}
                         onClick={() => handleToggleDoc(doc.id)}
                       >
                         <input
@@ -216,7 +217,7 @@ export function EmailModal({ isOpen, onClose, documents, onSendEmail }: EmailMod
                     ))}
                   </div>
                 )}
-                
+
                 <p className="caption text-text-secondary mt-2">
                   {selectedDocs.length} document(s) selected
                 </p>
@@ -273,11 +274,10 @@ export function EmailModal({ isOpen, onClose, documents, onSendEmail }: EmailMod
               {/* Result Message */}
               {sendResult.type && (
                 <div
-                  className={`mt-4 p-3 rounded-lg flex items-center space-x-2 ${
-                    sendResult.type === "success"
-                      ? "bg-green-50 text-green-700 border border-green-200"
-                      : "bg-red-50 text-red-700 border border-red-200"
-                  }`}
+                  className={`mt-4 p-3 rounded-lg flex items-center space-x-2 ${sendResult.type === "success"
+                    ? "bg-green-50 text-green-700 border border-green-200"
+                    : "bg-red-50 text-red-700 border border-red-200"
+                    }`}
                 >
                   {sendResult.type === "success" ? (
                     <Check className="w-4 h-4" />
@@ -292,7 +292,7 @@ export function EmailModal({ isOpen, onClose, documents, onSendEmail }: EmailMod
             {/* Footer */}
             <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50/50">
               <div className="caption text-text-secondary">
-                Powered by AWS SES • Secure email delivery
+                Opens Gmail in a new tab
               </div>
               <div className="flex items-center space-x-3">
                 <Button
@@ -315,7 +315,7 @@ export function EmailModal({ isOpen, onClose, documents, onSendEmail }: EmailMod
                   ) : (
                     <>
                       <Mail className="w-4 h-4 mr-2" />
-                      Send Email
+                      Send via Gmail
                     </>
                   )}
                 </Button>

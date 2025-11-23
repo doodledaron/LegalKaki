@@ -34,14 +34,6 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
     setActions(allActions)
   }, [refresh])
 
-  // Calculate stats from collections and actions
-  const stats = {
-    totalCollections: collections.length,
-    activeCollections: collections.filter(c => c.status === 'active').length,
-    totalActions: actions.length,
-    urgentActions: actions.filter(a => a.priority === 'urgent' && a.status !== 'completed').length
-  }
-
   // Client-side filtering
   const filteredCollections = collections.filter(collection => {
     // Status filter
@@ -58,6 +50,20 @@ export function CollectionList({ onBack, onSelectCollection, onStartNewChat }: C
     }
     return true
   })
+
+  // Calculate stats from filtered collections and their actions
+  // Get all chats from filtered collections to find their actions
+  const filteredCollectionIds = filteredCollections.map(c => c.id)
+  const filteredActions = actions.filter(action =>
+    action.collectionId && filteredCollectionIds.includes(action.collectionId)
+  )
+
+  const stats = {
+    totalCollections: collections.length,
+    activeCollections: collections.filter(c => c.status === 'active').length,
+    totalActions: filteredActions.length,
+    urgentActions: filteredActions.filter(a => a.priority === 'urgent' && a.status !== 'completed').length
+  }
 
   const handleDeleteClick = (collection: Collection, e: React.MouseEvent) => {
     e.stopPropagation()

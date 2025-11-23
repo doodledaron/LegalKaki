@@ -430,7 +430,11 @@ export const chatService = {
   saveDraft,
 
   // Intent detection
-  detectIntent: (prompt: string) => geminiService.detectIntent(prompt)
+  detectIntent: (prompt: string) => geminiService.detectIntent(prompt),
+
+  // Chat Summary
+  generateChatSummary: (chatHistory: Array<{ content: string, sender: string }>, draftContent?: string) =>
+    geminiService.generateChatSummary(chatHistory, draftContent)
 };
 
 export default chatService;

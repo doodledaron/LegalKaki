@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, MessageCircle, Calendar, User, Bot } from 'lucide-react';
+import { X, MessageCircle, Calendar, User, Bot, FileText } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ChatSession } from '@/types';
@@ -84,11 +84,40 @@ export function ConversationHistoryPanel({ session, isOpen, onClose }: Conversat
                                         </div>
 
                                         {(message.type === 'analysis' || message.payload) && message.payload ? (
-                                            // Check if it's a supervisor payload (has tabs or explanation/analysis/actions structure)
-                                            (message.payload.explanation_tab || message.payload.explanation || message.payload.analysis_tab) ? (
-                                                <RichMessageBubble payload={message.payload} />
+                                            // Check if it's a draft payload
+                                            message.payload.documentType || message.payload.content ? (
+                                                <div className="bg-white border border-gray-200 rounded-2xl rounded-tl-sm p-4 shadow-sm max-w-full">
+                                                    <div className="flex items-center space-x-2 mb-3 pb-3 border-b border-gray-100">
+                                                        <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+                                                            <FileText className="w-4 h-4 text-purple-600" />
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-semibold text-gray-900">
+                                                                {message.payload.documentType || 'Generated Document'}
+                                                            </div>
+                                                            <div className="text-xs text-gray-500">
+                                                                AI-Generated Draft
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="prose prose-sm max-w-none">
+                                                        <div className="text-gray-700 whitespace-pre-wrap font-mono text-sm bg-gray-50 p-3 rounded-lg max-h-96 overflow-y-auto">
+                                                            {message.payload.content}
+                                                        </div>
+                                                    </div>
+                                                    {message.payload.disclaimer && (
+                                                        <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-500 italic">
+                                                            {message.payload.disclaimer}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             ) : (
-                                                <AnalysisMessageBubble analysisResult={message.payload} />
+                                                // Check if it's a supervisor payload (has tabs or explanation/analysis/actions structure)
+                                                (message.payload.explanation_tab || message.payload.explanation || message.payload.analysis_tab) ? (
+                                                    <RichMessageBubble payload={message.payload} />
+                                                ) : (
+                                                    <AnalysisMessageBubble analysisResult={message.payload} />
+                                                )
                                             )
                                         ) : (
                                             <div className={`rounded-2xl px-4 py-3 ${message.sender === 'user'

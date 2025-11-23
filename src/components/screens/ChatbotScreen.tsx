@@ -38,7 +38,7 @@ import { ExplanationTab, AnalysisTab, ActionTab, SupplementaryTab } from "@/comp
 import { AnalysisMessageBubble } from "@/components/chat/AnalysisMessageBubble";
 import { SaveToCollectionModal } from "@/components/modals/SaveToCollectionModal";
 import { EmailModal, EmailData } from "@/components/modals/EmailModal";
-import { emailService } from "@/api/emailService";
+import { SummaryReviewModal } from "@/components/modals/SummaryReviewModal";
 import {
   isEducatorResponse,
   isAnalystResponse,
@@ -852,6 +852,14 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
   const [latestDraft, setLatestDraft] = useState<Document | null>(null);
   const [pendingSaveData, setPendingSaveData] = useState<{ collectionId?: number; title?: string } | null>(null);
   const [showDraftConfirmation, setShowDraftConfirmation] = useState(false);
+  const [pendingEmailAction, setPendingEmailAction] = useState(false);
+
+  // Summary Modal State
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [summaryData, setSummaryData] = useState({ title: "", description: "" });
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [emailBody, setEmailBody] = useState<string | undefined>(undefined);
+
   const [showDocumentDropdown, setShowDocumentDropdown] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isSidePanelOpen, setIsSidePanelOpen] = useState(false);
@@ -864,6 +872,7 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
   >({});
   // Email modal state
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [emailTargetDocId, setEmailTargetDocId] = useState<string | null>(null);
 
   // State for temporarily storing uploaded documents (memory-based, no persistence)
   // Extended type for documents with staging metadata
@@ -1049,8 +1058,11 @@ export function ChatbotScreen({ domain, onBack, initialSession, conversationId, 
   // Combine chat documents with session-uploaded documents for display
   const availableDocuments = useMemo(() => {
     const combined = [...chatDocuments, ...sessionDocuments];
+    if (latestDraft) {
+      combined.push(latestDraft);
+    }
     return combined;
-  }, [chatDocuments, sessionDocuments]);
+  }, [chatDocuments, sessionDocuments, latestDraft]);
 
   // #TODO: Replace chatApi.createSession with real backend endpoint
   // POST /api/chat/sessions - Create new chat session
@@ -1290,6 +1302,12 @@ Generate a complete, updated version of the document incorporating all the reque
   const handleSaveDraft = useCallback((document: Document) => {
     const success = chatService.saveDraft(document);
     if (success) {
+      // Link to current collection if one exists
+      if (currentCollectionId) {
+        console.log(`🔗 Linking draft ${document.id} to collection ${currentCollectionId}`);
+        updateDocument(document.id, { collectionId: currentCollectionId });
+      }
+
       setLatestDraft(null); // Clear pending draft
       // Add to chat documents list
       setChatDocuments(prev => [...prev, document]);
@@ -1310,7 +1328,7 @@ Generate a complete, updated version of the document incorporating all the reque
         });
       }
     }
-  }, [currentSession, domain]);
+  }, [currentSession, domain, currentCollectionId]);
 
   const handleDiscardDraft = useCallback(() => {
     // 1. Exit draft mode
@@ -1388,7 +1406,7 @@ Generate a complete, updated version of the document incorporating all the reque
         console.log("💬 [Draft Mode] Handling as question about draft");
         // Fall through to normal chat logic below, but we'll need to ensure context is passed
         // We can append the context to the prompt invisibly or rely on the chatService to handle it
-        // For now, let's prepend the context to the prompt sent to the AI (but not shown to user)
+        // For now, let's prepend the context to the message content sent to the AI (but not shown to user)
 
         // If we have a draft, we should probably include it in the context
         if (lastDraftContent) {
@@ -1720,26 +1738,64 @@ Generate a complete, updated version of the document incorporating all the reque
   };
 
   const handleConfirmDraftSave = async () => {
-    let extraDocs: Document[] = [];
     if (latestDraft) {
-      handleSaveDraft(latestDraft);
-      extraDocs = [latestDraft];
+      // If triggered by email action, generate summary first
+      if (pendingEmailAction) {
+        setShowDraftConfirmation(false);
+        setShowSummaryModal(true);
+        setIsGeneratingSummary(true);
+
+        // Generate summary
+        const summary = await chatService.generateChatSummary(
+          currentSession?.messages || [],
+          latestDraft.contentText
+        );
+
+        setSummaryData(summary);
+        setIsGeneratingSummary(false);
+        return;
+      }
+
+      // Otherwise save normally
+      await handleSaveDraft(latestDraft);
+      await processSaveConversation(pendingSaveData?.collectionId, pendingSaveData?.title);
     }
     setShowDraftConfirmation(false);
-    if (pendingSaveData) {
-      await processSaveConversation(pendingSaveData.collectionId, pendingSaveData.title, extraDocs);
-      setPendingSaveData(null);
+  };
+
+  const handleConfirmSummary = async (title: string, description: string) => {
+    if (latestDraft) {
+      const draftId = latestDraft.id;
+
+      // Save the draft
+      await handleSaveDraft(latestDraft);
+
+      // Construct email body with summary
+      const body = `Hi,\n\n**${title}**\n\n${description}\n\nPlease find the selected legal documents attached for your reference.\n\nThese documents have been analyzed using LegalKaki's AI-powered legal assistance system.\n\nBest regards,\nLegalKaki`;
+      setEmailBody(body);
+
+      // Open email modal
+      setEmailTargetDocId(draftId);
+      setIsEmailModalOpen(true);
+      setPendingEmailAction(false);
     }
+    setShowSummaryModal(false);
   };
 
   const handleDiscardDraftSave = async () => {
-    // Just discard the draft (don't save it)
+    // Discard draft
     setLatestDraft(null);
-    setShowDraftConfirmation(false);
-    if (pendingSaveData) {
-      await processSaveConversation(pendingSaveData.collectionId, pendingSaveData.title);
-      setPendingSaveData(null);
+
+    // If triggered by email action
+    if (pendingEmailAction) {
+      setEmailTargetDocId(null);
+      setIsEmailModalOpen(true);
+      setPendingEmailAction(false);
+    } else {
+      // Proceed with save conversation flow
+      await processSaveConversation(pendingSaveData?.collectionId, pendingSaveData?.title);
     }
+    setShowDraftConfirmation(false);
   };
 
   const handleSaveConversation = async (collectionId: number | undefined, title?: string) => {
@@ -1874,18 +1930,74 @@ Generate a complete, updated version of the document incorporating all the reque
 
 
 
-  const handleOpenEmailModal = () => {
+  const handleOpenEmailModal = (docId?: string | any) => {
+    // If there's an unsaved draft, prompt to save it first
+    if (latestDraft) {
+      setPendingEmailAction(true);
+      setShowDraftConfirmation(true);
+      return;
+    }
+
+    if (typeof docId === 'string') {
+      setEmailTargetDocId(docId);
+    } else {
+      setEmailTargetDocId(null);
+    }
     setIsEmailModalOpen(true);
   };
 
   const handleSendEmail = async (emailData: EmailData) => {
     try {
-      // Try to use the real email service first
-      await emailService.sendEmail(emailData);
+      const { to, subject, body, documentIds } = emailData;
+
+      // Fetch content of selected documents
+      let fullBody = body;
+      if (documentIds && documentIds.length > 0) {
+        fullBody += "\n\n--- Attached Documents ---\n";
+
+        // Combine all available documents to search from
+        const allDocs = [...chatDocuments, ...sessionDocuments];
+        if (latestDraft) {
+          allDocs.push(latestDraft);
+        }
+
+        for (const docId of documentIds) {
+          const doc = allDocs.find(d => d.id === docId);
+          if (doc) {
+            const content = doc.contentText || "Content not available";
+            fullBody += `\n\n[Document: ${doc.originalFilename}]\n${content}\n`;
+            fullBody += "\n-------------------\n";
+          }
+        }
+      }
+
+      // Construct Gmail compose link
+      const gmailLink = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to.join(','))}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(fullBody)}`;
+
+      // Open Gmail in new tab
+      window.open(gmailLink, '_blank');
+
+      // Close modal
+      setIsEmailModalOpen(false);
+
+      // Add system message to chat
+      if (currentSession) {
+        const emailMessage: Message = {
+          id: Date.now().toString(),
+          content: `📧 **Gmail Opened**\n\nI've opened Gmail in a new tab with your draft content ready to send.`,
+          sender: "assistant",
+          timestamp: new Date(),
+          domain,
+          type: "text"
+        };
+        setCurrentSession({
+          ...currentSession,
+          messages: [...currentSession.messages, emailMessage]
+        });
+      }
     } catch (error) {
-      // Fallback to demo mode if email service is not available
-      console.log('Email service not available, using demo mode:', error);
-      await emailService.sendEmailDemo(emailData);
+      console.error('Failed to open email client:', error);
+      setIsEmailModalOpen(false);
     }
   };
 
@@ -2334,6 +2446,45 @@ Generate a complete, updated version of the document incorporating all the reque
                           </div>
                         </button>
 
+                        {/* Create New Draft Option */}
+                        <button
+                          onClick={() => {
+                            setSelectedDocumentForEdit(null);
+                            setIsDraftMode(true);
+                            setShowDocumentDropdown(false);
+
+                            if (currentSession) {
+                              const modeMessage: Message = {
+                                id: Date.now().toString(),
+                                content:
+                                  "📝 Switched to Draft Mode - I'm ready to help you create a new legal document!",
+                                sender: "assistant",
+                                timestamp: new Date(),
+                                domain,
+                              };
+                              setCurrentSession({
+                                ...currentSession,
+                                messages: [
+                                  ...currentSession.messages,
+                                  modeMessage,
+                                ],
+                              });
+                            }
+                          }}
+                          className={`w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors ${isDraftMode && !selectedDocumentForEdit
+                              ? "bg-purple-subtle text-purple-primary"
+                              : "text-text-primary"
+                            }`}
+                        >
+                          <Edit className="w-4 h-4" />
+                          <div className="text-left">
+                            <div className="font-medium">Create New Draft</div>
+                            <div className="text-sm opacity-70">
+                              Generate a new legal document from scratch
+                            </div>
+                          </div>
+                        </button>
+
                         {/* Documents List */}
                         <div className="mt-2 border-t border-gray-100 pt-2">
                           <div className="px-3 py-2">
@@ -2725,6 +2876,17 @@ Generate a complete, updated version of the document incorporating all the reque
           onClose={() => setIsEmailModalOpen(false)}
           documents={availableDocuments || []}
           onSendEmail={handleSendEmail}
+          initialSelectedDocs={emailTargetDocId ? [emailTargetDocId] : (latestDraft ? [latestDraft.id] : [])}
+          initialBody={emailBody}
+        />
+
+        <SummaryReviewModal
+          isOpen={showSummaryModal}
+          onClose={() => setShowSummaryModal(false)}
+          onConfirm={handleConfirmSummary}
+          initialTitle={summaryData.title}
+          initialDescription={summaryData.description}
+          isGenerating={isGeneratingSummary}
         />
 
         {/* Save to Collection Modal */}

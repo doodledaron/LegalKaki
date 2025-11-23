@@ -723,6 +723,69 @@ OUTPUT FORMAT:
   }
 
   /**
+   * Summarize chat history into a title and short description
+   */
+  async generateChatSummary(
+    chatHistory: Array<{ content: string, sender: string }>,
+    draftContent?: string
+  ): Promise<{ title: string; description: string }> {
+    try {
+      console.log('[Gemini Service] Generating chat summary...');
+
+      if (!this.model) {
+        return {
+          title: "Legal Document Draft",
+          description: "Draft generated based on user request."
+        };
+      }
+
+      const historyText = chatHistory
+        .map(msg => `${msg.sender}: ${msg.content}`)
+        .join('\n');
+
+      const prompt = `Analyze the following chat history and draft document context.
+Summarize the user's intent into a concise Title (max 50 chars) and a Short Description (max 300 chars).
+Focus on what the user is trying to achieve (e.g., 'Drafting an Employment Contract', 'Reviewing a NDA').
+
+Chat History:
+${historyText}
+
+${draftContent ? `Draft Content Preview:\n${draftContent.substring(0, 1000)}...` : ''}
+
+Respond with ONLY valid JSON:
+{
+  "title": "Concise Title",
+  "description": "Short description of the user's intent and the document's purpose."
+}`;
+
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+
+      // Parse JSON
+      let cleanedText = text.trim();
+      if (cleanedText.startsWith('```json')) {
+        cleanedText = cleanedText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      } else if (cleanedText.startsWith('```')) {
+        cleanedText = cleanedText.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+
+      const parsed = JSON.parse(cleanedText);
+      return {
+        title: parsed.title || "Legal Document Draft",
+        description: parsed.description || "Draft generated based on user request."
+      };
+
+    } catch (error) {
+      console.error('[Gemini Service] Error generating summary:', error);
+      return {
+        title: "Legal Document Draft",
+        description: "Draft generated based on user request."
+      };
+    }
+  }
+
+  /**
    * Fallback draft when Gemini is unavailable
    */
   private fallbackDraft(title: string, prompt: string): string {
